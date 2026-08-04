@@ -1,0 +1,10 @@
+{
+  "name": "Rota Certa — Gestão de entregas",
+  "short_name": "Rota Certa",
+  "description": "Entregas organizadas. Menos caminho. Mais agilidade.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f8f7",
+  "theme_color": "#0c3e3a",
+  "icons": [{"src":"/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
