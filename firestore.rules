@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function profile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function sameCompany(companyId) { return signedIn() && profile().companyId == companyId; }
+    function admin(companyId) { return sameCompany(companyId) && profile().role == 'admin'; }
+    function driver(companyId) { return sameCompany(companyId) && profile().role == 'driver'; }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || profile().role == 'admin' && profile().companyId == resource.data.companyId);
+      allow create: if signedIn() && request.auth.uid == userId;
+      // O usuário nunca pode trocar o próprio estabelecimento ou perfil.
+      allow update: if signedIn() && request.auth.uid == userId
+        && request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.role == resource.data.role;
+    }
+
+    match /companies/{companyId} {
+      allow read: if sameCompany(companyId);
+      allow create: if signedIn();
+      allow update, delete: if admin(companyId);
+
+      match /drivers/{driverId} {
+        allow read: if sameCompany(companyId);
+        allow write: if admin(companyId);
+      }
+
+      match /deliveries/{deliveryId} {
+        allow read: if admin(companyId) || (driver(companyId) && resource.data.driverId == request.auth.uid);
+        allow create, delete: if admin(companyId);
+        allow update: if admin(companyId) || (
+          driver(companyId)
+          && resource.data.driverId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status','deliveredAt','failureReason','failureNotes','updatedAt'])
+        );
+      }
+
+      match /routes/{routeId} {
+        allow read: if sameCompany(companyId);
+        allow write: if admin(companyId);
+      }
+    }
+  }
+}
