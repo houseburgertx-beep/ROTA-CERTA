@@ -7,6 +7,8 @@ export interface Company { id:string; name:string; phone:string; city:string; st
 export interface Driver { id:string; name:string; phone:string; vehicle:string; plate?:string; userId?:string; active:boolean }
 export interface Delivery { id:string; orderNumber:string; customerName:string; customerPhone:string; address:string; district:string; city:string; state:string; postalCode?:string; latitude?:number; longitude?:number; amount:number; deliveryFee:number; paymentMethod:string; priority:DeliveryPriority; status:DeliveryStatus; driverId?:string; source:"manual"|"ocr"|"importação" }
 export interface RouteStop { deliveryId:string; position:number; point:GeoPoint }
-export interface RoutePlan { id:string; driverId:string; stops:RouteStop[]; totalDistance:number; estimatedDuration:number; optimizationMethod:"openrouteservice"|"vizinho-mais-proximo" }
+export type RoutingProvider = "openrouteservice"|"graphhopper"|"osrm"|"valhalla"|"local";
+export interface RouteResult { provider:RoutingProvider; orderedPoints:GeoPoint[]; geometry:GeoPoint[]; distanceMeters:number; durationSeconds:number }
+export interface RoutePlan { id:string; driverId:string; stops:RouteStop[]; totalDistance:number; estimatedDuration:number; optimizationMethod:RoutingProvider }
 export interface OCRResult { rawText:string; confidence:number; fields:Partial<Delivery>; warnings:string[] }
-export interface GeocodingResult extends GeoPoint { displayName:string }
+export interface GeocodingResult extends GeoPoint { displayName:string; provider?:string }
