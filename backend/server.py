@@ -30,7 +30,7 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret-change-me')
 JWT_ALGO = 'HS256'
 TOKEN_HOURS = 24 * 7
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
-GROQ_MODEL = 'meta-llama/llama-4-maverick-17b-128e-instruct'
+GROQ_MODEL = 'qwen/qwen3.6-27b'
 GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -313,15 +313,22 @@ async def update_driver(driver_id: str, body: DriverUpdate, admin: dict = Depend
     upd = {k: v for k, v in body.dict().items() if v is not None}
     if not upd:
         raise HTTPException(status_code=400, detail="Nada para atualizar")
-    await db.users.update_one({"_id": ObjectId(driver_id), "role": "driver"}, {"$set": upd})
+    res = await db.users.update_one(
+        {"_id": ObjectId(driver_id), "role": "driver", "admin_id": str(admin["_id"])},
+        {"$set": upd},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Motoboy não encontrado")
     doc = await db.users.find_one({"_id": ObjectId(driver_id)})
     return serialize(doc)
 
 
 @api_router.delete("/drivers/{driver_id}")
 async def delete_driver(driver_id: str, admin: dict = Depends(require_admin)):
-    await db.users.delete_one({"_id": ObjectId(driver_id), "role": "driver"})
-    await db.deliveries.update_many({"driver_id": driver_id}, {"$set": {"driver_id": None}})
+    await db.users.delete_one({"_id": ObjectId(driver_id), "role": "driver", "admin_id": str(admin["_id"])})
+    await db.deliveries.update_many(
+        {"driver_id": driver_id, "admin_id": str(admin["_id"])}, {"$set": {"driver_id": None}}
+    )
     return {"ok": True}
 
 
@@ -354,7 +361,7 @@ async def scan_comanda(body: ScanIn, admin: dict = Depends(require_admin)):
         ],
         "temperature": 0.1,
         "response_format": {"type": "json_object"},
-        "max_tokens": 1024,
+        "max_tokens": 2048,
     }
     try:
         async with httpx.AsyncClient(timeout=60) as hc:
@@ -452,18 +459,26 @@ async def get_delivery(delivery_id: str, user: dict = Depends(get_current_user))
     d = await db.deliveries.find_one({"_id": ObjectId(delivery_id)})
     if not d:
         raise HTTPException(status_code=404, detail="Entrega não encontrada")
+    uid = str(user["_id"])
+    owns = (user["role"] == "admin" and d.get("admin_id") == uid) or (
+        user["role"] == "driver" and d.get("driver_id") == uid
+    )
+    if not owns:
+        raise HTTPException(status_code=403, detail="Sem permissão")
     return serialize(d)
 
 
 @api_router.put("/deliveries/{delivery_id}")
 async def update_delivery(delivery_id: str, body: DeliveryUpdate, admin: dict = Depends(require_admin)):
+    prev = await db.deliveries.find_one({"_id": ObjectId(delivery_id), "admin_id": str(admin["_id"])})
+    if not prev:
+        raise HTTPException(status_code=404, detail="Entrega não encontrada")
     upd = {k: v for k, v in body.dict().items() if v is not None}
     if "address" in upd:
         lat, lng = await geocode(upd["address"])
         upd["lat"], upd["lng"] = lat, lng
-    prev = await db.deliveries.find_one({"_id": ObjectId(delivery_id)})
     await db.deliveries.update_one({"_id": ObjectId(delivery_id)}, {"$set": upd})
-    if "driver_id" in upd and upd["driver_id"] and (not prev or prev.get("driver_id") != upd["driver_id"]):
+    if "driver_id" in upd and upd["driver_id"] and prev.get("driver_id") != upd["driver_id"]:
         d = await db.deliveries.find_one({"_id": ObjectId(delivery_id)})
         await push_notification(upd["driver_id"], "Nova entrega atribuída",
                                 f"{d['customer_name']} — {d['address']}", "assign")
@@ -476,6 +491,12 @@ async def update_status(delivery_id: str, body: StatusUpdate, user: dict = Depen
     d = await db.deliveries.find_one({"_id": ObjectId(delivery_id)})
     if not d:
         raise HTTPException(status_code=404, detail="Entrega não encontrada")
+    uid = str(user["_id"])
+    owns = (user["role"] == "admin" and d.get("admin_id") == uid) or (
+        user["role"] == "driver" and d.get("driver_id") == uid
+    )
+    if not owns:
+        raise HTTPException(status_code=403, detail="Sem permissão")
     upd = {"status": body.status}
     if body.status == "entregue":
         upd["delivered_at"] = now_utc()
@@ -502,9 +523,13 @@ async def delete_delivery(delivery_id: str, admin: dict = Depends(require_admin)
 # ----------------------- Route optimization -----------------------
 @api_router.post("/routes/optimize")
 async def optimize_route(body: OptimizeIn, admin: dict = Depends(require_admin)):
+    aid = str(admin["_id"])
+    drv = await db.users.find_one({"_id": ObjectId(body.driver_id), "role": "driver", "admin_id": aid})
+    if not drv:
+        raise HTTPException(status_code=404, detail="Motoboy não encontrado")
     docs = []
     for did in body.delivery_ids:
-        d = await db.deliveries.find_one({"_id": ObjectId(did)})
+        d = await db.deliveries.find_one({"_id": ObjectId(did), "admin_id": aid})
         if d:
             docs.append(d)
     if not docs:

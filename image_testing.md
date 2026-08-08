@@ -16,6 +16,6 @@ Follow these rules exactly. Do not overcomplicate.
 -Resize large images to reasonable bounds (avoid oversized payloads).
 
 ## Rota Certa specific
-- Vision provider: Groq (OpenAI-compatible), model meta-llama/llama-4-maverick-17b-128e-instruct.
+- Vision provider: Groq (OpenAI-compatible), model qwen/qwen3.6-27b (vision-capable).
 - Endpoint: POST /api/deliveries/scan  body {image_base64, mime_type}. Requires admin JWT.
 - Requires GROQ_API_KEY in backend/.env. If missing, endpoint returns 503 (expected).
