@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "Rota Certa",
+    "slug": "frontend",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "frontend",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.emergent.routeops.cgq13m",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Fotografar comandas para criar entregas",
+        "NSPhotoLibraryUsageDescription": "Escolher fotos de comandas da galeria",
+        "NSLocationWhenInUseUsageDescription": "Compartilhar sua localização durante as entregas"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0B0E11"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.emergent.routeops.cgq13m",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-image.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0E11"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Escolher fotos de comandas da galeria",
+          "cameraPermission": "Fotografar comandas para criar entregas"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Compartilhar sua localização durante as entregas"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

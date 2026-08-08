@@ -1,0 +1,48 @@
+{
+  "summary": "Comprehensive backend + frontend testing of Rota Certa. Backend pytest: 24/25 passed (96%). The ONLY failing endpoint is POST /api/deliveries/scan (Groq vision) — it returns 502 because Groq returns 404 model_not_found for the configured model 'meta-llama/llama-4-maverick-17b-128e-instruct'. Everything else works: auth (register/login/me/wrong-password), driver CRUD + driver login + role isolation, delivery create/list/status transitions/status_filter, admin-vs-driver visibility (drivers only see assigned), Nominatim geocoding populates lat/lng, route optimization (nearest-neighbor + haversine, total_km + est_minutes + sequences 1..N), dashboard counts, billing (taxa_realizada/aberto/total_previsto/valor_pedidos), driver location update + admin listing, notifications (list + unread_count + read_all). Frontend UI: Portuguese login/register works, admin lands on tabs (Início/Entregas/Rotas/Motoboys), the previously-broken 'Novo motoboy' flow now works end-to-end (motoboy is created and appears in the list), all key screens render with proper testIDs — home stats, delivery review form, faturamento, notificações, scan screen. Map screen is Leaflet/WebView (expected not to render on web, only on device). No deprecated Expo packages detected. No red-screen errors.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/deliveries/scan",
+        "issue": "Groq API returns 404 model_not_found for model 'meta-llama/llama-4-maverick-17b-128e-instruct'. Backend logs: 'The model ... does not exist or you do not have access to it.' Server then returns 502 to client. Update GROQ_MODEL in /app/backend/server.py to a currently available Groq vision model (e.g. 'meta-llama/llama-4-scout-17b-16e-instruct' or 'llama-3.2-11b-vision-preview' / 'llama-3.2-90b-vision-preview'). Please web-search current Groq vision model IDs before choosing.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "General",
+        "issue": "passlib logs 'AttributeError: module bcrypt has no attribute __about__' warning on every hash call. Cosmetic — hashing works — but noisy. Consider pinning bcrypt<4.1 or upgrading passlib."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "general", "issues": ["React Native web warning: 'props.pointerEvents is deprecated. Use style.pointerEvents' emitted on load (originates from a library, not app code). Not a blocker."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix GROQ_MODEL: replace 'meta-llama/llama-4-maverick-17b-128e-instruct' in /app/backend/server.py:33 with a currently available Groq vision model. Verify by re-running pytest TestScan or hitting POST /api/deliveries/scan with a receipt JPEG.",
+    "(Optional) Silence bcrypt/passlib version warning by pinning bcrypt in backend/requirements.txt."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~660 lines — within acceptable limits but nearing the split threshold; consider modularizing (auth, drivers, deliveries, routes, billing) if it grows further.",
+    "PUT /drivers/{id}: allows any admin to update any driver — no admin_id ownership check on the query. Same concern for delete_driver. Consider filtering by admin_id like list_drivers does.",
+    "get_delivery does not restrict access by admin_id / driver_id, so any authenticated user could fetch any delivery by id if guessed. Add ownership check.",
+    "optimize_route does not validate that the deliveries belong to the calling admin (admin_id filter missing).",
+    "billing/dashboard use string admin_id comparisons — consistent, OK.",
+    "Frontend properly wraps text in Text components and uses StyleSheet.create; testIDs are present on all interactive elements."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (new — 25 pytest tests covering auth, drivers, deliveries, routes, dashboard, billing, location, notifications, scan, cleanup)"
+  ],
+  "success_rate": {"backend": "96% (24/25)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "Tests create timestamped 'test_gestor_<ts>@teste.com' admin, 'test_motoboy_<ts>@teste.com' driver, and TEST_ prefixed deliveries. Delivery/driver cleanup runs at end of pytest suite. Some deliveries created during route-optimize test are intentionally not deleted (safe — TEST_ prefix).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: `cd /app && python -m pytest backend/tests/backend_test.py -n 0 -v` (use -n 0 because pytest.ini enables xdist loadscope but the suite shares state via a module-level dict across classes). All classes must run in one worker OR -n 0. To retest scan after main agent updates GROQ_MODEL, run only TestScan: `pytest backend/tests/backend_test.py::TestScan -n 0 -v`. Base URL from EXPO_PUBLIC_BACKEND_URL. Admin & driver accounts are created inside the pytest run (no seeded data — user requested empty start).",
+  "rca_of_issue": "SCAN 502 RCA — Reproduction: POST /api/deliveries/scan with valid base64 JPEG + admin JWT. Backend forwards to Groq chat completions with model='meta-llama/llama-4-maverick-17b-128e-instruct'. Groq responds HTTP 404 with body {\"error\":{\"code\":\"model_not_found\", \"message\":\"The model `meta-llama/llama-4-maverick-17b-128e-instruct` does not exist or you do not have access to it.\"}}. server.py:365-367 correctly maps non-200 Groq responses to HTTPException(502). Cloudflare/preview ingress relays the 502 (HTML page). Mitigation: change GROQ_MODEL constant to a supported Groq vision model. Configuration only — no code path bug."
+}
