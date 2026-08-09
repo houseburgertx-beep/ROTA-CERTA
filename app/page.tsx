@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LayoutDashboard, Package, Route, Bike, Settings, Plus, ScanLine, Search, MapPin, Clock, CircleDollarSign, AlertTriangle, CheckCircle2, Navigation, MoreHorizontal, SlidersHorizontal, ChevronRight, Menu, X, RotateCw, Upload, Camera, MapPinned, Gauge, Users, Bell, Eye, Pencil, Trash2 } from "lucide-react";
+import { LayoutDashboard, Package, Route, Bike, Settings, Plus, ScanLine, Search, MapPin, Clock, CircleDollarSign, AlertTriangle, CheckCircle2, Navigation, MoreHorizontal, SlidersHorizontal, ChevronRight, Menu, X, RotateCw, Upload, Camera, MapPinned, Gauge, Users, Bell, Eye, Pencil, Trash2, UserRound } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import { currentPosition, geocode, reverseGeocode } from "../src/services/geocodingService";
 import { calculateRoute } from "../src/services/routingService";
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from "../src/services/mapProviders";
 import type { GeoPoint, RouteResult } from "../src/types";
+import { EmptyState } from "../src/components/EmptyState";
 
 type Status = "Aguardando" | "Pronta para sair" | "Em rota" | "Entregue" | "Problema";
 type Delivery = { id:number; order:string; customer:string; phone:string; address:string; district:string; amount:number; deliveryFee:number; payment:string; priority:"Normal"|"Alta"|"Urgente"; status:Status; driver:string; time:string; latitude:number; longitude:number };
@@ -22,7 +23,15 @@ type LeafletMapHandle = { remove:()=>void; setView:(center:[number,number],zoom:
 const initialDeliveries: Delivery[] = [];
 
 const nav = [
-  ["Visão geral", LayoutDashboard], ["Entregas", Package], ["Planejar rota", Route], ["Motoboys", Bike], ["Configurações", Settings]
+  ["Visão geral", LayoutDashboard], ["Entregas", Package], ["Mapa", MapPinned], ["Planejar rota", Route], ["Motoboys", Bike], ["Configurações", Settings]
+] as const;
+
+const mobileNav = [
+  ["Visão geral", "Início", LayoutDashboard],
+  ["Entregas", "Entregas", Package],
+  ["Mapa", "Mapa", MapPinned],
+  ["Planejar rota", "Rotas", Route],
+  ["Configurações", "Perfil", UserRound],
 ] as const;
 
 export default function Home() {
@@ -42,28 +51,28 @@ export default function Home() {
       <header><button className="hamb" onClick={()=>setMobile(true)}><Menu/></button><div><h1>{page}</h1><p>{subtitle(page)}</p></div><div className="head-actions"><button className="icon-btn"><Bell size={19}/><i/></button><button className="primary" onClick={()=>setModal("new")}><Plus size={19}/> Nova entrega</button></div></header>
       {page==="Visão geral"&&<Dashboard deliveries={deliveries} go={go} setModal={setModal} mapProvider={mapProvider}/>} 
       {page==="Entregas"&&<Deliveries data={filtered} query={query} setQuery={setQuery} remove={(id)=>{setDeliveries(v=>v.filter(d=>d.id!==id));notify("Entrega excluída")}}/>}
+      {page==="Mapa"&&<MapOverview deliveries={deliveries} mapProvider={mapProvider} go={go}/>}
       {page==="Planejar rota"&&<RoutePlanner deliveries={deliveries} notify={notify} mapProvider={mapProvider}/>} 
       {page==="Motoboys"&&<Drivers/>}
       {page==="Configurações"&&<Config notify={notify} mapProvider={mapProvider} setMapProvider={setMapProvider}/>} 
     </main>
-    <div className="bottom-nav">{nav.slice(0,4).map(([l,I])=><button key={l} onClick={()=>go(l)} className={page===l?"active":""}><I/><span>{l.replace("Visão geral","Início").replace("Planejar rota","Rotas")}</span></button>)}</div>
+    <div className="bottom-nav" aria-label="Navegação principal">{mobileNav.map(([target,label,Icon])=><button key={target} onClick={()=>go(target)} className={page===target?"active":""} aria-current={page===target?"page":undefined}><Icon/><span>{label}</span></button>)}</div>
     {modal==="new"&&<NewDelivery close={()=>{setModal(null);setOcrData(null);}} save={saveDelivery} prefill={ocrData}/>} {modal==="ocr"&&<OCR close={()=>setModal(null)} done={(fields:Record<string,string>)=>{setOcrData(fields);setModal("new");notify("Comanda lida. Confira e ajuste os campos antes de salvar.")}}/>}
     {toast&&<div className="toast"><CheckCircle2/>{toast}</div>}
   </div>
 }
 
-function subtitle(p:string){return ({"Visão geral":"Acompanhe a operação de hoje","Entregas":"Consulte e organize todos os pedidos","Planejar rota":"Organize as paradas e reduza o caminho","Motoboys":"Equipe e desempenho da operação","Configurações":"Estabelecimento e integrações"} as Record<string,string>)[p]}
+function subtitle(p:string){return ({"Visão geral":"Acompanhe a operação de hoje","Entregas":"Consulte e organize todos os pedidos","Mapa":"Veja entregas e rotas próximas","Planejar rota":"Organize as paradas e reduza o caminho","Motoboys":"Equipe e desempenho da operação","Configurações":"Estabelecimento e integrações"} as Record<string,string>)[p]}
 
-function Dashboard({deliveries,go,setModal,mapProvider}:{deliveries:Delivery[];go:(p:string)=>void;setModal:(v:"ocr")=>void;mapProvider:MapTileProvider}){
+function Dashboard({deliveries,go,setModal,mapProvider}:{deliveries:Delivery[];go:(p:string)=>void;setModal:(v:"new"|"ocr")=>void;mapProvider:MapTileProvider}){
  const aguardando=deliveries.filter(d=>d.status==="Aguardando"||d.status==="Pronta para sair").length;
  const emRota=deliveries.filter(d=>d.status==="Em rota").length;
  const entregues=deliveries.filter(d=>d.status==="Entregue").length;
  const problema=deliveries.filter(d=>d.status==="Problema").length;
- const semLocal=deliveries.filter(d=>!d.latitude||!d.longitude).length;
  const feesAberto=deliveries.filter(d=>d.status!=="Entregue").reduce((sum,d)=>sum+(d.deliveryFee||0),0);
  const feesConcluido=deliveries.filter(d=>d.status==="Entregue").reduce((sum,d)=>sum+(d.deliveryFee||0),0);
  const cards=[["Aguardando saida",String(aguardando),"pendentes",Package,"teal"],["Em rota",String(emRota),"em entrega",Bike,"blue"],["Concluidas hoje",String(entregues),"finalizadas",CheckCircle2,"green"],["Com problema",String(problema),"requer atencao",AlertTriangle,"orange"]] as const;
- return <div className="content"><section className="quick"><button onClick={()=>go("Planejar rota")}><span className="qicon route"><Route/></span><div><b>Montar rota</b><small>{aguardando} entrega(s) aguardando</small></div><ChevronRight/></button><button onClick={()=>setModal("ocr")}><span className="qicon scan"><ScanLine/></span><div><b>Ler comanda</b><small>Foto ou imagem da galeria</small></div><ChevronRight/></button><button onClick={()=>go("Entregas")}><span className="qicon pin"><MapPin/></span><div><b>Revisar enderecos</b><small>{semLocal} sem localizacao</small></div><ChevronRight/></button></section>
+ return <div className="content"><section className="quick"><button className="quick-primary" onClick={()=>setModal("new")}><span className="qicon add"><Plus/></span><div><b>Nova entrega</b><small>Cadastro rápido</small></div><ChevronRight/></button><button onClick={()=>setModal("ocr")}><span className="qicon scan"><ScanLine/></span><div><b>Ler comanda</b><small>Câmera ou galeria</small></div><ChevronRight/></button><button onClick={()=>go("Planejar rota")}><span className="qicon route"><Route/></span><div><b>Montar rota</b><small>{aguardando} aguardando</small></div><ChevronRight/></button></section>
  <section className="metrics">{cards.map(([t,n,sub,I,c])=><article key={t}><div className={"metric-icon "+c}><I/></div><div><span>{t}</span><strong>{n}</strong><small>{sub}</small></div></article>)}</section>
  <section className="workspace"><div className="map-card"><div className="card-title"><div><h2>Mapa da operacao</h2><p>Mapa gratuito com localizacao por GPS</p></div><button><MapPinned size={18}/> {MAP_TILE_PROVIDERS[mapProvider].name}</button></div><FreeMap deliveries={deliveries} mapProvider={mapProvider}/><div className="map-legend"><span><i className="dot waiting"/>Aguardando {aguardando}</span><span><i className="dot transit"/>Em rota {emRota}</span><span><i className="dot done"/>Entregues {entregues}</span></div></div>
  <div className="next-card"><div className="card-title"><div><h2>Proximas entregas</h2><p>Ordenadas pela lista</p></div><button className="text-btn" onClick={()=>go("Entregas")}>Ver todas</button></div>{deliveries.length===0?<div style={{padding:"26px",textAlign:"center",color:"#6c7a77",fontSize:"12px"}}>Nenhuma entrega ainda. Use <b>Ler comanda</b> ou <b>Nova entrega</b>.</div>:deliveries.slice(0,5).map((d)=><div className="next-row" key={d.id}><div className="timebox"><b>{d.time}</b><span>hoje</span></div><div><b>{d.customer}</b><span><MapPin/> {d.district} · {d.address}</span><small>{d.order} · {d.payment}</small></div><StatusBadge status={d.status}/></div>)}</div></section>
@@ -76,6 +85,11 @@ function FreeMap({deliveries,mapProvider,route}:{deliveries:Delivery[];mapProvid
   useEffect(()=>{let active=true; void import("leaflet").then(L=>{if(!active||!element.current)return; map.current?.remove(); const instance=L.map(element.current,{zoomControl:true}).setView([STORE_POINT.latitude,STORE_POINT.longitude],13); map.current=instance; const tile=MAP_TILE_PROVIDERS[mapProvider]; L.tileLayer(tile.url,{attribution:tile.attribution,maxZoom:tile.maxZoom}).addTo(instance); const bounds:Array<[number,number]>=[]; L.circleMarker([STORE_POINT.latitude,STORE_POINT.longitude],{radius:9,color:"#fff",weight:3,fillColor:"#0b5c54",fillOpacity:1}).bindPopup("Ponto de saída").addTo(instance); bounds.push([STORE_POINT.latitude,STORE_POINT.longitude]); deliveries.forEach((delivery,index)=>{const color=delivery.status==="Entregue"?"#459664":delivery.status==="Em rota"?"#3577a9":"#ed7d38"; L.circleMarker([delivery.latitude,delivery.longitude],{radius:9,color:"#fff",weight:3,fillColor:color,fillOpacity:1}).bindTooltip(String(index+1),{permanent:true,direction:"center",className:"route-number"}).bindPopup(`<strong>${delivery.customer}</strong><br>${delivery.address}<br>${delivery.district}`).addTo(instance); bounds.push([delivery.latitude,delivery.longitude]);}); if(route?.geometry.length){const line=route.geometry.map(point=>[point.latitude,point.longitude] as [number,number]); L.polyline(line,{color:"#087b6e",weight:5,opacity:.88}).addTo(instance); bounds.push(...line);} if(bounds.length>1)instance.fitBounds(L.latLngBounds(bounds),{padding:[28,28],maxZoom:15}); setTimeout(()=>instance.invalidateSize(),50);}); return()=>{active=false;map.current?.remove();map.current=null}},[deliveries,mapProvider,route]);
   async function locate(){setGpsMessage("Localizando…");try{const point=await currentPosition();map.current?.setView([point.latitude,point.longitude],16);const L=await import("leaflet");if(map.current)L.circleMarker([point.latitude,point.longitude],{radius:10,color:"#fff",weight:3,fillColor:"#2563eb",fillOpacity:1}).bindPopup("Sua localização").addTo(map.current).openPopup();setGpsMessage("Localização encontrada")}catch(error){setGpsMessage(error instanceof Error?error.message:"GPS indisponível")}}
   return <div className="live-map-wrap"><div ref={element} className="live-map"/><div className="map-live-controls"><button type="button" onClick={locate}><Navigation size={15}/> Minha localização</button>{gpsMessage&&<span>{gpsMessage}</span>}</div></div>
+}
+
+function MapOverview({deliveries,mapProvider,go}:{deliveries:Delivery[];mapProvider:MapTileProvider;go:(page:string)=>void}){
+  const visible=deliveries.filter(delivery=>delivery.status!=="Entregue");
+  return <div className="content map-overview"><section className="map-overview-head"><div><h2>Mapa da operação</h2><p>{visible.length} entrega(s) pendente(s) ou em rota</p></div><button className="primary" type="button" onClick={()=>go("Planejar rota")}><Route/> Montar rota</button></section>{visible.length?<div className="map-overview-card"><FreeMap deliveries={visible} mapProvider={mapProvider}/><div className="map-overview-list">{visible.slice(0,4).map((delivery,index)=><button type="button" key={delivery.id}><strong>{index+1}</strong><span><b>{delivery.customer}</b><small>{delivery.address} · {delivery.district}</small></span><StatusBadge status={delivery.status}/></button>)}</div></div>:<EmptyState icon={MapPin} title="Nenhuma entrega no mapa" description="Cadastre uma entrega e confirme o endereço para visualizar sua localização." actionLabel="Ver entregas" onAction={()=>go("Entregas")}/>}</div>
 }
 
 function Deliveries({data,query,setQuery,remove}:{data:Delivery[];query:string;setQuery:(s:string)=>void;remove:(id:number)=>void}){const fees=data.reduce((s,d)=>s+d.deliveryFee,0);return <div className="content"><div className="list-finance"><div><span>Taxas desta lista</span><b>{money(fees)}</b></div><div><span>Já concluído</span><b>{money(data.filter(d=>d.status==="Entregue").reduce((s,d)=>s+d.deliveryFee,0))}</b></div><div><span>Valor dos pedidos</span><b>{money(data.reduce((s,d)=>s+d.amount,0))}</b></div></div><div className="toolbar"><label><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar cliente, telefone, endereço ou pedido"/></label><button><SlidersHorizontal/> Filtros</button><select><option>Todos os status</option><option>Aguardando</option><option>Em rota</option></select></div><div className="table-card"><div className="table-head"><b>{data.length} entregas</b><span>Atualizado agora</span></div><div className="delivery-table"><div className="tr th"><span>Pedido / Cliente</span><span>Endereço</span><span>Pedido / Taxa</span><span>Prioridade</span><span>Motoboy</span><span>Status</span><span/></div>{data.map(d=><div className="tr" key={d.id}><span><b>{d.order} · {d.customer}</b><small>{d.phone} · {d.time}</small></span><span><b>{d.district}</b><small>{d.address}</small></span><span><b>{money(d.amount)}</b><small className="fee-value">Taxa: {money(d.deliveryFee)}</small></span><span><Priority p={d.priority}/></span><span><b>{d.driver}</b></span><span><StatusBadge status={d.status}/></span><span className="row-actions"><button title="Visualizar"><Eye/></button><button title="Editar"><Pencil/></button><button title="Excluir" onClick={()=>remove(d.id)}><Trash2/></button></span></div>)}</div></div></div>}
