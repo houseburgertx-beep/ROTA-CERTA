@@ -83,3 +83,18 @@ export async function deleteDelivery(companyId: string, deliveryId: string) {
   if (!db) throw new Error("Firebase não está configurado.");
   await deleteDoc(doc(db, "companies", companyId, "deliveries", deliveryId));
 }
+
+export async function updateDeliveryLocation(
+  companyId: string,
+  deliveryId: string,
+  latitude: number,
+  longitude: number,
+) {
+  if (!db) throw new Error("Firebase não está configurado.");
+  await updateDoc(doc(db, "companies", companyId, "deliveries", deliveryId), {
+    latitude,
+    longitude,
+    geocodedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}

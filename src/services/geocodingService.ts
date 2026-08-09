@@ -128,6 +128,28 @@ export async function geocode(address: string): Promise<GeocodingResult | null> 
   return null;
 }
 
+export async function geocodeDeliveryAddress(parts: {
+  address: string;
+  district?: string;
+  city?: string;
+  postalCode?: string;
+}): Promise<GeocodingResult | null> {
+  const city = parts.city?.trim() || "Teixeira de Freitas";
+  const addressWithoutNumber = parts.address.replace(/[,\s]+(?:n[º°o]?\s*)?\d+[a-z]?\b.*$/i, "").trim();
+  const attempts = [
+    [parts.address, parts.district, city, "BA", "Brasil"],
+    [parts.postalCode, city, "BA", "Brasil"],
+    [addressWithoutNumber, parts.district, city, "BA", "Brasil"],
+    [parts.address, city, "BA", "Brasil"],
+    [parts.district, city, "BA", "Brasil"],
+  ].map(values => values.filter(Boolean).join(", ")).filter((value,index,list)=>value&&list.indexOf(value)===index);
+  for (const attempt of attempts) {
+    const result = await geocode(attempt);
+    if (result) return result;
+  }
+  return null;
+}
+
 export async function reverseGeocode(
   point: GeoPoint,
 ): Promise<GeocodingResult | null> {
