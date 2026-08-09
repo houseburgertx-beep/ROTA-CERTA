@@ -9,14 +9,25 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || profile().role == 'admin' && profile().companyId == resource.data.companyId);
-      // O primeiro perfil administrativo deve ser provisionado por ambiente
-      // confiável. O cliente nunca escolhe o próprio papel ou estabelecimento.
-      allow create: if false;
-      allow update: if signedIn() && request.auth.uid == userId
+      // O primeiro administrador é provisionado manualmente no console.
+      // Depois disso, somente um admin existente cria perfis da mesma empresa.
+      allow create: if signedIn()
+        && profile().role == 'admin'
+        && request.resource.data.companyId == profile().companyId
+        && request.resource.data.role in ['admin', 'driver'];
+      allow update: if signedIn() && (
+        request.auth.uid == userId
         && request.resource.data.companyId == resource.data.companyId
         && request.resource.data.role == resource.data.role
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['name', 'phone', 'photoURL', 'updatedAt']);
+          .hasOnly(['name', 'phone', 'photoURL', 'updatedAt'])
+        || profile().role == 'admin'
+        && profile().companyId == resource.data.companyId
+        && request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'phone', 'photoURL', 'active', 'updatedAt'])
+      );
       allow delete: if false;
     }
 

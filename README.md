@@ -20,7 +20,7 @@ Aplicação operacional para cadastrar entregas, ler comandas no aparelho, local
 
 ## Tecnologias
 
-React, TypeScript, Vite/Vinext, Tailwind CSS, Firebase Authentication, Cloud Firestore, Leaflet/OpenStreetMap, Tesseract.js, Nominatim, OpenRouteService, Lucide React, React Hook Form, Zod e date-fns.
+React, TypeScript, Vite, Firebase Authentication, Cloud Firestore, Firebase Hosting, Leaflet/OpenStreetMap, Tesseract.js, Nominatim, OSRM, Lucide React, React Hook Form e Zod.
 
 ## Instalação local
 
@@ -43,7 +43,9 @@ Sem variáveis configuradas, a aplicação abre automaticamente em modo demonstr
 5. Publique as regras com `firebase deploy --only firestore:rules`.
 6. Cadastre o domínio publicado em **Authentication > Settings > Authorized domains**.
 
-O cadastro inicial deve criar o usuário no Authentication, o documento da empresa e o perfil `admin`. As regras impedem leitura entre empresas e limitam o motoboy aos campos operacionais das entregas atribuídas.
+O projeto usa somente recursos compatíveis com o plano Spark: Authentication por e-mail/senha, Firestore e Hosting. Cloud Storage e Cloud Functions não fazem parte desta versão.
+
+O primeiro administrador deve ser criado manualmente no Authentication e em `users/{uid}` pelo Console Firebase. Depois disso, administradores podem provisionar perfis da própria empresa. As regras impedem leitura entre empresas e limitam o entregador aos campos operacionais das entregas atribuídas.
 
 ## Mapas, localização e roteirização gratuitas
 
@@ -57,9 +59,9 @@ OpenRouteService, GraphHopper, Geoapify e LocationIQ permanecem como opções de
 
 Consulte `.env.example`. Nunca publique `.env` e nunca inclua chaves reais no código. Variáveis `VITE_` ficam acessíveis no navegador. Esta arquitetura é adequada a MVP e testes; em produção, proteja chaves e aplique limites em um backend.
 
-## Deploy no GitHub Pages
+## Deploy no Firebase Hosting
 
-Configure o `base` do Vite com o nome do repositório, envie o projeto à branch `main`, ative **Settings > Pages > GitHub Actions** e cadastre as variáveis necessárias como secrets do repositório. Em SPA estática, use `HashRouter` ou copie `index.html` para `404.html` no workflow para preservar rotas. O build publicado deve vir de `npm run build`.
+Associe o diretório ao seu projeto Firebase, execute `npm run build` e publique com `firebase deploy --only hosting,firestore`. O workflow do GitHub usa os secrets `VITE_FIREBASE_*` e `FIREBASE_SERVICE_ACCOUNT` para publicar a branch `main`.
 
 ## Privacidade e limites
 
@@ -71,7 +73,7 @@ A foto da comanda é processada localmente e descartada ao sair da tela. Somente
 - **Endereço não localizado:** acrescente número, bairro, cidade e estado; ajuste o marcador manualmente.
 - **Rota usa fallback local:** confira a internet; OSRM e Valhalla são tentados automaticamente.
 - **Firebase permission-denied:** confirme `companyId`, `role` e publicação das regras.
-- **Página em branco no GitHub Pages:** corrija `base` e o fallback de SPA.
+- **Publicação não inicia:** confira o projeto selecionado no Firebase CLI e os secrets do GitHub.
 - **OCR fraco:** fotografe sem sombra, paralelamente ao papel e com boa iluminação.
 
 ## Próximas melhorias
