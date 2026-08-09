@@ -1,0 +1,6 @@
+.delivery-marker-shell{background:transparent!important;border:0!important}
+.delivery-marker-shell span{width:34px;height:34px;border-radius:13px;display:grid;place-items:center;background:var(--marker-color);color:#fff;border:3px solid #fff;box-shadow:0 7px 18px rgba(36,27,70,.25);font-size:11px;font-weight:800;line-height:28px;text-align:center}
+.address-tooltip{border:0!important;border-radius:9px!important;box-shadow:var(--shadow-sm)!important;font:700 10px Inter,sans-serif!important;color:#25212f!important}
+.map-popup{min-width:170px;display:flex;flex-direction:column;gap:3px;font-family:Inter,sans-serif}
+.map-popup small{font-size:8px;color:#7557f6;font-weight:800;letter-spacing:.08em}
+.map-popup strong{font-size:13px}.map-popup span{font-size:10px;color:#686571}.map-popup b{font-size:10px;margin-top:4px}

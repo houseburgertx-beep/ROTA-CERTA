@@ -19,17 +19,24 @@ const receiptSchema = z.object({
   deliveryFee: z.number().nonnegative().nullable().default(null),
   payment: z.enum(["Pix", "Dinheiro", "Cartão", "Pago", "Não identificado"]).default("Não identificado"),
   uncertainFields: z.array(z.string()).default([]),
+  confidence: z.record(z.number().min(0).max(1)).default({}),
 });
 
 export type AIReceiptFields = z.infer<typeof receiptSchema>;
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Não consegui abrir a imagem."));
-    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
-    reader.readAsDataURL(file);
-  });
+async function prepareReceiptImage(file: File): Promise<{ data: string; mimeType: string }> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 2000 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Não consegui preparar a imagem.");
+  context.filter = "grayscale(1) contrast(1.18) brightness(1.04)";
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const url = canvas.toDataURL("image/jpeg", 0.9);
+  return { data: url.split(",")[1] || "", mimeType: "image/jpeg" };
 }
 
 export async function analyzeReceiptWithAI(file: File): Promise<AIReceiptFields> {
@@ -39,7 +46,7 @@ export async function analyzeReceiptWithAI(file: File): Promise<AIReceiptFields>
 
   const ai = getAI(firebaseApp, { backend: new GoogleAIBackend() });
   const model = getGenerativeModel(ai, {
-    model: "gemini-3.5-flash-lite",
+    model: "gemini-3.5-flash",
     generationConfig: {
       temperature: 0.1,
       responseMimeType: "application/json",
@@ -53,21 +60,33 @@ export async function analyzeReceiptWithAI(file: File): Promise<AIReceiptFields>
           amount: { type: ["number", "null"] }, deliveryFee: { type: ["number", "null"] },
           payment: { type: "string", enum: ["Pix", "Dinheiro", "Cartão", "Pago", "Não identificado"] },
           uncertainFields: { type: "array", items: { type: "string" } },
+          confidence: { type: "object", additionalProperties: { type: "number" } },
         },
-        required: ["customer", "phone", "address", "number", "district", "city", "postalCode", "complement", "reference", "items", "notes", "amount", "deliveryFee", "payment", "uncertainFields"],
+        required: ["customer", "phone", "address", "number", "district", "city", "postalCode", "complement", "reference", "items", "notes", "amount", "deliveryFee", "payment", "uncertainFields", "confidence"],
       },
     },
   });
-  const data = await fileToBase64(file);
+  const image = await prepareReceiptImage(file);
   const result = await model.generateContent([
-    "Analise esta comanda brasileira de entrega. Extraia somente informações visíveis. Não invente dados. Separe rua e número. Valores devem ser números em reais. Coloque em uncertainFields os nomes dos campos ausentes, ilegíveis ou duvidosos.",
-    { inlineData: { data, mimeType: file.type } },
+    `Você é especialista em leitura de comandas brasileiras de delivery. Examine toda a imagem, inclusive texto manuscrito.
+Regras obrigatórias:
+- extraia somente dados realmente visíveis; nunca complete por suposição;
+- diferencie valor do pedido, taxa de entrega e troco;
+- normalize telefone brasileiro, CEP e valores em reais;
+- separe logradouro e número; preserve complemento e referência;
+- transcreva itens com quantidade e variações;
+- confidence deve conter uma nota de 0 a 1 para cada campo encontrado;
+- inclua em uncertainFields todo campo ausente, ilegível, ambíguo ou com confiança abaixo de 0.78.
+A resposta deve ser somente o JSON solicitado.`,
+    { inlineData: image },
   ]);
   return receiptSchema.parse(JSON.parse(result.response.text()));
 }
 
 export function receiptFieldsForForm(fields: AIReceiptFields): Record<string, string> {
   const notes = [fields.notes, fields.reference && `Referência: ${fields.reference}`, fields.items.length && `Itens: ${fields.items.join("; ")}`].filter(Boolean).join("\n");
+  const uncertain = new Set(fields.uncertainFields);
+  for (const [field, confidence] of Object.entries(fields.confidence)) if (confidence < 0.78) uncertain.add(field);
   return Object.fromEntries(Object.entries({
     customer: fields.customer, phone: fields.phone,
     address: [fields.address, fields.number].filter(Boolean).join(", "),
@@ -76,5 +95,7 @@ export function receiptFieldsForForm(fields: AIReceiptFields): Record<string, st
     deliveryFee: fields.deliveryFee == null ? "" : String(fields.deliveryFee),
     payment: fields.payment === "Não identificado" ? "" : fields.payment,
     notes,
+    _uncertain: [...uncertain].join(","),
+    _source: "Firebase AI · Gemini 3.5 Flash",
   }).filter(([, value]) => Boolean(value)));
 }
