@@ -32,6 +32,8 @@ const deliverySchema = z.object({
   amount: z.number().finite().min(0),
   deliveryFee: z.number().finite().min(0),
   paymentMethod: z.string().trim().min(2).max(40),
+  platform: z.enum(["ifood", "other"]).optional(),
+  platformOrderId: z.string().trim().max(60).optional(),
   priority: z.enum(["normal", "high", "urgent"]).optional(),
   source: z.enum(["manual", "ocr"]).optional(),
   notes: z.string().trim().max(500).optional(),

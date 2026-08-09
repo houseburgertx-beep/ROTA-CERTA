@@ -69,17 +69,15 @@ service cloud.firestore {
 
       match /driverLocations/{driverId} {
         allow read: if admin(companyId) || (driver(companyId) && driverId == request.auth.uid);
-        allow create: if driver(companyId)
-          && driverId == request.auth.uid
-          && request.resource.data.driverId == request.auth.uid
+        allow create: if (admin(companyId) || (driver(companyId) && driverId == request.auth.uid))
+          && request.resource.data.driverId == driverId
           && request.resource.data.companyId == companyId
-          && request.resource.data.keys().hasOnly(['driverId','companyId','routeId','nextStopId','latitude','longitude','accuracy','heading','speed','updatedAt']);
-        allow update: if driver(companyId)
-          && driverId == request.auth.uid
-          && request.resource.data.driverId == request.auth.uid
+          && request.resource.data.keys().hasOnly(['driverId','companyId','routeId','nextStopId','latitude','longitude','accuracy','heading','speed','active','updatedAt']);
+        allow update: if (admin(companyId) || (driver(companyId) && driverId == request.auth.uid))
+          && request.resource.data.driverId == driverId
           && request.resource.data.companyId == companyId
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['driverId','companyId','routeId','nextStopId','latitude','longitude','accuracy','heading','speed','updatedAt']);
+            .hasOnly(['driverId','companyId','routeId','nextStopId','latitude','longitude','accuracy','heading','speed','active','updatedAt']);
         allow delete: if admin(companyId);
       }
     }
