@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   limit,
   onSnapshot,
@@ -17,16 +18,22 @@ import type { DeliveryRecord, NewDeliveryRecord } from "../types/delivery";
 const deliverySchema = z.object({
   companyId: z.string().min(1),
   customerName: z.string().trim().min(2).max(120),
+  orderNumber: z.string().trim().min(1).max(40),
   phone: z.string().trim().min(8).max(24),
   address: z.string().trim().min(3).max(180),
   number: z.string().trim().min(1).max(20),
   district: z.string().trim().min(2).max(80),
+  city: z.string().trim().max(80).optional(),
+  postalCode: z.string().trim().max(12).optional(),
   complement: z.string().trim().max(100).optional(),
   reference: z.string().trim().max(160).optional(),
   latitude: z.number().finite().optional(),
   longitude: z.number().finite().optional(),
   amount: z.number().finite().min(0),
+  deliveryFee: z.number().finite().min(0),
   paymentMethod: z.string().trim().min(2).max(40),
+  priority: z.enum(["normal", "high", "urgent"]).optional(),
+  source: z.enum(["manual", "ocr"]).optional(),
   notes: z.string().trim().max(500).optional(),
   status: z.enum(["pending","assigned","on_route","arrived","delivered","problem","cancelled"]),
   customerId: z.string().optional(),
@@ -70,4 +77,9 @@ export async function updateDeliveryStatus(
     updatedAt: serverTimestamp(),
     ...(status === "delivered" ? { deliveredAt: serverTimestamp() } : {}),
   });
+}
+
+export async function deleteDelivery(companyId: string, deliveryId: string) {
+  if (!db) throw new Error("Firebase não está configurado.");
+  await deleteDoc(doc(db, "companies", companyId, "deliveries", deliveryId));
 }
