@@ -9,16 +9,20 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if signedIn() && (request.auth.uid == userId || profile().role == 'admin' && profile().companyId == resource.data.companyId);
-      allow create: if signedIn() && request.auth.uid == userId;
-      // O usuário nunca pode trocar o próprio estabelecimento ou perfil.
+      // O primeiro perfil administrativo deve ser provisionado por ambiente
+      // confiável. O cliente nunca escolhe o próprio papel ou estabelecimento.
+      allow create: if false;
       allow update: if signedIn() && request.auth.uid == userId
         && request.resource.data.companyId == resource.data.companyId
-        && request.resource.data.role == resource.data.role;
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'phone', 'photoURL', 'updatedAt']);
+      allow delete: if false;
     }
 
     match /companies/{companyId} {
       allow read: if sameCompany(companyId);
-      allow create: if signedIn();
+      allow create: if false;
       allow update, delete: if admin(companyId);
 
       match /drivers/{driverId} {
@@ -38,8 +42,34 @@ service cloud.firestore {
       }
 
       match /routes/{routeId} {
-        allow read: if sameCompany(companyId);
+        allow read: if admin(companyId) || (
+          driver(companyId) && resource.data.driverId == request.auth.uid
+        );
         allow write: if admin(companyId);
+
+        match /stops/{stopId} {
+          allow read: if admin(companyId) || (
+            driver(companyId)
+            && get(/databases/$(database)/documents/companies/$(companyId)/routes/$(routeId)).data.driverId == request.auth.uid
+          );
+          allow write: if admin(companyId);
+        }
+      }
+
+      match /driverLocations/{driverId} {
+        allow read: if admin(companyId) || (driver(companyId) && driverId == request.auth.uid);
+        allow create: if driver(companyId)
+          && driverId == request.auth.uid
+          && request.resource.data.driverId == request.auth.uid
+          && request.resource.data.companyId == companyId
+          && request.resource.data.keys().hasOnly(['driverId','companyId','routeId','nextStopId','latitude','longitude','accuracy','heading','speed','updatedAt']);
+        allow update: if driver(companyId)
+          && driverId == request.auth.uid
+          && request.resource.data.driverId == request.auth.uid
+          && request.resource.data.companyId == companyId
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['driverId','companyId','routeId','nextStopId','latitude','longitude','accuracy','heading','speed','updatedAt']);
+        allow delete: if admin(companyId);
       }
     }
   }

@@ -11,8 +11,19 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    "assets/**",
+    "github-pages/**",
+    "dist/**",
+    "coverage/**",
+    "tsconfig.tsbuildinfo",
     "next-env.d.ts",
   ]),
+  {
+    rules: {
+      // Fotos de comandas usam object URLs locais e não passam pelo otimizador.
+      "@next/next/no-img-element": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;
