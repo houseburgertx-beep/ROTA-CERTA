@@ -8,6 +8,11 @@ import { calculateRoute } from "../src/services/routingService";
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from "../src/services/mapProviders";
 import type { GeoPoint, RouteResult } from "../src/types";
 import { EmptyState } from "../src/components/EmptyState";
+import { LoginView } from "../src/components/LoginView";
+import { useAuth } from "../src/hooks/useAuth";
+import { signOut } from "../src/services/authService";
+import { firebaseConfigured } from "../src/services/firebase";
+import type { User } from "../src/types";
 
 type Status = "Aguardando" | "Pronta para sair" | "Em rota" | "Entregue" | "Problema";
 type Delivery = { id:number; order:string; customer:string; phone:string; address:string; district:string; amount:number; deliveryFee:number; payment:string; priority:"Normal"|"Alta"|"Urgente"; status:Status; driver:string; time:string; latitude:number; longitude:number };
@@ -34,7 +39,17 @@ const mobileNav = [
   ["Configurações", "Perfil", UserRound],
 ] as const;
 
+const demoProfile: User = {id:"demo",name:"André Silva",email:"demo@rotacerta.app",phone:"",role:"admin",companyId:"demo",active:true};
+
 export default function Home() {
+  const session=useAuth();
+  if(session.loading)return <main className="auth-shell"><div className="auth-loading"><span/><b>Preparando sua operação…</b><small>Carregando acesso e entregas</small></div></main>;
+  if(firebaseConfigured&&!session.firebaseUser)return <LoginView/>;
+  if(firebaseConfigured&&!session.profile)return <LoginView profileError={session.error} signedInEmail={session.firebaseUser?.email||undefined}/>;
+  return <DeliveryApp profile={session.profile||demoProfile} demoMode={!firebaseConfigured}/>;
+}
+
+function DeliveryApp({profile,demoMode}:{profile:User;demoMode:boolean}) {
   const [page,setPage]=useState("Visão geral"); const [mobile,setMobile]=useState(false); const [query,setQuery]=useState(""); const [deliveries,setDeliveries]=useState<Delivery[]>(()=>{try{const raw=typeof localStorage!=="undefined"?localStorage.getItem(DELIV_KEY):null;const s=raw?JSON.parse(raw):null;return Array.isArray(s)?s:initialDeliveries;}catch{return initialDeliveries;}});const [ocrData,setOcrData]=useState<Record<string,string>|null>(null); const [modal,setModal]=useState<"new"|"ocr"|null>(null); const [toast,setToast]=useState(""); const [mapProvider,setMapProvider]=useState<MapTileProvider>("osm");
   const filtered=useMemo(()=>deliveries.filter(d=>(d.customer+d.order+d.address+d.phone).toLowerCase().includes(query.toLowerCase())),[deliveries,query]);
   useEffect(()=>{try{localStorage.setItem(DELIV_KEY,JSON.stringify(deliveries));}catch{}},[deliveries]);const go=(p:string)=>{setPage(p);setMobile(false)};
@@ -45,7 +60,7 @@ export default function Home() {
       <div className="brand"><div className="brandmark"><Route size={24}/></div><div><b>Rota Certa</b><span>Gestão de entregas</span></div><button className="close" onClick={()=>setMobile(false)}><X/></button></div>
       <nav>{nav.map(([label,Icon])=><button key={label} onClick={()=>go(label)} className={page===label?"active":""}><Icon size={20}/><span>{label}</span>{label==="Entregas"&&<em>5</em>}</button>)}</nav>
       <div className="ops-card"><span className="live-dot"/> <b>Operação ativa</b><small>Loja aberta até 22h</small><div><span>Hoje</span><strong>{deliveries.length} entrega(s)</strong></div></div>
-      <div className="user"><div className="avatar">AS</div><div><b>André Silva</b><span>Administrador</span></div><MoreHorizontal size={20}/></div>
+      <div className="user"><div className="avatar">{initials(profile.name)}</div><div><b>{profile.name}</b><span>{profile.role==="admin"?"Administrador":"Entregador"}{demoMode?" · demonstração":""}</span></div>{demoMode?<MoreHorizontal size={20}/>:<button type="button" title="Sair" onClick={()=>void signOut()}><X/></button>}</div>
     </aside>
     <main>
       <header><button className="hamb" onClick={()=>setMobile(true)}><Menu/></button><div><h1>{page}</h1><p>{subtitle(page)}</p></div><div className="head-actions"><button className="icon-btn"><Bell size={19}/><i/></button><button className="primary" onClick={()=>setModal("new")}><Plus size={19}/> Nova entrega</button></div></header>
@@ -156,3 +171,4 @@ function parseComanda(text:string):Record<string,string>{
   return out;
 }
 const money=(v:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
+const initials=(name:string)=>name.split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]).join("").toUpperCase()||"RC";
