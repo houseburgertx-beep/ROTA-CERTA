@@ -26,6 +26,8 @@ export type DeliveryRecord = {
   amount: number;
   deliveryFee: number;
   paymentMethod: string;
+  platform?: "ifood" | "other";
+  platformOrderId?: string;
   priority?: "normal" | "high" | "urgent";
   source?: "manual" | "ocr";
   notes?: string;

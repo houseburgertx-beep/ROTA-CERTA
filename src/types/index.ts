@@ -12,3 +12,4 @@ export interface RouteResult { provider:RoutingProvider; orderedPoints:GeoPoint[
 export interface RoutePlan { id:string; driverId:string; stops:RouteStop[]; totalDistance:number; estimatedDuration:number; optimizationMethod:RoutingProvider }
 export interface OCRResult { rawText:string; confidence:number; fields:Partial<Delivery>; warnings:string[] }
 export interface GeocodingResult extends GeoPoint { displayName:string; provider?:string }
+export interface DriverLocation extends GeoPoint { id:string;driverId:string;companyId:string;routeId?:string;nextStopId?:string;accuracy?:number|null;heading?:number|null;speed?:number|null;active?:boolean;updatedAt?:unknown }
