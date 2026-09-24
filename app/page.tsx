@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Bell,
   Bike,
   Camera,
   Check,
@@ -381,26 +382,85 @@ function MobileDeliveryApp({
   const driversRef = useRef(drivers);
   driversRef.current = drivers;
 
-  // Função auxiliar para tocar alerta sonoro quando um novo pedido chega
-  const playNewOrderAlert = () => {
+  // Desbloqueia AudioContext em qualquer primeiro toque do usuário
+  useEffect(() => {
+    const unlockAudio = () => {
+      try {
+        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          const testCtx = new AudioCtx();
+          if (testCtx.state === "suspended") {
+            void testCtx.resume();
+          }
+        }
+      } catch {}
+      window.removeEventListener("touchstart", unlockAudio);
+      window.removeEventListener("click", unlockAudio);
+    };
+    window.addEventListener("touchstart", unlockAudio, { passive: true });
+    window.addEventListener("click", unlockAudio, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", unlockAudio);
+      window.removeEventListener("click", unlockAudio);
+    };
+  }, []);
+
+  // Alerta Sonoro Autêntico estilo iFood (Arpeggio D6-F#6-A6-D7 com eco e vibração)
+  const playIfoodSoundAlert = () => {
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        const ctx = new AudioCtx();
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === "suspended") {
+        void ctx.resume();
+      }
+
+      // Haptic feedback (duplo toque vibratório estilo iFood)
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate([180, 80, 220]);
+      }
+
+      const now = ctx.currentTime;
+      // Melodia clássica do iFood: duplo toque ascendente brilhante
+      const notes = [
+        // Toque 1
+        { freq: 1174.66, time: 0.00, dur: 0.09 }, // D6
+        { freq: 1479.98, time: 0.09, dur: 0.09 }, // F#6
+        { freq: 1760.00, time: 0.18, dur: 0.09 }, // A6
+        { freq: 2349.32, time: 0.27, dur: 0.38 }, // D7
+
+        // Toque 2 (eco característico)
+        { freq: 1174.66, time: 0.46, dur: 0.09 }, // D6
+        { freq: 1479.98, time: 0.55, dur: 0.09 }, // F#6
+        { freq: 1760.00, time: 0.64, dur: 0.09 }, // A6
+        { freq: 2349.32, time: 0.73, dur: 0.55 }, // D7
+      ];
+
+      notes.forEach(({ freq, time, dur }) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
+
+        // Timbre de sino / marimba percussiva
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, now + time);
+
+        // Curva percussiva com volume nítido
+        gain.gain.setValueAtTime(0.001, now + time);
+        gain.gain.exponentialRampToValueAtTime(0.75, now + time + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + time + dur);
+
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.35);
-      }
-    } catch {}
+
+        osc.start(now + time);
+        osc.stop(now + time + dur);
+      });
+    } catch (e) {
+      console.warn("Falha ao tocar som de novo pedido iFood:", e);
+    }
   };
+
+  const playNewOrderAlert = playIfoodSoundAlert;
 
   // Polling automático da Takeat a cada 15 segundos quando configurado
   useEffect(() => {
@@ -869,8 +929,22 @@ function MobileDeliveryApp({
           </div>
         </button>
 
-        {/* Right: Quick Controls (Loja/Moto switch for ADM, Theme Toggle) */}
+        {/* Right: Quick Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {/* Botão de Testar Som iFood */}
+          <button
+            type="button"
+            onClick={() => {
+              playIfoodSoundAlert();
+              notify("🔔 Som de novo pedido iFood tocado!");
+            }}
+            className="icon-btn"
+            style={{ width: "34px", height: "34px", borderRadius: "11px", border: "1px solid var(--line)" }}
+            title="Testar toque de novo pedido (som iFood)"
+          >
+            <Bell size={15} style={{ color: "var(--primary)" }} />
+          </button>
+
           {currentUser.role === "admin" && (
             <div className="mode-toggle" style={{ padding: "2px" }}>
               <button
@@ -902,6 +976,17 @@ function MobileDeliveryApp({
             aria-label="Alternar tema"
           >
             {theme === "light" ? <Moon size={15} /> : <Sun size={15} />}
+          </button>
+
+          {/* Botão Sair direto no Header */}
+          <button
+            type="button"
+            className="btn-header-logout"
+            onClick={onLogout}
+            title="Sair da Conta"
+          >
+            <LogOut size={13} />
+            <span>Sair</span>
           </button>
         </div>
       </header>
@@ -3115,75 +3200,75 @@ function FinancialTab({
   }, [deliveries, appMode, activeDriver]);
 
   return (
-    <div>
-      {/* Title */}
-      <div style={{ marginBottom: "14px" }}>
-        <h2 style={{ fontSize: "20px", margin: "0 0 4px" }}>Faturamento das Entregas</h2>
-        <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0 }}>
-          {appMode === "motoboy" ? `Ganhos de ${activeDriver?.name || "Motoboy"}` : "Relatório Geral da Frota da Loja"}
-        </p>
-      </div>
-
-      {/* Hero Cards */}
-      <div className="night-finance-banner">
-        <div className="night-card">
-          <div className="night-card-kicker">
-            <Sparkles size={12} /> Faturado Esta Noite
+    <div className="finance-screen-container">
+      {/* Hero Balance Card */}
+      <div className="finance-hero-balance-card">
+        <div className="finance-hero-top">
+          <div className="finance-hero-label">
+            <Sparkles size={14} /> {appMode === "motoboy" ? `Ganhos Desta Noite (${activeDriver?.name?.split(" ")[0] || "Motoboy"})` : "Faturamento da Loja"}
           </div>
-          <div className="night-card-val">{money(stats.nightTotal)}</div>
-          <div className="night-card-sub">
-            {stats.nightCount} corrida(s) concluída(s) • Média: {money(stats.avgFee)}/corrida
-          </div>
+          <span className="finance-hero-badge">
+            <CheckCircle2 size={11} /> Turno Ativo
+          </span>
         </div>
-
-        <div className="night-card month">
-          <div className="night-card-kicker">
-            <CircleDollarSign size={12} /> Faturado no Mês
-          </div>
-          <div className="night-card-val">{money(stats.monthTotal)}</div>
-          <div className="night-card-sub">
-            {stats.monthCount} entregas acumuladas
-          </div>
+        <div className="finance-hero-amount">{money(stats.nightTotal)}</div>
+        <div className="finance-hero-sub">
+          <span>{stats.nightCount} entrega(s) concluída(s) hoje</span>
+          <span>•</span>
+          <span>Média {money(stats.avgFee)}/entrega</span>
         </div>
       </div>
 
-      {/* Extrato / Histórico */}
-      <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "18px", padding: "14px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-          <b>Extrato das Corridas Concluídas</b>
-          <span style={{ fontSize: "11px", color: "var(--muted)" }}>{completedList.length} registro(s)</span>
+      {/* 2x2 Metrics Grid */}
+      <div className="finance-metrics-grid">
+        <div className="finance-metric-card highlight">
+          <div className="finance-metric-kicker">
+            <CircleDollarSign size={13} style={{ color: "var(--primary)" }} /> Acumulado do Mês
+          </div>
+          <div className="finance-metric-val">{money(stats.monthTotal)}</div>
+          <div className="finance-metric-sub">{stats.monthCount} entregas no mês</div>
+        </div>
+
+        <div className="finance-metric-card success-tint">
+          <div className="finance-metric-kicker">
+            <Bike size={13} style={{ color: "var(--success)" }} /> Taxa Média
+          </div>
+          <div className="finance-metric-val">{money(stats.avgFee)}</div>
+          <div className="finance-metric-sub">por corrida realizada</div>
+        </div>
+      </div>
+
+      {/* Extrato / Histórico Recente */}
+      <div className="finance-statement-section">
+        <div className="finance-statement-header">
+          <b>Extrato das Corridas</b>
+          <span>{completedList.length} registro(s)</span>
         </div>
 
         {completedList.length === 0 ? (
-          <div style={{ padding: "30px", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
-            Nenhuma entrega foi concluída ainda. Ao tocar em &quot;Entregar&quot;, a taxa de entrega é computada instantaneamente nos ganhos da noite.
+          <div style={{ padding: "36px 16px", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
+            <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "var(--surface-2)", color: "var(--muted)", display: "grid", placeItems: "center", margin: "0 auto 10px" }}>
+              <CircleDollarSign size={24} />
+            </div>
+            <b style={{ color: "var(--ink)", display: "block", marginBottom: "4px" }}>Nenhum ganho registrado hoje</b>
+            <span>Ao concluir pedidos na aba Entregas, o valor da taxa entra automaticamente neste extrato.</span>
           </div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div className="finance-statement-list">
             {completedList.map((d) => (
-              <div
-                key={d.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "10px 12px",
-                  background: "var(--surface-2)",
-                  borderRadius: "12px",
-                  fontSize: "12px",
-                }}
-              >
-                <div>
-                  <b>{d.order} • {d.customer}</b>
-                  <span style={{ display: "block", fontSize: "10px", color: "var(--muted)" }}>
-                    {d.district} • {d.time}
-                  </span>
+              <div key={d.id} className="finance-statement-item">
+                <div className="statement-item-left">
+                  <div className="statement-item-icon">
+                    <Check size={18} strokeWidth={3} />
+                  </div>
+                  <div className="statement-item-info">
+                    <b>{d.order} • {d.customer}</b>
+                    <span>{d.district ? `${d.district} · ` : ""}{d.time}</span>
+                  </div>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <b style={{ color: "var(--success)", fontSize: "13px", display: "block" }}>
-                    +{money(d.deliveryFee)}
-                  </b>
-                  <small style={{ fontSize: "9px", color: "var(--muted)" }}>{d.payment}</small>
+                <div className="statement-item-right">
+                  <span className="statement-item-amount">+{money(d.deliveryFee)}</span>
+                  <span className="statement-item-payment">{d.payment}</span>
                 </div>
               </div>
             ))}
