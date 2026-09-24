@@ -7,13 +7,10 @@ import {
   Flame,
   LockKeyhole,
   Mail,
-  Phone,
   Route,
-  Sparkles,
-  User as UserIcon,
 } from "lucide-react";
 import { useState, type FormEvent } from "react";
-import { friendlyAuthError, signIn, signUp, signOut } from "../services/authService";
+import { friendlyAuthError, signIn, signOut } from "../services/authService";
 import type { User } from "../types";
 
 type LoginViewProps = {
@@ -36,10 +33,7 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
     }
     return "driver";
   });
-  const [isRegister, setIsRegister] = useState(false);
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -62,13 +56,8 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
     setError("");
 
     try {
-      if (isRegister) {
-        const user = await signUp(email, password, name, selectedRole, phone);
-        onLoginSuccess?.(user);
-      } else {
-        const user = await signIn(email, password, selectedRole);
-        onLoginSuccess?.(user);
-      }
+      const user = await signIn(email, password, selectedRole);
+      onLoginSuccess?.(user);
     } catch (reason) {
       setError(friendlyAuthError(reason));
     } finally {
@@ -277,135 +266,11 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
           </p>
         </div>
 
-        {/* Mode Switch (Entrar vs Criar Conta) */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: "16px",
-            marginBottom: "16px",
-            borderBottom: "1px solid var(--line)",
-            paddingBottom: "10px",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegister(false);
-              setError("");
-            }}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: !isRegister ? 800 : 500,
-              color: !isRegister ? "var(--text)" : "var(--muted)",
-              position: "relative",
-              paddingBottom: "4px",
-              borderBottom: !isRegister ? `2px solid ${isDriver ? "#7c3aed" : "#ea580c"}` : "none",
-            }}
-          >
-            Entrar
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegister(true);
-              setError("");
-            }}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: isRegister ? 800 : 500,
-              color: isRegister ? "var(--text)" : "var(--muted)",
-              position: "relative",
-              paddingBottom: "4px",
-              borderBottom: isRegister ? `2px solid ${isDriver ? "#7c3aed" : "#ea580c"}` : "none",
-            }}
-          >
-            {isDriver ? "Cadastrar Motoboy" : "Criar Conta da Loja"}
-          </button>
-        </div>
-
         {/* Form */}
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-          {isRegister && (
-            <>
-              <div>
-                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, marginBottom: "4px" }}>
-                  {isDriver ? "Nome Completo ou Apelido" : "Nome do Restaurante / Loja"}
-                </label>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    background: "var(--surface)",
-                    border: "1px solid var(--line)",
-                    borderRadius: "10px",
-                    padding: "10px 12px",
-                  }}
-                >
-                  <UserIcon size={16} color="var(--muted)" />
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={isDriver ? "Ex: Carlos Silva (Kaká)" : "Ex: House Burger 190"}
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      width: "100%",
-                      outline: "none",
-                      color: "var(--text)",
-                      fontSize: "14px",
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, marginBottom: "4px" }}>
-                  WhatsApp / Telefone
-                </label>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    background: "var(--surface)",
-                    border: "1px solid var(--line)",
-                    borderRadius: "10px",
-                    padding: "10px 12px",
-                  }}
-                >
-                  <Phone size={16} color="var(--muted)" />
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="(73) 99999-9999"
-                    style={{
-                      border: "none",
-                      background: "transparent",
-                      width: "100%",
-                      outline: "none",
-                      color: "var(--text)",
-                      fontSize: "14px",
-                    }}
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           <div>
-            <label style={{ display: "block", fontSize: "11px", fontWeight: 700, marginBottom: "4px" }}>
-              E-mail de Acesso
+            <label style={{ display: "block", fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>
+              {isDriver ? "Usuário ou E-mail" : "E-mail de Acesso da Loja"}
             </label>
             <div
               style={{
@@ -415,16 +280,18 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 background: "var(--surface)",
                 border: "1px solid var(--line)",
                 borderRadius: "10px",
-                padding: "10px 12px",
+                padding: "11px 12px",
               }}
             >
               <Mail size={16} color="var(--muted)" />
               <input
-                type="email"
+                type="text"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={isDriver ? "motoboy@exemplo.com" : "gerencia@restaurante.com"}
+                placeholder={isDriver ? "guilherme (ou seu e-mail)" : "houseburgertx@gmail.com"}
+                autoCapitalize="none"
+                autoCorrect="off"
                 style={{
                   border: "none",
                   background: "transparent",
@@ -438,9 +305,8 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
           </div>
 
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-              <label style={{ fontSize: "11px", fontWeight: 700 }}>Senha</label>
-              {isRegister && <span style={{ fontSize: "10px", color: "var(--muted)" }}>Mínimo 6 dígitos</span>}
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+              <label style={{ fontSize: "12px", fontWeight: 700 }}>Senha de Acesso</label>
             </div>
             <div
               style={{
@@ -529,8 +395,6 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
           >
             {loading ? (
               <span>Conectando ao Firebase…</span>
-            ) : isRegister ? (
-              <span>{isDriver ? "Cadastrar Motoboy & Acessar 🛵" : "Cadastrar Loja / ADM 🏪"}</span>
             ) : (
               <span>{isDriver ? "Entrar como Motoboy 🛵" : "Entrar no Painel da Loja 🏪"}</span>
             )}
