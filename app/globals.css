@@ -23,3 +23,103 @@ main{min-height:100vh;margin-left:242px}header{height:78px;position:sticky;top:0
 @media(max-width:1000px){.metrics{grid-template-columns:1fr 1fr}.workspace{grid-template-columns:1fr}.earnings{grid-template-columns:1fr 1fr}.earnings-title{grid-column:1/-1}.summary{grid-template-columns:1fr 1fr}.driver-grid{grid-template-columns:1fr 1fr}.config{grid-template-columns:1fr}.quick{grid-template-columns:1fr}.route-page{grid-template-columns:360px 1fr}}
 @media(max-width:760px){body{padding-bottom:78px}.sidebar{transform:translateX(-105%);width:min(285px,88vw);box-shadow:20px 0 60px rgba(0,0,0,.18)}.sidebar.open{transform:translateX(0)}.close{display:block}main{margin-left:0}header{height:68px;padding:0 16px;justify-content:flex-start}header h1{font-size:18px}header p{font-size:9px}.hamb{display:grid;place-items:center;width:40px;height:40px;border:0;background:transparent;margin-right:5px;color:var(--primary)}.head-actions{margin-left:auto}.head-actions .icon-btn:not(.theme-toggle){display:none}.content{padding:14px 14px 25px}.welcome{padding:19px;border-radius:17px;align-items:flex-start}.welcome h2{font-size:20px;margin-top:6px}.welcome p{font-size:10px}.welcome>.primary{display:none}.quick{gap:9px;margin-bottom:11px}.quick>button{min-height:74px;border-radius:16px;padding:13px}.quick-primary{order:-1}.metrics{gap:9px;margin-bottom:11px}.metrics article{padding:12px;border-radius:15px;min-height:92px;align-items:flex-start}.metric-icon{width:37px;height:37px;flex-basis:37px}.metrics strong{font-size:22px}.workspace{gap:11px}.card-title{padding:13px 14px}.card-title button{font-size:0;padding:8px}.live-map{height:310px}.map-legend{overflow:auto;white-space:nowrap}.earnings{grid-template-columns:1fr 1fr;padding:14px}.earnings>div:not(.earnings-title){padding-left:0;border-left:0}.earnings-total{grid-column:1/-1;padding-top:10px;border-top:1px solid var(--line)!important}.summary{gap:9px}.summary article{padding:12px}.list-finance{grid-template-columns:1fr 1fr}.list-finance>div:last-child{grid-column:1/-1}.toolbar{flex-wrap:wrap}.toolbar label{flex-basis:100%;max-width:none}.toolbar button,.toolbar select{flex:1}.delivery-table{padding:10px}.tr.th{display:none}.tr{position:relative;display:grid;grid-template-columns:1fr auto;padding:13px;border:1px solid var(--line);border-radius:13px;margin-bottom:8px}.tr>span:nth-child(5){display:none}.row-actions{position:absolute;right:7px;bottom:7px}.driver-grid{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}.form-grid .full{grid-column:auto}.route-page{display:block;height:auto}.route-panel{border:0}.route-map{height:520px}.route-summary{position:relative;left:auto;right:auto;top:auto;border:0;border-radius:0;grid-template-columns:1fr 1fr;box-shadow:none}.map-overview-card{display:block}.map-overview-card .live-map{height:390px}.map-overview-list{display:none}.overlay{align-items:flex-end;padding:0}.modal,.modal.large{max-height:96vh;border-radius:22px 22px 0 0}.modal form{padding:15px}.modal-head{padding:17px}.dropzone{margin:16px;min-height:350px}.capture-actions{width:100%;flex-direction:column}.capture-actions button{width:100%;justify-content:center}.receipt-preview{height:340px;margin:14px}.ocr-actions{margin:0 14px 16px}.locate{align-items:flex-start;flex-wrap:wrap}.locate-actions{width:100%}.locate-actions button{flex:1}.modal-actions{position:sticky;bottom:-15px;background:var(--surface);padding:12px 0 calc(5px + env(safe-area-inset-bottom))}.modal-actions .primary{flex:1}.bottom-nav{position:fixed;z-index:700;left:0;right:0;bottom:0;height:72px;padding-bottom:env(safe-area-inset-bottom);display:grid;grid-template-columns:repeat(5,1fr);background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(18px);border-top:1px solid var(--line);box-shadow:0 -8px 25px rgba(30,24,56,.05)}.bottom-nav button{border:0;background:transparent;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:8px}.bottom-nav button svg{width:19px}.bottom-nav button.active{color:var(--primary);font-weight:800}.toast{left:14px;right:14px;bottom:86px;justify-content:center}.section-head .primary,.map-overview-head .primary{font-size:0;padding:10px}.section-head .primary svg,.map-overview-head .primary svg{margin:0}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* ===== 100% MOBILE-FIRST COMPONENTS ===== */
+.mobile-top-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:60}
+.mode-toggle{display:inline-flex;align-items:center;background:var(--surface-2);border-radius:12px;padding:3px;border:1px solid var(--line)}
+.mode-toggle button{border:0;background:transparent;padding:6px 12px;border-radius:9px;font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer}
+.mode-toggle button.active{background:var(--primary);color:#fff;box-shadow:var(--shadow-sm)}
+.driver-select-pill{font-size:11px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);padding:0 8px;font-weight:600;color:var(--ink);max-width:180px}
+
+/* Financial Highlights (Night & Month) */
+.night-finance-banner{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.night-card{background:linear-gradient(135deg,#1f1c2e,#110e1a);color:#fff;border-radius:18px;padding:15px;box-shadow:var(--shadow);position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.08)}
+.night-card.month{background:linear-gradient(135deg,#0d382b,#081f18)}
+.night-card-kicker{display:flex;align-items:center;gap:5px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:#a3e635;margin-bottom:6px}
+.night-card.month .night-card-kicker{color:#34d399}
+.night-card-val{font-size:22px;font-weight:800;letter-spacing:-.5px;line-height:1.1;margin-bottom:4px}
+.night-card-sub{font-size:10px;opacity:.78}
+
+/* Mobile Delivery Cards */
+.mobile-card-list{display:flex;flex-direction:column;gap:11px}
+.delivery-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:var(--shadow-sm);position:relative;display:flex;flex-direction:column;gap:10px}
+.delivery-card.is-delivered{opacity:.75;border-color:color-mix(in srgb,var(--success) 35%,var(--line))}
+.delivery-card-top{display:flex;align-items:center;justify-content:space-between}
+.order-badge{font-size:12px;font-weight:800;color:var(--primary);background:var(--primary-soft);padding:3px 9px;border-radius:8px}
+.customer-block b{display:block;font-size:14px;letter-spacing:-.2px;color:var(--ink)}
+.customer-block span{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);margin-top:2px}
+.customer-block span svg{width:13px;height:13px;flex-shrink:0;color:var(--primary)}
+.fee-badge-highlight{display:inline-flex;align-items:center;gap:5px;background:rgba(34,197,94,.12);color:#15803d;border:1px solid rgba(34,197,94,.28);font-size:12px;font-weight:800;padding:4px 10px;border-radius:99px}
+:root[data-theme="dark"] .fee-badge-highlight{color:#4ade80;background:rgba(34,197,94,.18)}
+.price-row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface-2);border-radius:12px;font-size:11px}
+.price-row small{color:var(--muted)}
+.card-actions-grid{display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;margin-top:4px}
+.btn-action{height:38px;border-radius:10px;border:0;display:flex;align-items:center;justify-content:center;gap:6px;font-size:11px;font-weight:700;cursor:pointer}
+.btn-action svg{width:15px;height:15px}
+.btn-whatsapp{background:#25d366;color:#fff}
+.btn-whatsapp:hover{background:#1eb857}
+.btn-call{background:#3b82f6;color:#fff}
+.btn-call:hover{background:#2563eb}
+.btn-maps{background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
+.btn-done{background:#10b981;color:#fff}
+.btn-done:hover{background:#059669}
+
+/* Fullscreen Mobile Map */
+.mobile-map-container{position:relative;width:100%;height:calc(100vh - 138px);min-height:480px;border-radius:18px;overflow:hidden;border:1px solid var(--line)}
+.mobile-map-container .live-map{height:100%!important;width:100%!important}
+.map-floating-bar{position:absolute;top:10px;left:10px;right:10px;z-index:500;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow)}
+.map-floating-bar b{font-size:13px;display:block}
+.map-floating-bar span{font-size:10px;color:var(--muted);display:block}
+.map-bottom-drawer{position:absolute;bottom:10px;left:10px;right:10px;z-index:500;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px;box-shadow:var(--shadow)}
+
+/* Driver Management (ADM) */
+.driver-admin-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px;display:flex;flex-direction:column;gap:10px}
+.driver-admin-header{display:flex;align-items:center;gap:10px}
+.driver-avatar-circle{width:42px;height:42px;border-radius:13px;background:var(--primary-soft);color:var(--primary);display:grid;place-items:center;font-weight:800;font-size:14px}
+.driver-meta b{font-size:13px;display:block}
+.driver-meta span{font-size:10px;color:var(--muted);display:block}
+.driver-earnings-pill{display:flex;gap:8px;padding:8px 10px;background:var(--surface-2);border-radius:10px;font-size:10px}
+.driver-earnings-pill div{flex:1}
+.driver-earnings-pill b{display:block;font-size:12px;color:var(--success)}
+
+/* Camera / OCR Mobile View */
+.comanda-camera-card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:18px;text-align:center;box-shadow:var(--shadow-sm)}
+.camera-trigger-big{width:100%;height:160px;border:2px dashed color-mix(in srgb,var(--primary) 40%,var(--line));border-radius:18px;background:var(--primary-soft);color:var(--primary);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;cursor:pointer}
+.camera-trigger-big svg{width:42px;height:42px}
+.camera-trigger-big b{font-size:15px}
+.camera-trigger-big span{font-size:11px;color:var(--muted)}
+
+/* Takeat Realtime & Items Styles */
+.takeat-sync-bar{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow-sm)}
+.sync-status-dot{width:9px;height:9px;border-radius:99px;display:inline-block}
+.sync-status-dot.online{background:#10b981;box-shadow:0 0 0 3px rgba(16,185,129,.2);animation:pulse-dot 2s infinite}
+.sync-status-dot.offline{background:#ef4444}
+.btn-sync-takeat{height:34px;padding:0 12px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font-size:11px;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer}
+.btn-sync-takeat:hover{background:var(--surface)}
+.btn-sync-takeat:disabled{opacity:.6;cursor:not-allowed}
+
+.spin-animation{animation:spin 1s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Delivery Items Card Block */
+.delivery-items-block{background:var(--surface-2);border:1px dashed var(--line);border-radius:12px;padding:9px 11px;display:flex;flex-direction:column;gap:6px}
+.delivery-items-summary{font-size:11px;color:var(--ink);line-height:1.4;font-weight:500}
+.btn-expand-items{background:transparent;border:0;color:var(--primary);font-size:10px;font-weight:700;cursor:pointer;padding:0}
+.delivery-items-detail-list{display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--line)}
+.delivery-item-detail-row{display:flex;justify-content:space-between;align-items:flex-start;font-size:11px}
+.delivery-item-complements{display:block;font-size:10px;color:var(--primary);margin-top:1px;font-weight:600}
+.delivery-item-notes{display:block;font-size:9.5px;color:var(--muted);font-style:italic}
+.delivery-item-price{font-weight:700;color:var(--ink);font-size:11px;white-space:nowrap;margin-left:8px}
+
+/* Takeat ADM Settings Card */
+.takeat-settings-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:14px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow-sm)}
+.takeat-tabs-selector{display:flex;gap:6px;background:var(--surface-2);padding:4px;border-radius:12px}
+.takeat-tab-btn{flex:1;height:34px;border-radius:8px;border:0;background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer}
+.takeat-tab-btn.active{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
+.takeat-connected-box{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:14px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between}
+
+@media(min-width:761px){
+  .bottom-nav{display:flex;max-width:480px;left:50%;transform:translateX(-50%);border-radius:24px 24px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.15)}
+}
+

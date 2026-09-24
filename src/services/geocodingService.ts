@@ -24,9 +24,34 @@ const throttledFetch = async (provider: string, url: string) => {
     headers: {
       Accept: "application/json",
       "Accept-Language": "pt-BR,pt;q=0.9",
+      "User-Agent": "RotaCertaDeliveryApp/1.0 (contato@rotacerta.app)",
     },
   });
 };
+
+export async function geocodeByCep(cep: string): Promise<GeocodingResult | null> {
+  const clean = (cep || "").replace(/\D/g, "");
+  if (clean.length !== 8) return null;
+  try {
+    const res = await fetch(`https://brasilapi.com.br/api/cep/v2/${clean}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.location?.coordinates?.latitude && data.location?.coordinates?.longitude) {
+      return {
+        latitude: Number(data.location.coordinates.latitude),
+        longitude: Number(data.location.coordinates.longitude),
+        displayName: `${data.street || ""}, ${data.neighborhood || ""}, ${data.city} - ${data.state}`,
+        provider: "brasilapi",
+      };
+    }
+    // If BrasilAPI didn't have lat/lon for the CEP, geocode the returned street + neighborhood + city
+    if (data.street && data.city) {
+      return await geocode(`${data.street}, ${data.neighborhood || ""}, ${data.city} - ${data.state}`);
+    }
+  } catch {}
+  return null;
+}
+
 
 const providers = (): GeocodingProvider[] => {
   const configured = String(env("VITE_GEOCODING_PROVIDER") || "auto");
@@ -134,6 +159,12 @@ export async function geocodeDeliveryAddress(parts: {
   city?: string;
   postalCode?: string;
 }): Promise<GeocodingResult | null> {
+  if (parts.postalCode) {
+    try {
+      const cepResult = await geocodeByCep(parts.postalCode);
+      if (cepResult) return cepResult;
+    } catch {}
+  }
   const city = parts.city?.trim() || "Teixeira de Freitas";
   const addressWithoutNumber = parts.address.replace(/[,\s]+(?:n[º°o]?\s*)?\d+[a-z]?\b.*$/i, "").trim();
   const attempts = [

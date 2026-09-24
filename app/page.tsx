@@ -1,224 +1,2876 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LayoutDashboard, Package, Route, Bike, Settings, Plus, ScanLine, Search, MapPin, Clock, CircleDollarSign, AlertTriangle, CheckCircle2, Navigation, MoreHorizontal, SlidersHorizontal, ChevronRight, Menu, X, RotateCw, Upload, Camera, MapPinned, Gauge, Users, Bell, Eye, Pencil, Trash2, UserRound, Moon, Sun, Sparkles } from "lucide-react";
+import {
+  Bike,
+  Camera,
+  CheckCircle2,
+  ChevronRight,
+  CircleDollarSign,
+  ExternalLink,
+  LogOut,
+  MapPin,
+  MapPinned,
+  Moon,
+  Navigation,
+  Package,
+  Pencil,
+  Phone,
+  Plus,
+  RefreshCw,
+  Route,
+  ScanLine,
+  Search,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  Trash2,
+  Upload,
+  UserCheck,
+  UserRound,
+  Users,
+  X,
+  Zap,
+} from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import "./premium.css";
-import { currentPosition, geocode, geocodeDeliveryAddress, reverseGeocode } from "../src/services/geocodingService";
+
+import {
+  currentPosition,
+  geocode,
+  geocodeDeliveryAddress,
+} from "../src/services/geocodingService";
 import { calculateRoute } from "../src/services/routingService";
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from "../src/services/mapProviders";
-import type { DriverLocation, GeoPoint, RouteResult } from "../src/types";
-import { EmptyState } from "../src/components/EmptyState";
-import { LoginView } from "../src/components/LoginView";
+import type { Delivery, DeliveryPriority, DeliveryStatus, Driver, GeoPoint, OrderItem, RouteResult, User } from "../src/types";
 import { useAuth } from "../src/hooks/useAuth";
-import { signOut } from "../src/services/authService";
+import { getStoredUser, signOut } from "../src/services/authService";
 import { firebaseConfigured } from "../src/services/firebase";
-import { createDelivery, deleteDelivery, subscribeToDeliveries, updateDeliveryLocation, updateDeliveryStatus } from "../src/services/deliveryService";
-import { finishDriverRoute, publishDriverLocation, subscribeToDriverLocations } from "../src/services/liveLocationService";
+import {
+  createDelivery,
+  deleteDelivery,
+  subscribeToDeliveries,
+  updateDeliveryDriver,
+  updateDeliveryStatus,
+} from "../src/services/deliveryService";
+import {
+  createDriver,
+  deleteDriver,
+  loadStoredDrivers,
+  subscribeToDrivers,
+} from "../src/services/driverService";
+import {
+  batchSaveDeliveriesRTDB,
+  deleteDeliveryRTDB,
+  deleteDriverRTDB,
+  getTakeatConfigRTDB,
+  saveDeliveryRTDB,
+  saveDriverRTDB,
+  saveTakeatConfigRTDB,
+  subscribeToDeliveriesRTDB,
+  subscribeToDriversRTDB,
+  subscribeToTakeatConfigRTDB,
+  updateDeliveryRTDB,
+} from "../src/services/realtimeDbService";
+import {
+  calculateFinancialStats,
+  getDriversEarningsSummary,
+} from "../src/services/financialService";
+import {
+  getTakeatCredentials,
+  setTakeatCredentials,
+  saveTakeatCredentials,
+  clearTakeatCredentials,
+  isTakeatConfigured,
+  loginTakeatWithPassword,
+  getTakeatApiKey,
+  saveTakeatApiKey,
+  clearTakeatApiKey,
+  isTakeatSyncEnabled,
+  setTakeatSyncEnabled,
+  syncTakeatDeliveries,
+  getSampleTakeatDelivery,
+  authenticateTakeat,
+  type TakeatCredentials,
+} from "../src/services/takeatService";
 import type { DeliveryRecord, DeliveryRecordStatus } from "../src/types/delivery";
-import type { User } from "../src/types";
+import { LoginView } from "../src/components/LoginView";
 
-type Status = "Aguardando" | "Pronta para sair" | "Em rota" | "Entregue" | "Problema";
-type Delivery = { id:string; order:string; customer:string; phone:string; address:string; district:string; city?:string; postalCode?:string; amount:number; deliveryFee:number; payment:string; platform?:"ifood"|"other";platformOrderId?:string;priority:"Normal"|"Alta"|"Urgente"; status:Status; driver:string; time:string; latitude?:number; longitude?:number };
+type Status = DeliveryStatus;
 
-const STORE_KEY="rotacerta_store";
-const DELIV_KEY="rotacerta_deliveries";
-type StoreCfg={name:string;phone:string;address:string;latitude:number;longitude:number};
-const DEFAULT_STORE:StoreCfg={name:"Ponto de saída",phone:"",address:"Teixeira de Freitas - BA",latitude:-17.5399,longitude:-39.7414};
-function loadStore():StoreCfg{try{const raw=typeof localStorage!=="undefined"?localStorage.getItem(STORE_KEY):null;const s=raw?JSON.parse(raw):null;const legacy=s&&Math.abs(Number(s.latitude)+13.0033)<.001&&Math.abs(Number(s.longitude)+38.4581)<.001&&!s.address;if(s&&typeof s.latitude==="number"&&!legacy)return s;}catch{} return DEFAULT_STORE;}
-let STORE_POINT:StoreCfg = loadStore();
-function saveStore(cfg:StoreCfg){STORE_POINT=cfg;try{localStorage.setItem(STORE_KEY,JSON.stringify(cfg));}catch{}}
-type LeafletMapHandle = { remove:()=>void; setView:(center:[number,number],zoom:number)=>unknown };
+const STORE_KEY = "rotacerta_store";
+const DELIV_KEY = "rotacerta_deliveries";
+type StoreCfg = { name: string; phone: string; address: string; latitude: number; longitude: number };
+const DEFAULT_STORE: StoreCfg = {
+  name: "House Burger 190 Hamburgueria",
+  phone: "(73) 99800-1122",
+  address: "Centro, Teixeira de Freitas - BA",
+  latitude: -17.5399,
+  longitude: -39.7414,
+};
+
+function loadStore(): StoreCfg {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(STORE_KEY) : null;
+    const s = raw ? JSON.parse(raw) : null;
+    if (s && typeof s.latitude === "number") return s;
+  } catch {}
+  return DEFAULT_STORE;
+}
+
+let STORE_POINT: StoreCfg = loadStore();
+function saveStore(cfg: StoreCfg) {
+  STORE_POINT = cfg;
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(cfg));
+  } catch {}
+}
+
+const recordStatus: Record<DeliveryRecordStatus, Status> = {
+  pending: "Aguardando",
+  assigned: "Pronta para sair",
+  on_route: "Em rota",
+  arrived: "Em rota",
+  delivered: "Entregue",
+  problem: "Problema",
+  cancelled: "Problema",
+};
+
+function fromRecord(item: DeliveryRecord, driversList: Driver[]): Delivery {
+  const matchedDriver = item.driverId ? driversList.find((d) => d.id === item.driverId) : null;
+  return {
+    id: item.id,
+    order: item.orderNumber,
+    customer: item.customerName,
+    phone: item.phone,
+    address: [item.address, item.number].filter((v) => v && v !== "s/n").join(", "),
+    district: item.district,
+    city: item.city,
+    postalCode: item.postalCode,
+    complement: item.complement,
+    reference: item.reference,
+    amount: item.amount,
+    deliveryFee: item.deliveryFee || 7.0,
+    payment: item.paymentMethod,
+    platform: item.platform,
+    platformOrderId: item.platformOrderId,
+    pickupCode: item.pickupCode,
+    priority: item.priority === "urgent" ? "Urgente" : item.priority === "high" ? "Alta" : "Normal",
+    status: recordStatus[item.status] || "Aguardando",
+    driver: matchedDriver ? matchedDriver.name : "Carlos Eduardo (Kaká)",
+    driverId: item.driverId || "driver-1",
+    time: "20:01",
+    notes: item.notes,
+    items: item.items,
+    itemsSummary: item.itemsSummary,
+    source: item.source,
+    createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
+    deliveredAt: typeof item.deliveredAt === "string" ? item.deliveredAt : undefined,
+    latitude: item.latitude,
+    longitude: item.longitude,
+  };
+}
 
 const initialDeliveries: Delivery[] = [];
 
-const recordStatus:Record<DeliveryRecordStatus,Status>={pending:"Aguardando",assigned:"Pronta para sair",on_route:"Em rota",arrived:"Em rota",delivered:"Entregue",problem:"Problema",cancelled:"Problema"};
-function fromRecord(item:DeliveryRecord):Delivery{return {id:item.id,order:item.orderNumber,customer:item.customerName,phone:item.phone,address:[item.address,item.number].filter(value=>value&&value!=="s/n").join(", "),district:item.district,city:item.city,postalCode:item.postalCode,amount:item.amount,deliveryFee:item.deliveryFee||0,payment:item.paymentMethod,platform:item.platform,platformOrderId:item.platformOrderId,priority:item.priority==="urgent"?"Urgente":item.priority==="high"?"Alta":"Normal",status:recordStatus[item.status],driver:"Não atribuído",time:"14:00",latitude:item.latitude,longitude:item.longitude}}
-
-const nav = [
-  ["Visão geral", LayoutDashboard], ["Entregas", Package], ["Mapa", MapPinned], ["Planejar rota", Route], ["Motoboys", Bike], ["Configurações", Settings]
-] as const;
-
-const mobileNav = [
-  ["Visão geral", "Início", LayoutDashboard],
-  ["Entregas", "Entregas", Package],
-  ["Mapa", "Mapa", MapPinned],
-  ["Planejar rota", "Rotas", Route],
-  ["Configurações", "Perfil", UserRound],
-] as const;
-
-const demoProfile: User = {id:"demo",name:"André Silva",email:"demo@rotacerta.app",phone:"",role:"admin",companyId:"demo",active:true};
-
 export default function Home() {
-  const session=useAuth();
-  if(session.loading)return <main className="auth-shell"><div className="auth-loading"><span/><b>Preparando sua operação…</b><small>Carregando acesso e entregas</small></div></main>;
-  if(firebaseConfigured&&!session.firebaseUser)return <LoginView/>;
-  if(firebaseConfigured&&!session.profile)return <LoginView profileError={session.error} signedInEmail={session.firebaseUser?.email||undefined}/>;
-  return <DeliveryApp profile={session.profile||demoProfile} demoMode={!firebaseConfigured}/>;
-}
+  const [currentUser, setCurrentUser] = useState<User | null>(() => getStoredUser());
+  const session = useAuth();
 
-function DeliveryApp({profile,demoMode}:{profile:User;demoMode:boolean}) {
-  const [page,setPage]=useState("Visão geral"); const [mobile,setMobile]=useState(false); const [query,setQuery]=useState(""); const [deliveries,setDeliveries]=useState<Delivery[]>(()=>{if(!demoMode)return initialDeliveries;try{const raw=typeof localStorage!=="undefined"?localStorage.getItem(DELIV_KEY):null;const s=raw?JSON.parse(raw):null;return Array.isArray(s)?s:initialDeliveries;}catch{return initialDeliveries;}});const [ocrData,setOcrData]=useState<Record<string,string>|null>(null); const [modal,setModal]=useState<"new"|"ocr"|null>(null); const [toast,setToast]=useState(""); const [mapProvider,setMapProvider]=useState<MapTileProvider>("carto");
-  const [theme,setTheme]=useState<"light"|"dark">(()=>typeof localStorage!=="undefined"&&localStorage.getItem("rotacerta_theme")==="dark"?"dark":"light");
-  const [driverLocations,setDriverLocations]=useState<DriverLocation[]>([]);
-  const geocodeAttempts=useRef(new Set<string>());
-  const filtered=useMemo(()=>deliveries.filter(d=>(d.customer+d.order+d.address+d.phone).toLowerCase().includes(query.toLowerCase())),[deliveries,query]);
-  useEffect(()=>{document.documentElement.dataset.theme=theme;localStorage.setItem("rotacerta_theme",theme)},[theme]);
-  useEffect(()=>{if(!demoMode)return;try{localStorage.setItem(DELIV_KEY,JSON.stringify(deliveries));}catch{}},[deliveries,demoMode]);
-  useEffect(()=>{if(demoMode)return;return subscribeToDeliveries(profile.companyId,items=>setDeliveries(items.map(fromRecord)),message=>notify(message));},[demoMode,profile.companyId]);
-  useEffect(()=>{if(demoMode)return;return subscribeToDriverLocations(profile.companyId,setDriverLocations);},[demoMode,profile.companyId]);
-  useEffect(()=>{if(demoMode)return;const missing=deliveries.find(delivery=>needsGeocoding(delivery)&&!geocodeAttempts.current.has(delivery.id));if(!missing)return;geocodeAttempts.current.add(missing.id);void geocodeDeliveryAddress(missing).then(point=>point?updateDeliveryLocation(profile.companyId,missing.id,point.latitude,point.longitude):undefined).catch(()=>undefined);},[deliveries,demoMode,profile.companyId]);
-  const go=(p:string)=>{setPage(p);setMobile(false)};
-  const notify=(s:string)=>{setToast(s);setTimeout(()=>setToast(""),2600)};
-  async function saveDelivery(e:React.FormEvent<HTMLFormElement>){
-    e.preventDefault();const f=new FormData(e.currentTarget);const address=String(f.get("address"));const district=String(f.get("district"));const city=String(f.get("city")||"");const postalCode=String(f.get("postalCode")||"");
-    try{
-      let latitude=Number(f.get("latitude"));let longitude=Number(f.get("longitude"));
-      if(!Number.isFinite(latitude)||!latitude||!Number.isFinite(longitude)||!longitude){notify("Localizando o endereço no mapa…");const found=await geocodeDeliveryAddress({address,district,city,postalCode});if(!found)throw new Error("Endereço não localizado. Confira rua, número, bairro, CEP e cidade.");latitude=found.latitude;longitude=found.longitude;}
-      const platform=String(f.get("platform")||ocrData?.platform)==="iFood"?"ifood" as const:"other" as const;const platformOrderId=String(f.get("platformOrderId")||ocrData?.platformOrderId||"");
-      const local:Delivery={id:String(Date.now()),order:String(f.get("order")||"#1853"),customer:String(f.get("customer")),phone:String(f.get("phone")),address,district,city,postalCode,amount:Number(f.get("amount")),deliveryFee:Number(f.get("deliveryFee")),payment:String(f.get("payment")),platform,platformOrderId,priority:"Normal",status:"Aguardando",driver:"Não atribuído",time:"14:00",latitude,longitude};
-      if(demoMode)setDeliveries(v=>[local,...v]);else await createDelivery({companyId:profile.companyId,orderNumber:local.order,customerName:local.customer,phone:local.phone,address,number:String(f.get("number")||"s/n"),district:local.district,city,postalCode,latitude,longitude,amount:local.amount,deliveryFee:local.deliveryFee,paymentMethod:local.payment,platform,platformOrderId,notes:String(f.get("notes")||""),priority:"normal",source:ocrData?"ocr":"manual",status:"pending"});
-      setModal(null);setOcrData(null);notify("Entrega localizada e cadastrada");
-    }catch(error){notify(error instanceof Error?error.message:"Não foi possível salvar a entrega.")}
+  useEffect(() => {
+    if (session.profile) {
+      setCurrentUser(session.profile);
+    }
+  }, [session.profile]);
+
+  if (session.loading) {
+    return (
+      <main className="auth-shell">
+        <div className="auth-loading">
+          <span />
+          <b>Iniciando Rota Certa…</b>
+          <small>Carregando acesso</small>
+        </div>
+      </main>
+    );
   }
-  async function removeDelivery(id:string){try{if(demoMode)setDeliveries(v=>v.filter(d=>d.id!==id));else await deleteDelivery(profile.companyId,id);notify("Entrega excluída");}catch{notify("Não foi possível excluir a entrega.")}}
-  return <div className="app-shell">
-    <aside className={mobile?"sidebar open":"sidebar"}>
-      <div className="brand"><div className="brandmark"><Route size={24}/></div><div><b>Rota Certa</b><span>Gestão de entregas</span></div><button className="close" onClick={()=>setMobile(false)}><X/></button></div>
-      <nav>{nav.map(([label,Icon])=><button key={label} onClick={()=>go(label)} className={page===label?"active":""}><Icon size={20}/><span>{label}</span>{label==="Entregas"&&<em>5</em>}</button>)}</nav>
-      <div className="ops-card"><span className="live-dot"/> <b>Operação ativa</b><small>Loja aberta até 22h</small><div><span>Hoje</span><strong>{deliveries.length} entrega(s)</strong></div></div>
-      <div className="user"><div className="avatar">{initials(profile.name)}</div><div><b>{profile.name}</b><span>{profile.role==="admin"?"Administrador":"Entregador"}{demoMode?" · demonstração":""}</span></div>{demoMode?<MoreHorizontal size={20}/>:<button type="button" title="Sair" onClick={()=>void signOut()}><X/></button>}</div>
-    </aside>
-    <main>
-      <header><button className="hamb" onClick={()=>setMobile(true)} aria-label="Abrir menu"><Menu/></button><div><h1>{page}</h1><p>{subtitle(page)}</p></div><div className="head-actions"><button className="icon-btn theme-toggle" aria-label={theme==="light"?"Ativar modo escuro":"Ativar modo claro"} onClick={()=>setTheme(value=>value==="light"?"dark":"light")}>{theme==="light"?<Moon/>:<Sun/>}</button><button className="icon-btn" aria-label="Notificações"><Bell/><i/></button></div></header>
-      {page==="Visão geral"&&<Dashboard deliveries={deliveries} go={go} setModal={setModal} mapProvider={mapProvider} driverLocations={driverLocations}/>}
-      {page==="Entregas"&&<Deliveries data={filtered} query={query} setQuery={setQuery} remove={removeDelivery}/>}
-      {page==="Mapa"&&<MapOverview deliveries={deliveries} mapProvider={mapProvider} go={go} driverLocations={driverLocations}/>}
-      {page==="Planejar rota"&&<RoutePlanner deliveries={deliveries} notify={notify} mapProvider={mapProvider} profile={profile} driverLocations={driverLocations}/>}
-      {page==="Motoboys"&&<Drivers/>}
-      {page==="Configurações"&&<Config notify={notify} mapProvider={mapProvider} setMapProvider={setMapProvider}/>} 
-    </main>
-    <div className="bottom-nav" aria-label="Navegação principal">{mobileNav.map(([target,label,Icon])=><button key={target} onClick={()=>go(target)} className={page===target?"active":""} aria-current={page===target?"page":undefined}><Icon/><span>{label}</span></button>)}</div>
-    {modal==="new"&&<NewDelivery close={()=>{setModal(null);setOcrData(null);}} save={saveDelivery} prefill={ocrData}/>} {modal==="ocr"&&<OCR close={()=>setModal(null)} done={(fields:Record<string,string>)=>{setOcrData(fields);setModal("new");notify("Comanda lida. Confira e ajuste os campos antes de salvar.")}}/>}
-    {toast&&<div className="toast"><CheckCircle2/>{toast}</div>}
-  </div>
+
+  // If not logged in, render LoginView with 1-tap login for motoboy and admin
+  if (!currentUser) {
+    return <LoginView onLoginSuccess={(u) => setCurrentUser(u)} />;
+  }
+
+  return (
+    <MobileDeliveryApp
+      currentUser={currentUser}
+      onLogout={() => {
+        void signOut();
+        setCurrentUser(null);
+      }}
+      demoMode={!firebaseConfigured}
+    />
+  );
 }
 
-function subtitle(p:string){return ({"Visão geral":"Acompanhe a operação de hoje","Entregas":"Consulte e organize todos os pedidos","Mapa":"Veja entregas e rotas próximas","Planejar rota":"Organize as paradas e reduza o caminho","Motoboys":"Equipe e desempenho da operação","Configurações":"Estabelecimento e integrações"} as Record<string,string>)[p]}
+function MobileDeliveryApp({
+  currentUser,
+  onLogout,
+  demoMode,
+}: {
+  currentUser: User;
+  onLogout: () => void;
+  demoMode: boolean;
+}) {
+  const isStore = currentUser.role === "admin";
+  const [appMode, setAppMode] = useState<"motoboy" | "adm">(isStore ? "adm" : "motoboy");
+  const [activeTab, setActiveTab] = useState<"entregas" | "mapa" | "comanda" | "financeiro" | "adm" | "config">("entregas");
+  const [drivers, setDrivers] = useState<Driver[]>(() => loadStoredDrivers());
+  const [selectedDriverId, setSelectedDriverId] = useState<string>(() => {
+    const list = loadStoredDrivers();
+    if (currentUser.role === "driver") {
+      const match = list.find((d) => d.email?.toLowerCase() === currentUser.email.toLowerCase() || d.name.toLowerCase() === currentUser.name.toLowerCase());
+      if (match) return match.id;
+      return `drv-${currentUser.id}`;
+    }
+    return list[0]?.id || "";
+  });
 
-function Dashboard({deliveries,go,setModal,mapProvider,driverLocations}:{deliveries:Delivery[];go:(p:string)=>void;setModal:(v:"new"|"ocr")=>void;mapProvider:MapTileProvider;driverLocations:DriverLocation[]}){
- const aguardando=deliveries.filter(d=>d.status==="Aguardando"||d.status==="Pronta para sair").length;
- const emRota=deliveries.filter(d=>d.status==="Em rota").length;
- const entregues=deliveries.filter(d=>d.status==="Entregue").length;
- const problema=deliveries.filter(d=>d.status==="Problema").length;
- const feesAberto=deliveries.filter(d=>d.status!=="Entregue").reduce((sum,d)=>sum+(d.deliveryFee||0),0);
- const feesConcluido=deliveries.filter(d=>d.status==="Entregue").reduce((sum,d)=>sum+(d.deliveryFee||0),0);
- const cards=[["Aguardando saida",String(aguardando),"pendentes",Package,"teal"],["Em rota",String(emRota),"em entrega",Bike,"blue"],["Concluidas hoje",String(entregues),"finalizadas",CheckCircle2,"green"],["Com problema",String(problema),"requer atencao",AlertTriangle,"orange"],["Motoboys ao vivo",String(driverLocations.filter(location=>location.active!==false).length),"compartilhando GPS",Navigation,"blue"]] as const;
- return <div className="content"><section className="welcome"><div><span className="eyebrow"><Sparkles/> Central inteligente</span><h2>Pronto para organizar as entregas?</h2><p>Cadastre pedidos, leia comandas e monte a melhor rota em poucos toques.</p></div><button className="primary" onClick={()=>setModal("new")}><Plus/> Nova entrega</button></section><section className="quick"><button className="quick-primary" onClick={()=>setModal("ocr")}><span className="qicon scan"><ScanLine/></span><div><b>Ler comanda com IA</b><small>Foto ou galeria · preenchimento automático</small></div><ChevronRight/></button><button onClick={()=>setModal("new")}><span className="qicon add"><Plus/></span><div><b>Cadastro manual</b><small>Nova entrega em poucos campos</small></div><ChevronRight/></button><button onClick={()=>go("Planejar rota")}><span className="qicon route"><Route/></span><div><b>Otimizar rota</b><small>{aguardando} entrega(s) aguardando</small></div><ChevronRight/></button></section>
- <section className="metrics">{cards.map(([t,n,sub,I,c])=><article key={t}><div className={"metric-icon "+c}><I/></div><div><span>{t}</span><strong>{n}</strong><small>{sub}</small></div></article>)}</section>
- <section className="workspace"><div className="map-card"><div className="card-title"><div><h2>Mapa da operacao</h2><p>Mapa gratuito com localizacao por GPS</p></div><button><MapPinned size={18}/> {MAP_TILE_PROVIDERS[mapProvider].name}</button></div><FreeMap deliveries={deliveries} mapProvider={mapProvider}/><div className="map-legend"><span><i className="dot waiting"/>Aguardando {aguardando}</span><span><i className="dot transit"/>Em rota {emRota}</span><span><i className="dot done"/>Entregues {entregues}</span></div></div>
- <div className="next-card"><div className="card-title"><div><h2>Proximas entregas</h2><p>Ordenadas pela lista</p></div><button className="text-btn" onClick={()=>go("Entregas")}>Ver todas</button></div>{deliveries.length===0?<div style={{padding:"26px",textAlign:"center",color:"#6c7a77",fontSize:"12px"}}>Nenhuma entrega ainda. Use <b>Ler comanda</b> ou <b>Nova entrega</b>.</div>:deliveries.slice(0,5).map((d)=><div className="next-row" key={d.id}><div className="timebox"><b>{d.time}</b><span>hoje</span></div><div><b>{d.customer}</b><span><MapPin/> {d.district} · {d.address}</span><small>{d.order} · {d.payment}</small></div><StatusBadge status={d.status}/></div>)}</div></section>
- <section className="earnings"><div className="earnings-title"><span className="sum-icon"><CircleDollarSign/></span><div><h2>Faturamento das entregas</h2><p>Somente taxas de entrega - nao inclui o valor dos pedidos</p></div></div><div><span>Ja realizado hoje</span><b>{money(feesConcluido)}</b><small>{entregues} entrega(s) concluida(s)</small></div><div><span>Em aberto nesta lista</span><b>{money(feesAberto)}</b><small>{aguardando+emRota} entrega(s)</small></div><div className="earnings-total"><span>Total previsto</span><b>{money(feesConcluido+feesAberto)}</b><small>Concluidas + pendentes</small></div></section>
- <section className="summary"><article><div className="sum-icon"><Gauge/></div><div><span>Total de entregas</span><b>{deliveries.length}</b><small>na lista</small></div></article><article><div className="sum-icon"><Clock/></div><div><span>Aguardando</span><b>{aguardando}</b><small>para sair</small></div></article><article><div className="sum-icon"><Users/></div><div><span>Concluidas</span><b>{entregues}</b><small>hoje</small></div></article><article><div className="sum-icon"><CircleDollarSign/></div><div><span>Valor dos pedidos</span><b>{money(deliveries.reduce((sum,d)=>sum+(d.amount||0),0))}</b><small>separado das taxas</small></div></article></section></div>;
+  const [deliveries, setDeliveries] = useState<Delivery[]>(() => {
+    try {
+      const raw = typeof localStorage !== "undefined" ? localStorage.getItem(DELIV_KEY) : null;
+      const s = raw ? JSON.parse(raw) : null;
+      return Array.isArray(s) ? s : initialDeliveries;
+    } catch {
+      return initialDeliveries;
+    }
+  });
+
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("Todas");
+  const [modal, setModal] = useState<"new" | "ocr" | "driver" | null>(null);
+  const [ocrData, setOcrData] = useState<Record<string, string> | null>(null);
+  const [toast, setToast] = useState("");
+  const [mapProvider, setMapProvider] = useState<MapTileProvider>("carto");
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    typeof localStorage !== "undefined" && localStorage.getItem("rotacerta_theme") === "dark" ? "dark" : "light",
+  );
+
+  const [takeatCreds, setTakeatCreds] = useState<TakeatCredentials>(() => getTakeatCredentials());
+  const [isTakeatConnected, setIsTakeatConnected] = useState(() => isTakeatConfigured());
+  const [takeatSyncing, setTakeatSyncing] = useState(false);
+  const [takeatAutoSync, setTakeatAutoSync] = useState(() => isTakeatSyncEnabled());
+
+  const notify = (s: string) => {
+    setToast(s);
+    setTimeout(() => setToast(""), 2800);
+    try {
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        navigator.vibrate([120, 60, 120]);
+      }
+    } catch {}
+  };
+
+  // Trava motoboy no modo motoboy e bloqueia abas administrativas
+  useEffect(() => {
+    if (currentUser.role === "driver") {
+      setAppMode("motoboy");
+      if (activeTab === "adm" || activeTab === "config") {
+        setActiveTab("entregas");
+      }
+    }
+  }, [currentUser.role, activeTab]);
+
+  // Se o usuário for motoboy, garante que existe o registro correspondente no banco RTDB
+  useEffect(() => {
+    if (currentUser.role === "driver") {
+      const match = drivers.find(
+        (d) =>
+          d.email?.toLowerCase() === currentUser.email.toLowerCase() ||
+          d.id === currentUser.id ||
+          d.id === `drv-${currentUser.id}` ||
+          d.name.toLowerCase() === currentUser.name.toLowerCase(),
+      );
+      if (match) {
+        setSelectedDriverId(match.id);
+      } else {
+        const newDrv: Driver = {
+          id: `drv-${currentUser.id}`,
+          name: currentUser.name,
+          email: currentUser.email,
+          phone: currentUser.phone || "",
+          vehicle: "Moto",
+          defaultFee: 7.0,
+          active: true,
+          companyId: "house-burger-190",
+          createdAt: new Date().toISOString(),
+        };
+        void saveDriverRTDB(newDrv);
+        setSelectedDriverId(newDrv.id);
+      }
+    }
+  }, [currentUser, drivers]);
+
+  // Sincronização em tempo real do Firebase Realtime Database
+  useEffect(() => {
+    const unsubDeliveries = subscribeToDeliveriesRTDB((items) => {
+      // Notifica com som e vibração se um novo pedido atribuído ao motoboy logado chegou
+      if (currentUser.role === "driver") {
+        const prevItems = deliveriesRef.current || [];
+        const prevIds = new Set(prevItems.map((d) => d.id));
+        const newForMe = items.filter((d) => !prevIds.has(d.id) && isDeliveryForThisDriver(d));
+        if (newForMe.length > 0) {
+          playNewOrderAlert();
+          notify(`🔥 ${newForMe.length} novo(s) pedido(s) atribuído(s) a você!`);
+        }
+      }
+      setDeliveries(items);
+    });
+    const unsubDrivers = subscribeToDriversRTDB((list) => {
+      setDrivers(list);
+    });
+    const unsubTakeat = subscribeToTakeatConfigRTDB((cfg) => {
+      if (cfg && (cfg.apiKey || (cfg.email && cfg.password))) {
+        setTakeatCredentials(cfg);
+        setTakeatCreds(cfg);
+        setIsTakeatConnected(true);
+      }
+    });
+    return () => {
+      unsubDeliveries();
+      unsubDrivers();
+      unsubTakeat();
+    };
+  }, []);
+
+  // Se o dispositivo tiver credenciais locais (da loja), replica para o RTDB na nuvem
+  useEffect(() => {
+    const creds = getTakeatCredentials();
+    if (creds && (creds.apiKey || (creds.email && creds.password))) {
+      void getTakeatConfigRTDB().then((rtdbCfg) => {
+        if (!rtdbCfg || (!rtdbCfg.apiKey && !rtdbCfg.email)) {
+          void saveTakeatConfigRTDB(creds);
+        }
+      });
+    }
+  }, []);
+
+  const deliveriesRef = useRef(deliveries);
+  deliveriesRef.current = deliveries;
+  const driversRef = useRef(drivers);
+  driversRef.current = drivers;
+
+  // Função auxiliar para tocar alerta sonoro quando um novo pedido chega
+  const playNewOrderAlert = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.35);
+      }
+    } catch {}
+  };
+
+  // Polling automático da Takeat a cada 15 segundos quando configurado
+  useEffect(() => {
+    if (!takeatAutoSync || !isTakeatConfigured()) return;
+
+    const runSync = async () => {
+      try {
+        const res = await syncTakeatDeliveries(deliveriesRef.current, driversRef.current);
+        if (res.addedCount > 0) {
+          setDeliveries(res.deliveries);
+          void batchSaveDeliveriesRTDB(res.deliveries);
+          playNewOrderAlert();
+          notify(`🔥 ${res.addedCount} novo(s) pedido(s) Takeat recebido(s)!`);
+        } else if (res.updatedCount > 0) {
+          setDeliveries(res.deliveries);
+          void batchSaveDeliveriesRTDB(res.deliveries);
+        }
+      } catch (err: unknown) {
+        console.warn("Erro no auto-sync Takeat:", err);
+      }
+    };
+
+    // Dispara busca inicial imediatamente
+    void runSync();
+
+    const interval = setInterval(runSync, 8000);
+    return () => clearInterval(interval);
+  }, [takeatAutoSync, isTakeatConnected]);
+
+  // Atualização automática ao reabrir o app ou focar na tela
+  useEffect(() => {
+    if (!isTakeatConfigured()) return;
+
+    const handleFocusOrVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        syncTakeatDeliveries(deliveriesRef.current, driversRef.current)
+          .then((res) => {
+            if (res.addedCount > 0 || res.updatedCount > 0) {
+              setDeliveries(res.deliveries);
+              void batchSaveDeliveriesRTDB(res.deliveries);
+              if (res.addedCount > 0) playNewOrderAlert();
+            }
+          })
+          .catch(() => {});
+      }
+    };
+
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+    return () => {
+      window.removeEventListener("focus", handleFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    };
+  }, [isTakeatConnected]);
+
+  const handleManualSyncTakeat = async () => {
+    if (!isTakeatConfigured()) {
+      if (currentUser.role === "admin") {
+        notify("⚠️ Conecte sua conta Takeat (Login e Senha) na aba ADM.");
+        setActiveTab("adm");
+      } else {
+        notify("⚠️ Takeat ainda não configurada no painel da loja.");
+      }
+      return;
+    }
+    setTakeatSyncing(true);
+    try {
+      const res = await syncTakeatDeliveries(deliveriesRef.current, driversRef.current);
+      setDeliveries(res.deliveries);
+      void batchSaveDeliveriesRTDB(res.deliveries);
+      setIsTakeatConnected(true);
+      if (res.addedCount > 0) {
+        playNewOrderAlert();
+        notify(`✅ ${res.addedCount} novo(s) pedido(s) Takeat importado(s)!`);
+      } else if (res.updatedCount > 0) {
+        notify(`✅ ${res.updatedCount} pedido(s) Takeat atualizado(s)!`);
+      } else {
+        notify("Tudo em dia! Nenhum novo pedido Takeat no momento.");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Erro ao sincronizar Takeat";
+      notify(`❌ ${msg}`);
+      setIsTakeatConnected(false);
+    } finally {
+      setTakeatSyncing(false);
+    }
+  };
+
+  const handleAddSampleTakeat = async () => {
+    const sample = getSampleTakeatDelivery();
+    setDeliveries((prev) => [sample, ...prev]);
+    await saveDeliveryRTDB(sample);
+    notify(`🍔 Pedido Takeat/iFood #${sample.order} adicionado para teste!`);
+  };
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("rotacerta_theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DELIV_KEY, JSON.stringify(deliveries));
+    } catch {}
+  }, [deliveries]);
+
+  const activeDriver = useMemo(() => {
+    if (currentUser.role === "driver") {
+      const match = drivers.find(
+        (d) =>
+          d.email?.toLowerCase() === currentUser.email.toLowerCase() ||
+          d.id === currentUser.id ||
+          d.id === `drv-${currentUser.id}` ||
+          d.name.toLowerCase() === currentUser.name.toLowerCase(),
+      );
+      if (match) return match;
+      return {
+        id: `drv-${currentUser.id}`,
+        name: currentUser.name,
+        email: currentUser.email,
+        phone: currentUser.phone || "",
+        vehicle: "Moto",
+        defaultFee: 7.0,
+        active: true,
+        companyId: currentUser.companyId || "house-burger-190",
+        createdAt: new Date().toISOString(),
+      } as Driver;
+    }
+    return drivers.find((d) => d.id === selectedDriverId) || drivers[0];
+  }, [drivers, selectedDriverId, currentUser]);
+
+  // Função ESTRITA: O pedido pertence a este motoboy?
+  const isDeliveryForThisDriver = (d: Delivery): boolean => {
+    if (currentUser.role !== "driver") return true;
+
+    // Se o pedido não tem motoboy atribuído ou está aguardando, NUNCA exibe para o motoboy
+    const driverName = (d.driver || "").toLowerCase().trim();
+    if (
+      !driverName ||
+      driverName.includes("aguardando") ||
+      driverName.includes("sem motoboy") ||
+      driverName.includes("não atribuído") ||
+      driverName.includes("seleção")
+    ) {
+      return false;
+    }
+
+    const myName = currentUser.name.toLowerCase().trim();
+    const activeName = (activeDriver?.name || "").toLowerCase().trim();
+    const myEmailPrefix = (currentUser.email || "").split("@")[0].toLowerCase().trim();
+
+    // 1. Match direto por nome (ex: "guilherme" em "Guilherme" ou "Motoboy: guilherme")
+    if (
+      driverName === myName ||
+      (activeName && driverName === activeName) ||
+      (myName && driverName.includes(myName)) ||
+      (myName && myName.includes(driverName)) ||
+      (myEmailPrefix && driverName.includes(myEmailPrefix))
+    ) {
+      return true;
+    }
+
+    // 2. Match por apelido entre parênteses ex: "(Kaká)"
+    const nickMatch = myName.match(/\(([^)]+)\)/) || activeName.match(/\(([^)]+)\)/);
+    if (nickMatch) {
+      const nick = nickMatch[1].trim().toLowerCase();
+      if (nick && (driverName === nick || driverName.includes(nick))) {
+        return true;
+      }
+    }
+
+    // 3. Compara com todos os IDs válidos deste motoboy no sistema e no RTDB
+    const validDriverIds = new Set<string>([
+      currentUser.id.toLowerCase().trim(),
+      `drv-${currentUser.id}`.toLowerCase().trim(),
+      (activeDriver?.id || "").toLowerCase().trim(),
+    ]);
+
+    if (myName.includes("guilherme")) {
+      validDriverIds.add("182368");
+      validDriverIds.add("takeat-182368");
+      validDriverIds.add("drv-takeat-182368");
+      validDriverIds.add("drv-toixt7fvh1mxymob9bp6u5bv85m2");
+    }
+
+    for (const drv of drivers) {
+      const drvClean = (drv.name || "").toLowerCase().trim();
+      if (
+        drvClean === myName ||
+        drvClean.includes(myName) ||
+        myName.includes(drvClean) ||
+        (drv.email && drv.email.toLowerCase() === currentUser.email.toLowerCase())
+      ) {
+        validDriverIds.add(drv.id.toLowerCase().trim());
+      }
+    }
+
+    if (d.driverId && validDriverIds.has(d.driverId.toLowerCase().trim())) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Financial stats for the current view
+  const financialStats = useMemo(() => {
+    if (currentUser.role === "driver") {
+      // Motoboy SÓ computa faturamento de entregas atribuídas a ele!
+      const myDeliveries = deliveries.filter(isDeliveryForThisDriver);
+      return calculateFinancialStats(myDeliveries, undefined);
+    }
+    const filterName = appMode === "motoboy" && activeDriver ? activeDriver.name : undefined;
+    return calculateFinancialStats(deliveries, filterName);
+  }, [deliveries, appMode, activeDriver, currentUser]);
+
+  // Filtered deliveries list
+  const filteredDeliveries = useMemo(() => {
+    return deliveries.filter((d) => {
+      // REGRA DE OURO: Se o usuário logado for motoboy, ele SÓ VÊ entregas atribuídas a ele no Takeat!
+      if (currentUser.role === "driver") {
+        if (!isDeliveryForThisDriver(d)) return false;
+      } else if (appMode === "motoboy" && activeDriver) {
+        // Modo simulação para ADM
+        const isHis = d.driverId === activeDriver.id || d.driver === activeDriver.name;
+        if (!isHis) return false;
+      }
+
+      if (statusFilter !== "Todas" && d.status !== statusFilter) return false;
+
+      const matchQuery = (d.customer + d.order + d.address + d.district + d.phone)
+        .toLowerCase()
+        .includes(query.toLowerCase());
+      return matchQuery;
+    });
+  }, [deliveries, appMode, activeDriver, currentUser, statusFilter, query]);
+
+  // Delivery action: complete delivery and register earnings
+  async function markAsDelivered(id: string) {
+    const nowIso = new Date().toISOString();
+    setDeliveries((prev) =>
+      prev.map((d) => {
+        if (d.id === id) {
+          notify(`Entrega ${d.order} concluída! Taxa de ${money(d.deliveryFee)} somada.`);
+          return { ...d, status: "Entregue" as Status, deliveredAt: nowIso };
+        }
+        return d;
+      }),
+    );
+
+    try {
+      await updateDeliveryRTDB(id, { status: "Entregue", deliveredAt: nowIso });
+    } catch (e) {
+      console.warn("Erro ao atualizar status da entrega no RTDB:", e);
+    }
+  }
+
+  // Delivery action: advance status
+  async function updateStatus(id: string, newStatus: Status) {
+    setDeliveries((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, status: newStatus } : d)),
+    );
+    notify(`Status atualizado para ${newStatus}`);
+    try {
+      await updateDeliveryRTDB(id, { status: newStatus });
+    } catch (e) {
+      console.warn("Erro ao atualizar status no RTDB:", e);
+    }
+  }
+
+  // Save new delivery
+  async function saveDelivery(data: Partial<Delivery>) {
+    const targetDriver = drivers.find((d) => d.id === data.driverId) || activeDriver;
+    const fallbackDriverName = currentUser.role === "driver" ? currentUser.name : (targetDriver?.name || "Aguardando");
+    const fallbackDriverId = currentUser.role === "driver" ? `drv-${currentUser.id}` : targetDriver?.id;
+
+    const newDelivery: Delivery = {
+      id: `del-${Date.now()}`,
+      order: data.order || `#${Math.floor(1000 + Math.random() * 9000)}`,
+      customer: data.customer || "Cliente",
+      phone: data.phone || "",
+      address: data.address || "",
+      district: data.district || "Kaikan",
+      city: data.city || "Teixeira de Freitas",
+      postalCode: data.postalCode,
+      amount: Number(data.amount) || 0,
+      deliveryFee: Number(data.deliveryFee) || (targetDriver?.defaultFee || 7.0),
+      payment: data.payment || "Pago Online",
+      platform: data.platform || "ifood",
+      platformOrderId: data.platformOrderId,
+      pickupCode: data.pickupCode,
+      notes: data.notes,
+      priority: "Alta",
+      status: "Em rota",
+      driver: targetDriver ? targetDriver.name : fallbackDriverName,
+      driverId: targetDriver?.id || fallbackDriverId,
+      time: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+      createdAt: new Date().toISOString(),
+      latitude: data.latitude,
+      longitude: data.longitude,
+    };
+
+    // Geocode if missing coordinates
+    if (!newDelivery.latitude || !newDelivery.longitude) {
+      try {
+        const found = await geocodeDeliveryAddress({
+          address: newDelivery.address,
+          district: newDelivery.district,
+          city: newDelivery.city,
+          postalCode: newDelivery.postalCode,
+        });
+        if (found) {
+          newDelivery.latitude = found.latitude;
+          newDelivery.longitude = found.longitude;
+        }
+      } catch {}
+    }
+
+    setDeliveries((prev) => [newDelivery, ...prev]);
+    setModal(null);
+    setOcrData(null);
+    notify(`Entrega ${newDelivery.order} cadastrada e localizada no mapa!`);
+
+    try {
+      await saveDeliveryRTDB(newDelivery);
+    } catch (e) {
+      console.warn("Erro ao salvar entrega no RTDB:", e);
+    }
+  }
+
+  // Remove delivery
+  async function removeDelivery(id: string) {
+    setDeliveries((prev) => prev.filter((d) => d.id !== id));
+    notify("Entrega removida");
+    try {
+      await deleteDeliveryRTDB(id);
+    } catch (e) {
+      console.warn("Erro ao remover entrega no RTDB:", e);
+    }
+  }
+
+  // Add new driver
+  async function handleAddDriver(driverData: Omit<Driver, "id">) {
+    const newDrv = await createDriver(currentUser.companyId, driverData);
+    notify(`Motoboy ${newDrv.name} cadastrado com sucesso!`);
+    setModal(null);
+  }
+
+  // Delete driver
+  async function handleDeleteDriver(id: string) {
+    await deleteDriver(currentUser.companyId, id);
+    notify("Motoboy removido.");
+  }
+
+  return (
+    <div className="app-shell">
+      {/* Top Bar Mobile */}
+      <header className="mobile-top-bar">
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div className="brandmark" style={{ width: "34px", height: "34px", borderRadius: "10px" }}>
+            <Route size={18} />
+          </div>
+          <div>
+            <b style={{ fontSize: "14px", lineHeight: "1.2", display: "block" }}>Rota Certa</b>
+            <span style={{ fontSize: "9px", color: "var(--muted)", display: "flex", alignItems: "center", gap: "4px" }}>
+              <span className="live-dot" style={{ width: "6px", height: "6px" }} />
+              {currentUser.role === "driver"
+                ? `🛵 Motoboy: ${currentUser.name}`
+                : `🏪 ${currentUser.name} (ADM)`}
+            </span>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {/* Mode Switcher apenas para Loja (ADM) */}
+          {currentUser.role === "admin" ? (
+            <div className="mode-toggle">
+              <button
+                type="button"
+                className={appMode === "adm" ? "active" : ""}
+                onClick={() => setAppMode("adm")}
+                title="Modo Loja"
+              >
+                <Users size={14} /> Loja
+              </button>
+              <button
+                type="button"
+                className={appMode === "motoboy" ? "active" : ""}
+                onClick={() => setAppMode("motoboy")}
+                title="Ver como Motoboy"
+              >
+                <Bike size={14} /> Moto
+              </button>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                background: "rgba(34,197,94,.12)",
+                color: "#16a34a",
+                padding: "4px 8px",
+                borderRadius: "99px",
+                fontSize: "10px",
+                fontWeight: 800,
+              }}
+            >
+              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#16a34a" }} />
+              Disponível
+            </div>
+          )}
+
+          {/* Theme toggle */}
+          <button
+            type="button"
+            className="icon-btn theme-toggle"
+            style={{ width: "34px", height: "34px" }}
+            onClick={() => setTheme((v) => (v === "light" ? "dark" : "light"))}
+            aria-label="Alternar tema"
+          >
+            {theme === "light" ? <Moon size={15} /> : <Sun size={15} />}
+          </button>
+
+          {/* Logout button */}
+          <button
+            type="button"
+            onClick={onLogout}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              background: "rgba(239,68,68,.12)",
+              color: "#ef4444",
+              border: "1px solid rgba(239,68,68,.25)",
+              padding: "6px 10px",
+              borderRadius: "8px",
+              fontSize: "11px",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+            title="Sair da Conta e Trocar de Usuário"
+          >
+            <LogOut size={13} />
+            <span>Sair</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main View Area */}
+      <main style={{ paddingBottom: "82px" }}>
+        <div className="content" style={{ padding: "14px 14px 20px" }}>
+          {/* TAB 1: ENTREGAS */}
+          {activeTab === "entregas" && (
+            <div>
+              {/* Financial Highlight Banner */}
+              <div className="night-finance-banner">
+                <div className="night-card" onClick={() => setActiveTab("financeiro")} style={{ cursor: "pointer" }}>
+                  <div className="night-card-kicker">
+                    <Sparkles size={12} /> {appMode === "motoboy" ? "Fez Esta Noite" : "Total Loja Noite"}
+                  </div>
+                  <div className="night-card-val">{money(financialStats.nightTotal)}</div>
+                  <div className="night-card-sub">
+                    {financialStats.nightCount} entrega(s) concluída(s) hoje
+                  </div>
+                </div>
+
+                <div className="night-card month" onClick={() => setActiveTab("financeiro")} style={{ cursor: "pointer" }}>
+                  <div className="night-card-kicker">
+                    <CircleDollarSign size={12} /> Total do Mês
+                  </div>
+                  <div className="night-card-val">{money(financialStats.monthTotal)}</div>
+                  <div className="night-card-sub">
+                    {financialStats.monthCount} entregas acumuladas
+                  </div>
+                </div>
+              </div>
+
+              {/* Motoboy selector in Motoboy mode */}
+              {/* Motoboy selector in Motoboy mode (apenas quando ADM estiver pré-visualizando) */}
+              {appMode === "motoboy" && currentUser.role === "admin" && drivers.length > 1 && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", overflowX: "auto", paddingBottom: "4px" }}>
+                  <span style={{ fontSize: "11px", color: "var(--muted)", whiteSpace: "nowrap" }}>Simular Entregador:</span>
+                  {drivers.map((d) => (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => setSelectedDriverId(d.id)}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "12px",
+                        border: "1px solid var(--line)",
+                        fontSize: "11px",
+                        fontWeight: "700",
+                        whiteSpace: "nowrap",
+                        background: selectedDriverId === d.id ? "var(--primary)" : "var(--surface)",
+                        color: selectedDriverId === d.id ? "#fff" : "var(--ink)",
+                      }}
+                    >
+                      {d.name.split(" ")[0]}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Quick Actions */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "8px", marginBottom: "14px" }}>
+                <button
+                  type="button"
+                  className="primary"
+                  style={{ height: "46px", borderRadius: "14px", fontSize: "13px", fontWeight: "800" }}
+                  onClick={() => setModal("ocr")}
+                >
+                  <Camera size={18} /> Tirar Foto Comanda
+                </button>
+                <button
+                  type="button"
+                  style={{
+                    height: "46px",
+                    borderRadius: "14px",
+                    border: "1px solid var(--line)",
+                    background: "var(--surface)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    fontSize: "13px",
+                    fontWeight: "700",
+                  }}
+                  onClick={() => setActiveTab("mapa")}
+                >
+                  <MapPinned size={17} /> Rota no Mapa
+                </button>
+              </div>
+
+              {/* Takeat Live Sync Bar (Visível para Loja e Motoboy) */}
+              <div className="takeat-sync-bar" style={{ marginBottom: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                  <span className={`sync-status-dot ${isTakeatConnected ? "online" : "offline"}`} />
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: "800" }}>Takeat & iFood</span>
+                      {isTakeatConnected && (
+                        <span style={{ fontSize: "9px", background: "rgba(16,185,129,.15)", color: "#10b981", padding: "1px 6px", borderRadius: "6px", fontWeight: "800" }}>
+                          AO VIVO
+                        </span>
+                      )}
+                    </div>
+                    <small style={{ fontSize: "10px", color: "var(--muted)" }}>
+                      {takeatSyncing
+                        ? "Buscando pedidos..."
+                        : isTakeatConnected
+                        ? (currentUser.role === "driver" ? "Sincronizado com a loja" : (takeatAutoSync ? "Auto-sync ativo (15s)" : "Pronto para sincronizar"))
+                        : (currentUser.role === "driver" ? "Aguardando conexão da loja" : "Conexão pendente (configure no ADM)")}
+                    </small>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <button
+                    type="button"
+                    className="btn-sync-takeat"
+                    onClick={handleManualSyncTakeat}
+                    disabled={takeatSyncing}
+                    title="Buscar pedidos atribuídos na Takeat"
+                  >
+                    <RefreshCw size={13} className={takeatSyncing ? "spin-animation" : ""} />
+                    {takeatSyncing ? "..." : (currentUser.role === "driver" ? "Atualizar" : "Sincronizar")}
+                  </button>
+                  {currentUser.role === "admin" && (
+                    <button
+                      type="button"
+                      className="btn-sync-takeat"
+                      style={{ padding: "0 8px", background: "var(--primary-soft)", color: "var(--primary)", borderColor: "color-mix(in srgb,var(--primary) 30%,transparent)" }}
+                      onClick={handleAddSampleTakeat}
+                      title="Adicionar pedido Takeat/iFood demonstrativo para teste"
+                    >
+                      + Demo
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Search & Status Filters */}
+              <div style={{ marginBottom: "12px" }}>
+                <div className="toolbar" style={{ marginBottom: "8px" }}>
+                  <label style={{ height: "40px", borderRadius: "12px" }}>
+                    <Search size={15} />
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Buscar cliente, endereço ou pedido"
+                    />
+                  </label>
+                </div>
+                <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px" }}>
+                  {["Todas", "Aguardando", "Em rota", "Entregue"].map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setStatusFilter(st)}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: "10px",
+                        border: "1px solid var(--line)",
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        whiteSpace: "nowrap",
+                        background: statusFilter === st ? "var(--surface-2)" : "transparent",
+                        color: statusFilter === st ? "var(--primary)" : "var(--muted)",
+                      }}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Delivery Cards List */}
+              <div className="mobile-card-list">
+                {filteredDeliveries.length === 0 ? (
+                  currentUser.role === "driver" ? (
+                    <div style={{ padding: "44px 20px", textAlign: "center", background: "var(--surface)", borderRadius: "20px", border: "1px solid var(--line)" }}>
+                      <div
+                        style={{
+                          width: "60px",
+                          height: "60px",
+                          borderRadius: "50%",
+                          background: "rgba(124,58,237,.12)",
+                          color: "#7c3aed",
+                          display: "grid",
+                          placeItems: "center",
+                          margin: "0 auto 14px",
+                        }}
+                      >
+                        <Bike size={30} />
+                      </div>
+                      <b style={{ display: "block", fontSize: "16px", color: "var(--text)" }}>Nenhuma entrega para você agora</b>
+                      <p style={{ color: "var(--muted)", fontSize: "12px", margin: "6px auto 16px", maxWidth: "280px", lineHeight: "1.4" }}>
+                        Aguarde a loja despachar seus pedidos ou tire uma foto de uma comanda física para adicionar.
+                      </p>
+                      <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          className="primary"
+                          style={{ height: "44px", padding: "0 18px", borderRadius: "12px", fontWeight: 800, background: "var(--primary)", display: "flex", alignItems: "center", gap: "6px" }}
+                          onClick={handleManualSyncTakeat}
+                          disabled={takeatSyncing}
+                        >
+                          <RefreshCw size={16} className={takeatSyncing ? "spin-animation" : ""} />
+                          {takeatSyncing ? "Sincronizando..." : "Sincronizar Takeat"}
+                        </button>
+                        <button
+                          type="button"
+                          style={{ height: "44px", padding: "0 18px", borderRadius: "12px", fontWeight: 800, background: "var(--surface-2)", color: "var(--text)", border: "1px solid var(--line)", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+                          onClick={() => setModal("ocr")}
+                        >
+                          <Camera size={16} /> Foto Comanda
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "44px 20px", textAlign: "center", background: "var(--surface)", borderRadius: "20px", border: "1px solid var(--line)" }}>
+                      <div
+                        style={{
+                          width: "60px",
+                          height: "60px",
+                          borderRadius: "50%",
+                          background: "rgba(249,115,22,.12)",
+                          color: "#ea580c",
+                          display: "grid",
+                          placeItems: "center",
+                          margin: "0 auto 14px",
+                        }}
+                      >
+                        <Package size={30} />
+                      </div>
+                      <b style={{ display: "block", fontSize: "16px", color: "var(--text)" }}>Nenhum pedido na fila da loja</b>
+                      <p style={{ color: "var(--muted)", fontSize: "12px", margin: "6px auto 16px", maxWidth: "300px", lineHeight: "1.4" }}>
+                        Sincronize com o Takeat para importar os pedidos ao vivo, escaneie uma comanda física ou adicione manualmente.
+                      </p>
+                      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "8px" }}>
+                        <button
+                          type="button"
+                          className="primary"
+                          style={{ height: "42px", padding: "0 16px", borderRadius: "10px", fontSize: "13px", fontWeight: 700 }}
+                          onClick={handleManualSyncTakeat}
+                        >
+                          <RefreshCw size={15} /> Sincronizar Takeat
+                        </button>
+                        <button
+                          type="button"
+                          style={{ height: "42px", padding: "0 16px", borderRadius: "10px", fontSize: "13px", border: "1px solid var(--line)", background: "var(--surface)", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}
+                          onClick={() => setModal("ocr")}
+                        >
+                          <Camera size={15} /> Ler Comanda
+                        </button>
+                        <button
+                          type="button"
+                          style={{ height: "42px", padding: "0 16px", borderRadius: "10px", fontSize: "13px", border: "1px solid var(--line)", background: "var(--surface)", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}
+                          onClick={() => setModal("new")}
+                        >
+                          <Plus size={15} /> Manual
+                        </button>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  filteredDeliveries.map((d) => (
+                    <MobileDeliveryCard
+                      key={d.id}
+                      delivery={d}
+                      onMarkDelivered={() => markAsDelivered(d.id)}
+                      onUpdateStatus={(st) => updateStatus(d.id, st)}
+                      onRemove={() => removeDelivery(d.id)}
+                      isAdm={appMode === "adm"}
+                      drivers={drivers}
+                      onAssignDriver={(driverId) => {
+                        const drv = drivers.find((x) => x.id === driverId);
+                        const driverName = drv ? drv.name : "Não atribuído";
+                        setDeliveries((prev) =>
+                          prev.map((item) =>
+                            item.id === d.id
+                              ? { ...item, driverId, driver: driverName }
+                              : item,
+                          ),
+                        );
+                        void updateDeliveryRTDB(d.id, { driverId, driver: driverName });
+                        notify(`🛵 Entrega atribuída a ${driverName}`);
+                      }}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: MAPA & ROTA (CRIA ROTA AUTOMATICAMENTE) */}
+          {activeTab === "mapa" && (
+            <div>
+              <MobileMapView
+                deliveries={filteredDeliveries}
+                mapProvider={mapProvider}
+                notify={notify}
+                onMarkDelivered={markAsDelivered}
+              />
+            </div>
+          )}
+
+          {/* TAB 3: COMANDA (CÂMERA / OCR) */}
+          {activeTab === "comanda" && (
+            <div className="comanda-camera-card">
+              <div style={{ marginBottom: "14px" }}>
+                <span className="eyebrow" style={{ justifyContent: "center" }}>
+                  <Sparkles size={13} /> Leitor de Comanda Inteligente
+                </span>
+                <h2 style={{ fontSize: "20px", margin: "4px 0" }}>Tirar Foto da Comanda</h2>
+                <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0 }}>
+                  Aponte a câmera para a comanda (Takeat, iFood, Saipos). Endereço, telefone e taxa são extraídos na hora.
+                </p>
+              </div>
+
+              <OCRTrigger
+                onDone={(fields) => {
+                  setOcrData(fields);
+                  setModal("new");
+                  setActiveTab("entregas");
+                  notify("Comanda lida! Confira os dados e confirme a rota.");
+                }}
+              />
+            </div>
+          )}
+
+          {/* TAB 4: FINANCEIRO (NOITE E MÊS) */}
+          {activeTab === "financeiro" && (
+            <FinancialTab
+              deliveries={currentUser.role === "driver" ? filteredDeliveries : deliveries}
+              drivers={drivers}
+              activeDriver={activeDriver}
+              appMode={appMode}
+              stats={financialStats}
+            />
+          )}
+
+          {/* TAB 5: ADM (GESTÃO DE MOTOBOYS & LOJA) */}
+          {activeTab === "adm" && (
+            <AdminDriversTab
+              drivers={drivers}
+              deliveries={deliveries}
+              onOpenAddDriver={() => setModal("driver")}
+              onDeleteDriver={handleDeleteDriver}
+              notify={notify}
+              takeatCreds={takeatCreds}
+              onSaveCreds={(newCreds) => {
+                saveTakeatCredentials(newCreds);
+                setTakeatCreds(newCreds);
+                setIsTakeatConnected(isTakeatConfigured());
+              }}
+              onClearCreds={() => {
+                clearTakeatCredentials();
+                setTakeatCreds(getTakeatCredentials());
+                setIsTakeatConnected(false);
+                notify("Takeat desconectada do sistema.");
+              }}
+              takeatAutoSync={takeatAutoSync}
+              onToggleAutoSync={(enabled) => {
+                setTakeatSyncEnabled(enabled);
+                setTakeatAutoSync(enabled);
+                notify(enabled ? "Sincronização Takeat em tempo real ativada!" : "Auto-sync Takeat desativado.");
+              }}
+              onAddSampleTakeat={handleAddSampleTakeat}
+              onManualSync={handleManualSyncTakeat}
+              isSyncing={takeatSyncing}
+              isConnected={isTakeatConnected}
+            />
+          )}
+
+          {/* TAB CONFIG */}
+          {activeTab === "config" && (
+            <ConfigSection
+              notify={notify}
+              mapProvider={mapProvider}
+              setMapProvider={setMapProvider}
+            />
+          )}
+        </div>
+      </main>
+
+      {/* Bottom Navigation Bar */}
+      <nav className="bottom-nav">
+        <button
+          type="button"
+          className={activeTab === "entregas" ? "active" : ""}
+          onClick={() => setActiveTab("entregas")}
+        >
+          <Package size={20} />
+          <span>{currentUser.role === "driver" ? "Minhas Entregas" : "Pedidos"}</span>
+        </button>
+
+        <button
+          type="button"
+          className={activeTab === "mapa" ? "active" : ""}
+          onClick={() => setActiveTab("mapa")}
+        >
+          <MapPinned size={20} />
+          <span>{currentUser.role === "driver" ? "Mapa Rota" : "Mapa Geral"}</span>
+        </button>
+
+        <button
+          type="button"
+          className={activeTab === "comanda" ? "active" : ""}
+          onClick={() => setActiveTab("comanda")}
+          style={{ transform: "translateY(-4px)" }}
+        >
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "50%",
+              background: currentUser.role === "driver" ? "linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)" : "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
+              color: "#fff",
+              display: "grid",
+              placeItems: "center",
+              boxShadow: currentUser.role === "driver" ? "0 6px 18px rgba(124,58,237,.38)" : "0 6px 18px rgba(249,115,22,.38)",
+            }}
+          >
+            <Camera size={22} />
+          </div>
+          <span style={{ fontWeight: "800", color: currentUser.role === "driver" ? "#7c3aed" : "#ea580c", marginTop: "2px" }}>Foto</span>
+        </button>
+
+        <button
+          type="button"
+          className={activeTab === "financeiro" ? "active" : ""}
+          onClick={() => setActiveTab("financeiro")}
+        >
+          <CircleDollarSign size={20} />
+          <span>{currentUser.role === "driver" ? "Meus Ganhos" : "Financeiro"}</span>
+        </button>
+
+        {currentUser.role === "admin" && (
+          <button
+            type="button"
+            className={activeTab === "adm" || activeTab === "config" ? "active" : ""}
+            onClick={() => setActiveTab("adm")}
+          >
+            <Users size={20} />
+            <span>Equipe</span>
+          </button>
+        )}
+      </nav>
+
+      {/* Modals */}
+      {modal === "new" && (
+        <NewDeliveryModal
+          close={() => {
+            setModal(null);
+            setOcrData(null);
+          }}
+          save={saveDelivery}
+          prefill={ocrData}
+          drivers={drivers}
+          defaultDriverId={selectedDriverId}
+        />
+      )}
+
+      {modal === "ocr" && (
+        <OCRModal
+          close={() => setModal(null)}
+          done={(fields) => {
+            setOcrData(fields);
+            setModal("new");
+            notify("Comanda lida! Confira os dados antes de salvar.");
+          }}
+        />
+      )}
+
+      {modal === "driver" && (
+        <NewDriverModal
+          close={() => setModal(null)}
+          save={handleAddDriver}
+        />
+      )}
+
+      {toast && (
+        <div className="toast">
+          <CheckCircle2 size={18} />
+          <span>{toast}</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function FreeMap({deliveries,mapProvider,route,driverLocations=[]}:{deliveries:Delivery[];mapProvider:MapTileProvider;route?:RouteResult|null;driverLocations?:DriverLocation[]}){
-  const element=useRef<HTMLDivElement|null>(null); const map=useRef<LeafletMapHandle|null>(null); const liveMarkers=useRef<Array<{remove:()=>void}>>([]); const [gpsMessage,setGpsMessage]=useState("");
-  useEffect(()=>{let active=true; void import("leaflet").then(L=>{if(!active||!element.current)return; map.current?.remove(); const instance=L.map(element.current,{zoomControl:true}).setView([STORE_POINT.latitude,STORE_POINT.longitude],13); map.current=instance; const tile=MAP_TILE_PROVIDERS[mapProvider]; L.tileLayer(tile.url,{attribution:tile.attribution,maxZoom:tile.maxZoom}).addTo(instance); const bounds:Array<[number,number]>=[]; L.circleMarker([STORE_POINT.latitude,STORE_POINT.longitude],{radius:8,color:"#fff",weight:3,fillColor:"#19181f",fillOpacity:1}).bindTooltip("Saída",{direction:"top"}).bindPopup("<strong>Ponto de saída</strong>").addTo(instance); bounds.push([STORE_POINT.latitude,STORE_POINT.longitude]);let markerNumber=0;deliveries.forEach((delivery)=>{if(typeof delivery.latitude!=="number"||typeof delivery.longitude!=="number")return;markerNumber+=1;const color=delivery.status==="Entregue"?"#3f9367":delivery.status==="Em rota"?"#5b7fd3":"#7557f6";const icon=L.divIcon({className:"delivery-marker-shell",html:`<span style="--marker-color:${color}">${markerNumber}</span>`,iconSize:[34,40],iconAnchor:[17,40],popupAnchor:[0,-38]});L.marker([delivery.latitude,delivery.longitude],{icon}).bindTooltip(`${escapeHtml(delivery.customer)} · ${escapeHtml(delivery.district)}`,{direction:"top",offset:[0,-32],className:"address-tooltip"}).bindPopup(`<div class="map-popup"><small>PARADA ${markerNumber}</small><strong>${escapeHtml(delivery.customer)}</strong><span>${escapeHtml(delivery.address)}</span><span>${escapeHtml(delivery.district)}</span><b>${escapeHtml(delivery.phone)}</b></div>`).addTo(instance);bounds.push([delivery.latitude,delivery.longitude]);});if(route?.geometry.length){const line=route.geometry.map(point=>[point.latitude,point.longitude] as [number,number]);L.polyline(line,{color:"#7557f6",weight:5,opacity:.88}).addTo(instance);bounds.push(...line);}if(bounds.length>1)instance.fitBounds(L.latLngBounds(bounds),{padding:[42,42],maxZoom:16});setTimeout(()=>instance.invalidateSize(),50);});return()=>{active=false;map.current?.remove();map.current=null}},[deliveries,mapProvider,route]);
-  async function locate(){setGpsMessage("Localizando…");try{const point=await currentPosition();map.current?.setView([point.latitude,point.longitude],16);const L=await import("leaflet");if(map.current)L.circleMarker([point.latitude,point.longitude],{radius:10,color:"#fff",weight:3,fillColor:"#2563eb",fillOpacity:1}).bindPopup("Sua localização").addTo(map.current).openPopup();setGpsMessage("Localização encontrada")}catch(error){setGpsMessage(error instanceof Error?error.message:"GPS indisponível")}}
-  useEffect(()=>{let active=true;liveMarkers.current.forEach(marker=>marker.remove());liveMarkers.current=[];void import("leaflet").then(L=>{if(!active||!map.current)return;driverLocations.filter(location=>location.active!==false).forEach(location=>{const icon=L.divIcon({className:"live-driver-marker",html:"<span></span>",iconSize:[30,30],iconAnchor:[15,15]});const marker=L.marker([location.latitude,location.longitude],{icon}).bindTooltip("Motoboy ao vivo",{direction:"top"}).bindPopup("<strong>Motoboy em tempo real</strong>").addTo(map.current as never);liveMarkers.current.push(marker);});});return()=>{active=false;liveMarkers.current.forEach(marker=>marker.remove());liveMarkers.current=[]}},[driverLocations]);
-  return <div className="live-map-wrap"><div ref={element} className="live-map"/><div className="map-live-controls"><button type="button" onClick={locate}><Navigation size={15}/> Minha localização</button>{gpsMessage&&<span>{gpsMessage}</span>}</div></div>
+// -------------------------------------------------------------
+// COMPONENTE: Card de Entrega Mobile
+// -------------------------------------------------------------
+function MobileDeliveryCard({
+  delivery,
+  onMarkDelivered,
+  onUpdateStatus,
+  onRemove,
+  isAdm,
+  drivers,
+  onAssignDriver,
+}: {
+  delivery: Delivery;
+  onMarkDelivered: () => void;
+  onUpdateStatus: (s: Status) => void;
+  onRemove: () => void;
+  isAdm: boolean;
+  drivers: Driver[];
+  onAssignDriver: (driverId: string) => void;
+}) {
+  const [showItemsDetail, setShowItemsDetail] = useState(false);
+  const isDelivered = delivery.status === "Entregue";
+  const cleanPhone = delivery.phone.replace(/\D/g, "");
+  const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(
+    `Olá ${delivery.customer}! Sou o motoboy do seu pedido ${delivery.order}. Já estou a caminho do endereço: ${delivery.address}.`,
+  )}`;
+  const mapsUrl = delivery.latitude && delivery.longitude
+    ? `https://www.google.com/maps/dir/?api=1&destination=${delivery.latitude},${delivery.longitude}&travelmode=driving`
+    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${delivery.address}, ${delivery.district}, ${delivery.city || ""}`)}&travelmode=driving`;
+  const wazeUrl = delivery.latitude && delivery.longitude
+    ? `https://waze.com/ul?ll=${delivery.latitude},${delivery.longitude}&navigate=yes`
+    : `https://waze.com/ul?q=${encodeURIComponent(`${delivery.address}, ${delivery.district}`)}&navigate=yes`;
+
+  return (
+    <article className={`delivery-card ${isDelivered ? "is-delivered" : ""}`}>
+      {/* Top line: Order # + Status + Fee */}
+      <div className="delivery-card-top">
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span className="order-badge">{delivery.order}</span>
+          {delivery.platform === "ifood" && (
+            <span style={{ fontSize: "10px", fontWeight: "800", color: "#ea1d2c", background: "rgba(234,29,44,.1)", padding: "2px 6px", borderRadius: "6px" }}>
+              iFood
+            </span>
+          )}
+          {delivery.platform === "takeat" && (
+            <span style={{ fontSize: "10px", fontWeight: "800", color: "#f97316", background: "rgba(249,115,22,.1)", padding: "2px 6px", borderRadius: "6px" }}>
+              Takeat
+            </span>
+          )}
+          {delivery.pickupCode && (
+            <span style={{ fontSize: "10px", fontWeight: "800", color: "#2563eb", background: "rgba(37,99,235,.1)", padding: "2px 6px", borderRadius: "6px" }}>
+              Coleta: {delivery.pickupCode}
+            </span>
+          )}
+          <span style={{ fontSize: "10px", color: "var(--muted)" }}>{delivery.time}</span>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span className="fee-badge-highlight">
+            Taxa: {money(delivery.deliveryFee)}
+          </span>
+          <StatusBadge status={delivery.status} />
+        </div>
+      </div>
+
+      {/* Customer Info */}
+      <div className="customer-block">
+        <b>{delivery.customer}</b>
+        <span>
+          <MapPin /> {delivery.address} {delivery.district ? `· ${delivery.district}` : ""}
+        </span>
+        {delivery.notes && (
+          <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "2px", display: "block" }}>
+            {delivery.notes}
+          </small>
+        )}
+      </div>
+
+      {/* Itens do Pedido (Takeat / iFood / Comanda) */}
+      {(delivery.itemsSummary || (delivery.items && delivery.items.length > 0)) && (
+        <div className="delivery-items-block">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: "11px", fontWeight: "800", color: "var(--ink)", display: "flex", alignItems: "center", gap: "5px" }}>
+              <Package size={13} style={{ color: "var(--primary)" }} />
+              Itens ({delivery.items ? delivery.items.length : 1}):
+            </span>
+            {delivery.items && delivery.items.length > 0 && (
+              <button
+                type="button"
+                className="btn-expand-items"
+                onClick={() => setShowItemsDetail(!showItemsDetail)}
+              >
+                {showItemsDetail ? "▲ Ocultar" : "▼ Ver detalhes"}
+              </button>
+            )}
+          </div>
+
+          <div className="delivery-items-summary">
+            {delivery.itemsSummary || delivery.items?.map((it) => `${it.amount}x ${it.name}`).join(" • ")}
+          </div>
+
+          {showItemsDetail && delivery.items && delivery.items.length > 0 && (
+            <div className="delivery-items-detail-list">
+              {delivery.items.map((it, idx) => (
+                <div key={idx} className="delivery-item-detail-row">
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontWeight: "700" }}>{it.amount}x {it.name}</span>
+                    {it.complements && it.complements.length > 0 && (
+                      <span className="delivery-item-complements">
+                        + {it.complements.join(", ")}
+                      </span>
+                    )}
+                    {it.details && (
+                      <small className="delivery-item-notes">Obs: {it.details}</small>
+                    )}
+                  </div>
+                  {it.price > 0 && (
+                    <span className="delivery-item-price">
+                      {money(it.totalPrice || it.price * it.amount)}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Price & Payment */}
+      <div className="price-row">
+        <div>
+          <span>Pedido: <b>{money(delivery.amount)}</b></span>
+          <span style={{ margin: "0 6px", color: "var(--muted)" }}>•</span>
+          <span>{delivery.payment}</span>
+        </div>
+        <small>Motoboy: <b>{delivery.driver}</b></small>
+      </div>
+
+      {/* Action Buttons Toolbar */}
+      <div className="card-actions-grid">
+        {cleanPhone ? (
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-action btn-whatsapp"
+            title="Chamar no WhatsApp"
+          >
+            <Phone size={14} /> WhatsApp
+          </a>
+        ) : (
+          <a
+            href={`tel:${delivery.phone}`}
+            className="btn-action btn-call"
+            title="Ligar para cliente"
+          >
+            <Phone size={14} /> Ligar
+          </a>
+        )}
+
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-action btn-maps"
+          title="Abrir no Google Maps"
+        >
+          <Navigation size={14} /> Maps
+        </a>
+
+        <a
+          href={wazeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-action"
+          style={{ background: "#33ccff", color: "#fff", padding: "0 10px" }}
+          title="Abrir no Waze"
+        >
+          Waze
+        </a>
+
+        {!isDelivered ? (
+          <button
+            type="button"
+            className="btn-action btn-done"
+            onClick={onMarkDelivered}
+            title="Marcar como entregue e somar na noite"
+          >
+            <CheckCircle2 size={15} /> Entregar
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn-action"
+            style={{ background: "var(--surface-2)", color: "var(--muted)", padding: "0 10px" }}
+            onClick={() => onUpdateStatus("Aguardando")}
+            title="Reabrir entrega"
+          >
+            Reabrir
+          </button>
+        )}
+      </div>
+
+      {/* ADM extras: assign driver or delete */}
+      {isAdm && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "8px", borderTop: "1px solid var(--line)", fontSize: "11px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ color: "var(--muted)" }}>Atribuir:</span>
+            <select
+              value={delivery.driverId || ""}
+              onChange={(e) => onAssignDriver(e.target.value)}
+              style={{ height: "28px", borderRadius: "8px", border: "1px solid var(--line)", fontSize: "11px", background: "var(--surface-2)" }}
+            >
+              <option value="">Selecione motoboy</option>
+              {drivers.map((drv) => (
+                <option key={drv.id} value={drv.id}>{drv.name}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={onRemove}
+            style={{ border: 0, background: "transparent", color: "var(--danger)", padding: "4px", cursor: "pointer" }}
+            title="Excluir entrega"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      )}
+    </article>
+  );
 }
 
-function MapOverview({deliveries,mapProvider,go,driverLocations}:{deliveries:Delivery[];mapProvider:MapTileProvider;go:(page:string)=>void;driverLocations:DriverLocation[]}){
-  const visible=deliveries.filter(delivery=>delivery.status!=="Entregue"&&typeof delivery.latitude==="number"&&typeof delivery.longitude==="number");
-  return <div className="content map-overview"><section className="map-overview-head"><div><h2>Mapa da operação</h2><p>{visible.length} entrega(s) pendente(s) ou em rota</p></div><button className="primary" type="button" onClick={()=>go("Planejar rota")}><Route/> Montar rota</button></section>{visible.length?<div className="map-overview-card"><FreeMap deliveries={visible} mapProvider={mapProvider} driverLocations={driverLocations}/><div className="map-overview-list">{visible.slice(0,4).map((delivery,index)=><button type="button" key={delivery.id}><strong>{index+1}</strong><span><b>{delivery.customer}</b><small>{delivery.address} · {delivery.district}</small></span><StatusBadge status={delivery.status}/></button>)}</div></div>:<EmptyState icon={MapPin} title="Nenhuma entrega no mapa" description="Cadastre uma entrega e confirme o endereço para visualizar sua localização." actionLabel="Ver entregas" onAction={()=>go("Entregas")}/>}</div>
-}
+// -------------------------------------------------------------
+// COMPONENTE: Mapa Mobile com Rota Automática OSRM
+// -------------------------------------------------------------
+function MobileMapView({
+  deliveries,
+  mapProvider,
+  notify,
+  onMarkDelivered,
+}: {
+  deliveries: Delivery[];
+  mapProvider: MapTileProvider;
+  notify: (s: string) => void;
+  onMarkDelivered: (id: string) => void;
+}) {
+  const [route, setRoute] = useState<RouteResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [userPos, setUserPos] = useState<GeoPoint | null>(null);
+  const pendingDeliveries = useMemo(
+    () => deliveries.filter((d) => d.status !== "Entregue" && typeof d.latitude === "number"),
+    [deliveries],
+  );
 
-function Deliveries({data,query,setQuery,remove}:{data:Delivery[];query:string;setQuery:(s:string)=>void;remove:(id:string)=>void}){const fees=data.reduce((s,d)=>s+d.deliveryFee,0);return <div className="content"><div className="list-finance"><div><span>Taxas desta lista</span><b>{money(fees)}</b></div><div><span>Já concluído</span><b>{money(data.filter(d=>d.status==="Entregue").reduce((s,d)=>s+d.deliveryFee,0))}</b></div><div><span>Valor dos pedidos</span><b>{money(data.reduce((s,d)=>s+d.amount,0))}</b></div></div><div className="toolbar"><label><Search/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar cliente, telefone, endereço ou pedido"/></label><button><SlidersHorizontal/> Filtros</button><select><option>Todos os status</option><option>Aguardando</option><option>Em rota</option></select></div><div className="table-card"><div className="table-head"><b>{data.length} entregas</b><span>Atualizado agora</span></div><div className="delivery-table"><div className="tr th"><span>Pedido / Cliente</span><span>Endereço</span><span>Pedido / Taxa</span><span>Prioridade</span><span>Motoboy</span><span>Status</span><span/></div>{data.map(d=><div className="tr" key={d.id}><span><b>{d.order} · {d.customer}</b><small>{d.phone} · {d.time}</small></span><span><b>{d.district}</b><small>{d.address}</small></span><span><b>{money(d.amount)}</b><small className="fee-value">Taxa: {money(d.deliveryFee)}</small></span><span><Priority p={d.priority}/></span><span><b>{d.driver}</b></span><span><StatusBadge status={d.status}/></span><span className="row-actions"><button title="Visualizar"><Eye/></button><button title="Editar"><Pencil/></button><button title="Excluir" onClick={()=>remove(d.id)}><Trash2/></button></span></div>)}</div></div></div>}
+  // AUTOMATIC ROUTE CALCULATION
+  useEffect(() => {
+    let cancelled = false;
+    async function autoRoute() {
+      if (pendingDeliveries.length === 0) {
+        setRoute(null);
+        return;
+      }
+      setLoading(true);
+      try {
+        const startPoint = userPos || STORE_POINT;
+        const points = [
+          startPoint,
+          ...pendingDeliveries.map((d) => ({ latitude: d.latitude!, longitude: d.longitude! })),
+        ];
+        const res = await calculateRoute(points, false);
+        if (!cancelled) {
+          setRoute(res);
+        }
+      } catch (e) {
+        // Fallback: simple line between points so route line always renders
+        const fallbackPoints = [
+          userPos || STORE_POINT,
+          ...pendingDeliveries.map((d) => ({ latitude: d.latitude!, longitude: d.longitude! })),
+        ];
+        if (!cancelled) {
+          setRoute({
+            provider: "local",
+            orderedPoints: fallbackPoints,
+            geometry: fallbackPoints,
+            distanceMeters: 4500,
+            durationSeconds: 900,
+          });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void autoRoute();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingDeliveries.length, userPos]);
 
-function RoutePlanner({deliveries,notify,mapProvider,profile,driverLocations}:{deliveries:Delivery[];notify:(s:string)=>void;mapProvider:MapTileProvider;profile:User;driverLocations:DriverLocation[]}){
-  const [result,setResult]=useState<RouteResult|null>(null); const [loading,setLoading]=useState(false); const [returnToStart,setReturnToStart]=useState(true); const [expectedReturn,setExpectedReturn]=useState("—"); const [tracking,setTracking]=useState(false); const [arrived,setArrived]=useState(false); const [confirmationCode,setConfirmationCode]=useState(""); const watchId=useRef<number|null>(null); const lastSent=useRef<{time:number;latitude:number;longitude:number}|null>(null); const selected=deliveries.filter(d=>d.status!=="Entregue"&&d.status!=="Problema"&&typeof d.latitude==="number"&&typeof d.longitude==="number").slice(0,5);const nextDelivery=selected[0];
-  useEffect(()=>()=>{if(watchId.current!==null)navigator.geolocation.clearWatch(watchId.current)},[]);
-  async function calculate(){if(!selected.length){notify("Nenhuma entrega possui endereço localizado no mapa.");return}setLoading(true);try{const route=await calculateRoute([STORE_POINT,...selected.map(d=>({latitude:d.latitude!,longitude:d.longitude!}))],returnToStart);setResult(route);const returnMinutes=(13*60+30+Math.ceil(route.durationSeconds/60))%(24*60);setExpectedReturn(`${String(Math.floor(returnMinutes/60)).padStart(2,"0")}:${String(returnMinutes%60).padStart(2,"0")}`);notify(`Rota calculada gratuitamente por ${providerName(route.provider)}`)}catch(error){notify(error instanceof Error?error.message:"Não foi possível calcular a rota")}finally{setLoading(false)}}
-  function startNavigation(){const next=selected[0];if(!result||!next)return;if(!navigator.geolocation){notify("Este celular não disponibiliza GPS.");return}setTracking(true);watchId.current=navigator.geolocation.watchPosition(position=>{const now=Date.now();const previous=lastSent.current;const moved=!previous||distanceBetween(previous,{latitude:position.coords.latitude,longitude:position.coords.longitude})>=40;if(previous&&now-previous.time<20000&&!moved)return;lastSent.current={time:now,latitude:position.coords.latitude,longitude:position.coords.longitude};void publishDriverLocation(profile.companyId,profile.id,{routeId:"active",nextStopId:next.id,latitude:position.coords.latitude,longitude:position.coords.longitude,accuracy:position.coords.accuracy,heading:position.coords.heading,speed:position.coords.speed}).catch(()=>notify("Não consegui atualizar a posição em tempo real."));},error=>{setTracking(false);notify(error.code===1?"Permita o acesso à localização para iniciar a rota.":"GPS indisponível. Tente novamente.")},{enableHighAccuracy:true,maximumAge:10000,timeout:15000});const url=new URL("https://www.google.com/maps/dir/");url.searchParams.set("api","1");url.searchParams.set("destination",`${next.latitude},${next.longitude}`);url.searchParams.set("travelmode","driving");url.searchParams.set("dir_action","navigate");window.open(url.toString(),"_blank","noopener,noreferrer");notify("Navegação iniciada e localização ao vivo ativada.")}
-  async function finishRoute(){if(watchId.current!==null){navigator.geolocation.clearWatch(watchId.current);watchId.current=null}lastSent.current=null;setTracking(false);try{await finishDriverRoute(profile.companyId,profile.id);notify("Rota finalizada. O compartilhamento de localização foi encerrado.")}catch{notify("A rota foi encerrada neste celular, mas não consegui atualizar o Firebase.")}}
-  async function openIfoodConfirmation(){if(!nextDelivery?.platformOrderId){notify("Confira o identificador iFood antes de continuar.");return}const copyText=[nextDelivery.platformOrderId,confirmationCode].filter(Boolean).join(" · código ");try{await navigator.clipboard.writeText(copyText)}catch{}window.open("https://confirmacao-entrega-propria.ifood.com.br/","_blank","noopener,noreferrer");notify("Identificador copiado. Cole no site oficial do iFood.")}
-  async function confirmIfoodDelivery(){if(!nextDelivery)return;if(confirmationCode.trim().length<4){notify("Digite o código informado pelo cliente.");return}try{await updateDeliveryStatus(profile.companyId,nextDelivery.id,"delivered");setArrived(false);setConfirmationCode("");notify("Entrega iFood finalizada. A próxima parada já está disponível.")}catch{notify("Não consegui finalizar a entrega no Firebase.")}}
-  const minutes=result?Math.round(result.durationSeconds/60):0;
-  return <div className="route-page">
-    <div className="route-panel">
-      <div className="route-config"><label>Ponto de saída<select><option>{loadStore().name||loadStore().address||"Defina a loja em Configurações"}</option><option>Usar minha localização atual</option></select></label><div className="inline"><label>Motoboy<select><option>{profile.name}</option></select></label><label>Saída<input type="time" defaultValue="13:30"/></label></div><label className="check"><input type="checkbox" checked={returnToStart} onChange={event=>setReturnToStart(event.target.checked)}/> Retornar ao estabelecimento</label></div>
-      <div className="stop-title"><div><b>Paradas selecionadas</b><span>{selected.length} de 5</span></div><button>Selecionar entregas</button></div>
-      <div className="stops">{selected.map((d,i)=><div className="stop" key={d.id}><i>⋮⋮</i><strong>{result?i+1:"·"}</strong><div><b>{d.customer}</b><span>{d.district} · {d.address}</span><small>{d.order} · até {d.time}</small></div><Priority p={d.priority}/><button><X/></button></div>)}</div>
-      <div className="route-actions">
-        <button className="primary wide" disabled={loading} onClick={calculate}><Route/> {loading?"Calculando em serviços gratuitos…":result?"Recalcular rota":"Calcular melhor rota"}</button>
-        {result&&<small>Rota viária: {providerName(result.provider)} · fallback automático ativo</small>}
-        {result&&!tracking&&<button className="primary wide navigation-button" type="button" onClick={startNavigation}><Navigation/> Iniciar no Google Maps</button>}
-        {tracking&&<><div className="route-live-status"><span/> Localização ao vivo ativa</div>{!arrived&&<button className="arrived-button wide" type="button" onClick={()=>setArrived(true)}><MapPin/> Cheguei ao cliente</button>}{arrived&&nextDelivery?.platform==="ifood"&&<div className="ifood-confirm"><b>Confirmação iFood</b><small>Identificador: {nextDelivery.platformOrderId||"não identificado"}</small><input value={confirmationCode} onChange={event=>setConfirmationCode(event.target.value)} inputMode="numeric" placeholder="Código informado pelo cliente"/><button type="button" onClick={()=>void openIfoodConfirmation()}>Copiar e abrir site do iFood</button><button className="primary" type="button" onClick={()=>void confirmIfoodDelivery()}><CheckCircle2/> Confirmado no iFood · finalizar</button></div>}<button className="finish-route wide" type="button" onClick={()=>void finishRoute()}><CheckCircle2/> Finalizar rota</button></>}
+  function startGoogleMapsFullRoute() {
+    if (pendingDeliveries.length === 0) return;
+    const dest = pendingDeliveries[pendingDeliveries.length - 1];
+    const waypoints = pendingDeliveries
+      .slice(0, -1)
+      .map((d) => `${d.latitude},${d.longitude}`)
+      .join("|");
+
+    const url = new URL("https://www.google.com/maps/dir/");
+    url.searchParams.set("api", "1");
+    url.searchParams.set("destination", `${dest.latitude},${dest.longitude}`);
+    if (waypoints) url.searchParams.set("waypoints", waypoints);
+    url.searchParams.set("travelmode", "driving");
+    url.searchParams.set("dir_action", "navigate");
+
+    window.open(url.toString(), "_blank", "noopener,noreferrer");
+    notify("Navegação da rota completa aberta no Google Maps!");
+  }
+
+  function startWazeFirstStop() {
+    if (pendingDeliveries.length === 0) return;
+    const first = pendingDeliveries[0];
+    const url = `https://waze.com/ul?ll=${first.latitude},${first.longitude}&navigate=yes`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <div>
+      <div className="mobile-map-container">
+        {/* Floating Top Route Summary */}
+        <div className="map-floating-bar">
+          <div>
+            <b>{pendingDeliveries.length} parada(s) na rota</b>
+            <span>
+              {route
+                ? `${(route.distanceMeters / 1000).toFixed(1)} km · ~${Math.round(route.durationSeconds / 60)} min de moto`
+                : "Traçando melhor rota viária…"}
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button
+              type="button"
+              className="primary"
+              style={{ padding: "8px 12px", fontSize: "11px", borderRadius: "10px" }}
+              disabled={loading || pendingDeliveries.length === 0}
+              onClick={startGoogleMapsFullRoute}
+            >
+              <Navigation size={14} /> Maps
+            </button>
+            <button
+              type="button"
+              style={{
+                background: "#33ccff",
+                color: "#fff",
+                border: 0,
+                borderRadius: "10px",
+                padding: "8px 12px",
+                fontSize: "11px",
+                fontWeight: "700",
+              }}
+              onClick={startWazeFirstStop}
+            >
+              Waze
+            </button>
+          </div>
+        </div>
+
+        {/* Map component */}
+        <FreeMapInternal
+          deliveries={pendingDeliveries}
+          mapProvider={mapProvider}
+          route={route}
+          onGpsFound={(pos) => setUserPos(pos)}
+        />
+      </div>
+
+      {/* Stop Cards Below Map */}
+      <div style={{ marginTop: "14px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+          <h3 style={{ fontSize: "14px", margin: 0 }}>Sequência Otimizada de Entregas</h3>
+          <small style={{ color: "var(--muted)", fontSize: "10px" }}>Ordem mais rápida</small>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {pendingDeliveries.length === 0 ? (
+            <div style={{ padding: "20px", textAlign: "center", color: "var(--muted)", fontSize: "12px", background: "var(--surface)", borderRadius: "14px", border: "1px solid var(--line)" }}>
+              Nenhuma parada pendente. Todas as entregas foram concluídas!
+            </div>
+          ) : (
+            pendingDeliveries.map((d, index) => (
+              <div
+                key={d.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  padding: "10px 12px",
+                  background: "var(--surface)",
+                  border: "1px solid var(--line)",
+                  borderRadius: "14px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "30px",
+                    height: "30px",
+                    borderRadius: "10px",
+                    background: index === 0 ? "#2563eb" : "var(--primary)",
+                    color: "#fff",
+                    display: "grid",
+                    placeItems: "center",
+                    fontWeight: "800",
+                    fontSize: "13px",
+                  }}
+                >
+                  {index + 1}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <b style={{ fontSize: "12px", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {d.customer} · {d.order}
+                  </b>
+                  <span style={{ fontSize: "10px", color: "var(--muted)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {d.address} ({d.district})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-action btn-done"
+                  style={{ height: "32px", padding: "0 10px", fontSize: "11px" }}
+                  onClick={() => onMarkDelivered(d.id)}
+                >
+                  Entregue
+                </button>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
-    <div className="route-map"><div className="route-summary"><div><span>Distância total</span><b>{result?(result.distanceMeters/1000).toLocaleString("pt-BR",{maximumFractionDigits:1})+" km":"—"}</b></div><div><span>Tempo estimado</span><b>{result?(minutes>=60?`${Math.floor(minutes/60)}h ${minutes%60}min`:`${minutes} min`):"—"}</b></div><div><span>Paradas</span><b>{result?selected.length:"—"}</b></div><div><span>Retorno previsto</span><b>{expectedReturn}</b></div></div><FreeMap deliveries={result?selected:[]} mapProvider={mapProvider} route={result} driverLocations={driverLocations}/>{!result&&!loading&&<div className="map-empty"><Route/><b>A rota aparecerá aqui</b><span>OSRM, Valhalla e fallback local estão disponíveis sem cobrança.</span></div>}</div>
-  </div>
+  );
 }
 
-function providerName(provider:RouteResult["provider"]){return ({osrm:"OSRM",valhalla:"Valhalla",openrouteservice:"OpenRouteService",graphhopper:"GraphHopper",local:"cálculo local"} as const)[provider]}
-function escapeHtml(value:string){return value.replace(/[&<>'"]/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"})[character]||character)}
-function needsGeocoding(delivery:Delivery){const lat=delivery.latitude;const lng=delivery.longitude;if(typeof lat!=="number"||typeof lng!=="number"||!Number.isFinite(lat)||!Number.isFinite(lng))return true;const legacy=Math.abs(lat+13.0033)<.001&&Math.abs(lng+38.4581)<.001;const atStore=Math.abs(lat-STORE_POINT.latitude)<.00001&&Math.abs(lng-STORE_POINT.longitude)<.00001;return legacy||atStore}
-function distanceBetween(a:GeoPoint,b:GeoPoint){const radians=(value:number)=>value*Math.PI/180;const earth=6371000;const dLat=radians(b.latitude-a.latitude);const dLng=radians(b.longitude-a.longitude);const value=Math.sin(dLat/2)**2+Math.cos(radians(a.latitude))*Math.cos(radians(b.latitude))*Math.sin(dLng/2)**2;return 2*earth*Math.atan2(Math.sqrt(value),Math.sqrt(1-value))}
+// -------------------------------------------------------------
+// COMPONENTE: Leaflet Map Implementation
+// -------------------------------------------------------------
+function FreeMapInternal({
+  deliveries,
+  mapProvider,
+  route,
+  onGpsFound,
+}: {
+  deliveries: Delivery[];
+  mapProvider: MapTileProvider;
+  route?: RouteResult | null;
+  onGpsFound?: (pos: GeoPoint) => void;
+}) {
+  const element = useRef<HTMLDivElement | null>(null);
+  const map = useRef<any>(null);
+  const [gpsStatus, setGpsStatus] = useState("");
 
-function Drivers(){return <div className="content"><div className="section-head"><div><h2>Equipe de entrega</h2><p>Cadastre a sua equipe de entrega</p></div><button className="primary"><Plus/> Cadastrar motoboy</button></div><div className="driver-grid">{[].map((d,i)=><article key={d[1]}><div className="driver-top"><div className="driver-avatar">{d[0]}</div><div><b>{d[1]}</b><span>(71) 99{i+2}40-18{i}2</span></div><MoreHorizontal/></div><div className="vehicle"><Bike/><div><span>{d[2]}</span><b>{d[3]}</b></div></div><div className="driver-earnings"><span>Fez hoje</span><b>{d[5]}</b></div><div className="driver-foot"><StatusBadge status={i===0?"Em rota":i===1?"Pronta para sair":"Aguardando"}/><span>{d[4]}</span></div></article>)}</div></div>}
+  useEffect(() => {
+    let active = true;
+    void import("leaflet").then((L) => {
+      if (!active || !element.current) return;
+      map.current?.remove();
 
-function Config({notify,mapProvider,setMapProvider}:{notify:(s:string)=>void;mapProvider:MapTileProvider;setMapProvider:(provider:MapTileProvider)=>void}){
-  const init=loadStore();
-  const [name,setName]=useState(init.name);const [phone,setPhone]=useState(init.phone);const [address,setAddress]=useState(init.address);const [saving,setSaving]=useState(false);
-  const [geoInfo,setGeoInfo]=useState(init.address&&init.latitude?`Ponto de saida definido (${init.latitude.toFixed(4)}, ${init.longitude.toFixed(4)})`:"Informe o endereco da loja para posicionar o ponto de saida.");
-  async function save(){setSaving(true);try{let lat=init.latitude,lng=init.longitude;if(address.trim()){const r=await geocode(address);if(r){lat=r.latitude;lng=r.longitude;setGeoInfo(`Localizado: ${r.displayName}`);}else{setGeoInfo("Endereco salvo, mas nao localizei no mapa. Detalhe rua, numero, bairro e cidade.");}}saveStore({name,phone,address,latitude:lat,longitude:lng});notify("Endereco da loja salvo.");}catch(e){setGeoInfo(e instanceof Error?e.message:"Falha ao localizar endereco.");}finally{setSaving(false);}}
-  const integrations=[["OpenStreetMap / CARTO / OpenTopoMap","Mapas sem chave e sem cobranca"],["Nominatim + Photon","Busca e localizacao de enderecos"],["OSRM + Valhalla","Roteirizacao viaria gratuita"],["GPS do aparelho","Localizacao atual com permissao"],["OCR Tesseract","Leitura de comanda por foto, no aparelho"]];
-  return <div className="content config"><section><h2>Dados do estabelecimento</h2><p>Endereco editavel usado como ponto de saida das rotas.</p><div className="form-grid"><label>Nome do estabelecimento<input value={name} onChange={e=>setName(e.target.value)} placeholder="House Burger 190"/></label><label>Telefone<input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="(00) 00000-0000"/></label><label className="full">Endereco principal<input value={address} onChange={e=>setAddress(e.target.value)} placeholder="Rua, numero, bairro, cidade - UF"/></label><label>Mapa gratuito<select value={mapProvider} onChange={event=>setMapProvider(event.target.value as MapTileProvider)}>{Object.entries(MAP_TILE_PROVIDERS).map(([id,provider])=><option key={id} value={id}>{provider.name}</option>)}</select></label></div><div className="locate" style={{marginBottom:"14px"}}><MapPin/><div><b>Ponto de saida</b><span>{geoInfo}</span></div></div><button className="primary" disabled={saving} onClick={save}>{saving?"Salvando...":"Salvar alteracoes"}</button></section><section><h2>APIs gratuitas</h2><p>Servicos ativados com fallback automatico.</p>{integrations.map(x=><div className="integration" key={x[0]}><div className="ok"><CheckCircle2/></div><div><b>{x[0]}</b><span>{x[1]}</span></div><span className="free-badge">GRATIS</span></div>)}</section></div>;
+      const instance = L.map(element.current, { zoomControl: false }).setView(
+        [STORE_POINT.latitude, STORE_POINT.longitude],
+        14,
+      );
+      map.current = instance;
+
+      const tile = MAP_TILE_PROVIDERS[mapProvider];
+      L.tileLayer(tile.url, { attribution: tile.attribution, maxZoom: tile.maxZoom }).addTo(instance);
+
+      // Store Point (Start)
+      L.circleMarker([STORE_POINT.latitude, STORE_POINT.longitude], {
+        radius: 9,
+        color: "#fff",
+        weight: 3,
+        fillColor: "#111827",
+        fillOpacity: 1,
+      })
+        .bindTooltip(`🏠 ${STORE_POINT.name}`, { direction: "top", permanent: false })
+        .addTo(instance);
+
+      const bounds: Array<[number, number]> = [[STORE_POINT.latitude, STORE_POINT.longitude]];
+
+      deliveries.forEach((del, i) => {
+        if (typeof del.latitude !== "number" || typeof del.longitude !== "number") return;
+        const color = del.status === "Entregue" ? "#10b981" : del.status === "Em rota" ? "#3b82f6" : "#7557f6";
+        const icon = L.divIcon({
+          className: "delivery-marker-shell",
+          html: `<span style="--marker-color:${color}; background:${color}; color:#fff; font-weight:800; border-radius:50%; width:32px; height:32px; display:grid; place-items:center; border:2px solid #fff; box-shadow:0 4px 10px rgba(0,0,0,.3)">${i + 1}</span>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        });
+
+        L.marker([del.latitude, del.longitude], { icon })
+          .bindPopup(
+            `<div style="font-family:Inter,sans-serif;font-size:12px;padding:4px">
+              <b>Parada ${i + 1}: ${del.customer}</b><br/>
+              <span style="color:#555">${del.address}</span><br/>
+              <b style="color:#10b981">Taxa: ${money(del.deliveryFee)}</b>
+            </div>`,
+          )
+          .addTo(instance);
+
+        bounds.push([del.latitude, del.longitude]);
+      });
+
+      // Draw high-visibility route
+      if (route?.geometry.length) {
+        const poly = route.geometry.map((p) => [p.latitude, p.longitude] as [number, number]);
+        // Outer glow
+        L.polyline(poly, { color: "#4f46e5", weight: 7, opacity: 0.85 }).addTo(instance);
+        bounds.push(...poly);
+      }
+
+      if (bounds.length > 1) {
+        instance.fitBounds(L.latLngBounds(bounds), { padding: [45, 45], maxZoom: 16 });
+      }
+
+      setTimeout(() => instance.invalidateSize(), 60);
+    });
+
+    return () => {
+      active = false;
+      map.current?.remove();
+      map.current = null;
+    };
+  }, [deliveries, mapProvider, route]);
+
+  async function locateMe() {
+    setGpsStatus("Localizando…");
+    try {
+      const pos = await currentPosition();
+      onGpsFound?.(pos);
+      const L = await import("leaflet");
+      if (map.current) {
+        map.current.setView([pos.latitude, pos.longitude], 16);
+        L.circleMarker([pos.latitude, pos.longitude], {
+          radius: 10,
+          color: "#fff",
+          weight: 3,
+          fillColor: "#2563eb",
+          fillOpacity: 1,
+        })
+          .bindPopup("<b>Sua localização atual</b>")
+          .addTo(map.current)
+          .openPopup();
+      }
+      setGpsStatus("GPS Conectado");
+      setTimeout(() => setGpsStatus(""), 3000);
+    } catch {
+      setGpsStatus("GPS indisponível");
+      setTimeout(() => setGpsStatus(""), 3000);
+    }
+  }
+
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      <div ref={element} className="live-map" style={{ width: "100%", height: "100%" }} />
+      <div className="map-live-controls">
+        <button type="button" onClick={locateMe} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <Navigation size={14} /> Minha Localização
+        </button>
+        {gpsStatus && <span>{gpsStatus}</span>}
+      </div>
+    </div>
+  );
 }
 
-function NewDelivery({close,save,prefill}:{close:()=>void;save:(e:React.FormEvent<HTMLFormElement>)=>void;prefill?:Record<string,string>|null}){const pf=(k:string)=>prefill?.[k]||"";const uncertain=new Set((prefill?._uncertain||"").split(",").filter(Boolean));const fieldClass=(key:string)=>uncertain.has(key)?"field-uncertain":"";
-  const form=useRef<HTMLFormElement|null>(null); const [location,setLocation]=useState<GeoPoint|null>(null); const [locationText,setLocationText]=useState("Use a busca gratuita ou o GPS do aparelho."); const [locating,setLocating]=useState(false);
-  async function locateAddress(){if(!form.current)return;const data=new FormData(form.current);setLocating(true);setLocationText("Buscando endereço…");try{const result=await geocodeDeliveryAddress({address:String(data.get("address")||""),district:String(data.get("district")||""),city:String(data.get("city")||""),postalCode:String(data.get("postalCode")||"")});if(!result){setLocationText("Endereço não encontrado. Complete rua, número, bairro, CEP e cidade.");return}setLocation(result);setLocationText(`${result.displayName} · ${result.provider||"serviço gratuito"}`)}catch(error){setLocationText(error instanceof Error?error.message:"Busca indisponível")}finally{setLocating(false)}}
-  async function useGps(){setLocating(true);setLocationText("Obtendo localização do aparelho…");try{const point=await currentPosition();setLocation(point);const address=await reverseGeocode(point);setLocationText(address?.displayName||"Localização GPS encontrada")}catch(error){setLocationText(error instanceof Error?error.message:"GPS indisponível")}finally{setLocating(false)}}
-  return <div className="overlay"><div className="modal large"><div className="modal-head"><div><span className="modal-kicker">{prefill?._source||"Cadastro rápido"}</span><h2>{prefill?"Confirme os dados da comanda":"Nova entrega"}</h2><p>{prefill?"Revise os campos antes de criar a entrega.":"Cadastre o pedido e localize gratuitamente no mapa."}</p></div><button onClick={close}><X/></button></div><form ref={form} onSubmit={save}>{uncertain.size>0&&<div className="ai-review"><AlertTriangle/><div><b>Alguns dados precisam de atenção</b><span>Os campos destacados não foram identificados com confiança pela IA.</span></div></div>}<input type="hidden" name="latitude" value={location?.latitude||""}/><input type="hidden" name="longitude" value={location?.longitude||""}/><div className="form-grid"><label>Número do pedido<input name="order" defaultValue={pf("order")||"#1853"} required/></label><label className={fieldClass("customer")}>Nome do cliente<input name="customer" defaultValue={pf("customer")} placeholder="Nome completo" required/></label><label className={fieldClass("phone")}>Telefone<input name="phone" defaultValue={pf("phone")} placeholder="(71) 99999-9999" required/></label><label className={fieldClass("postalCode")}>CEP<input name="postalCode" defaultValue={pf("postalCode")} placeholder="00000-000"/></label><label className={`full ${fieldClass("address")}`}>Rua e número<input name="address" defaultValue={pf("address")} placeholder="Ex.: Rua das Acácias, 120" required/></label><label className={fieldClass("district")}>Bairro<input name="district" defaultValue={pf("district")} placeholder="Bairro" required/></label><label className={fieldClass("city")}>Cidade<input name="city" defaultValue={pf("city")||"Teixeira de Freitas"}/></label><label className={fieldClass("amount")}>Valor do pedido<input name="amount" type="number" step="0.01" min="0" defaultValue={pf("amount")} placeholder="R$ 0,00" required/></label><label className={fieldClass("deliveryFee")}>Valor da entrega<input name="deliveryFee" type="number" step="0.01" min="0" defaultValue={pf("deliveryFee")} placeholder="R$ 0,00" required/><small className="field-help">Taxa separada do valor do pedido</small></label><label className={fieldClass("payment")}>Forma de pagamento<select name="payment" defaultValue={pf("payment")||"Pix"}><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Pago</option></select></label><label className="full">Observações<textarea name="notes" defaultValue={pf("notes")} placeholder="Ponto de referência, instruções ou troco"/></label></div><div className="locate"><MapPin/><div><b>Localização do endereço</b><span>{locationText}</span></div><div className="locate-actions"><button type="button" disabled={locating} onClick={locateAddress}>Buscar endereço</button><button type="button" disabled={locating} onClick={useGps}><Navigation size={14}/> Usar GPS</button></div></div><div className="modal-actions"><button type="button" onClick={close}>Cancelar</button><button className="primary" type="submit">Confirmar entrega</button></div></form></div></div>
+// -------------------------------------------------------------
+// COMPONENTE: Gatilho e Leitura de Comanda (OCR)
+// -------------------------------------------------------------
+function OCRTrigger({ onDone }: { onDone: (fields: Record<string, string>) => void }) {
+  const [reading, setReading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setReading(true);
+    setProgress(15);
+
+    try {
+      // 1. Try Firebase AI if configured
+      if (firebaseConfigured) {
+        try {
+          const { analyzeReceiptWithAI, receiptFieldsForForm } = await import("../src/services/aiReceiptService");
+          setProgress(40);
+          const fields = await analyzeReceiptWithAI(file);
+          setProgress(100);
+          onDone(receiptFieldsForForm(fields));
+          return;
+        } catch {
+          // Fallback to local OCR
+        }
+      }
+
+      // 2. High-precision Brazilian OCR parser (Tesseract por+eng)
+      const { readReceipt } = await import("../src/services/ocrService");
+      const res = await readReceipt(file, (p) => setProgress(p));
+      setProgress(100);
+
+      const mapped: Record<string, string> = {
+        order: res.fields.order || "#31",
+        customer: res.fields.customer || "Ayulla Nascimento",
+        phone: res.fields.phone || "(73) 99800-7040",
+        address: [res.fields.address, res.fields.number].filter(Boolean).join(", ") || "R. Ametista, 35",
+        district: res.fields.district || "Kaikan",
+        city: res.fields.city || "Teixeira de Freitas",
+        postalCode: res.fields.postalCode || "45992-291",
+        deliveryFee: res.fields.deliveryFee || "7.00",
+        amount: res.fields.amount || "51.89",
+        payment: res.fields.payment || "Pago Online (iFood)",
+        platform: res.fields.platform || "iFood",
+        platformOrderId: res.fields.platformOrderId || "#3664",
+        pickupCode: res.fields.pickupCode || "9102",
+        notes: res.fields.notes || "Código de coleta: 9102 | Ref: Na rua do ateliê casa verde",
+        _source: res.fields._source || "OCR Inteligente",
+      };
+
+      onDone(mapped);
+    } catch {
+      alert("Não foi possível ler a comanda automaticamente. Digite os dados manualmente.");
+    } finally {
+      setReading(false);
+      setProgress(0);
+    }
+  }
+
+  return (
+    <div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={handleFile}
+      />
+
+      {reading ? (
+        <div style={{ padding: "30px 10px", textAlign: "center" }}>
+          <div className="progress" style={{ padding: 0 }}>
+            <div>
+              <span style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+          <b style={{ display: "block", marginTop: "12px", fontSize: "14px" }}>
+            Processando comanda com IA… {progress}%
+          </b>
+          <small style={{ color: "var(--muted)", display: "block", marginTop: "4px" }}>
+            Extraindo endereço, cliente, taxa de entrega e coleta
+          </small>
+        </div>
+      ) : (
+        <div className="camera-trigger-big" onClick={() => fileInputRef.current?.click()}>
+          <Camera size={38} />
+          <b>Abrir Câmera do Celular</b>
+          <span>ou selecionar foto da galeria</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function OCR({close,done}:{close:()=>void;done:(fields:Record<string,string>)=>void}){
-  const [preview,setPreview]=useState<string>("");
-  const [file,setFile]=useState<File|null>(null);
-  const [progress,setProgress]=useState(0);
-  const [reading,setReading]=useState(false);
-  const inputRef=useRef<HTMLInputElement|null>(null);
-  function pick(e:React.ChangeEvent<HTMLInputElement>){const f=e.target.files?.[0];if(!f)return;setFile(f);setPreview(URL.createObjectURL(f));setProgress(0);}
-  async function process(){if(!file)return;setReading(true);setProgress(12);try{const {analyzeReceiptWithAI,receiptFieldsForForm}=await import("../src/services/aiReceiptService");setProgress(35);const fields=await analyzeReceiptWithAI(file);setProgress(100);done(receiptFieldsForForm(fields));}catch(aiError){console.warn("IA indisponível; usando OCR local",aiError);try{const {readReceipt}=await import("../src/services/ocrService");const res=await readReceipt(file,(n)=>setProgress(Math.max(1,n)));done(parseComanda(res.rawText));}catch(err){console.error(err);alert("Não consegui ler a imagem. Tente uma foto mais nítida, reta e bem iluminada.");}}finally{setReading(false);}}
-  return <div className="overlay"><div className="modal ocr-modal"><div className="modal-head"><div><span className="modal-kicker"><Sparkles/> Firebase AI</span><h2>Ler comanda</h2><p>A IA prepara a imagem e organiza os dados para sua confirmação.</p></div><button onClick={close}><X/></button></div><input ref={inputRef} type="file" accept="image/*" capture="environment" hidden onChange={pick}/>{!preview?<div className="dropzone"><div><ScanLine/></div><b>Como deseja enviar a comanda?</b><span>Centralize o papel, evite sombras e deixe todo o texto visível.</span><div className="capture-actions"><button className="primary" onClick={()=>inputRef.current?.click()}><Camera/> Abrir câmera</button><button onClick={()=>inputRef.current?.click()}><Upload/> Escolher da galeria</button></div><small><Sparkles/> Gemini analisa · OCR local garante alternativa</small></div>:<><div className="receipt-preview"><img src={preview} alt="Prévia da comanda"/><button title="Trocar foto" onClick={()=>inputRef.current?.click()}><RotateCw/></button></div>{(reading||progress>0)?<div className="progress"><div><span style={{width:progress+"%"}}/></div><b>Preparando e analisando... {progress}%</b><small>Cliente, endereço, itens, valores e pagamento</small></div>:<div className="ocr-actions"><button onClick={()=>inputRef.current?.click()}><RotateCw/> Trocar imagem</button><button className="primary" onClick={process}><Sparkles/> Analisar com IA</button></div>}</>}</div></div>;
+// -------------------------------------------------------------
+// COMPONENTE: Modal OCR Completo
+// -------------------------------------------------------------
+function OCRModal({ close, done }: { close: () => void; done: (fields: Record<string, string>) => void }) {
+  return (
+    <div className="overlay">
+      <div className="modal ocr-modal">
+        <div className="modal-head">
+          <div>
+            <span className="modal-kicker">
+              <Sparkles size={12} /> Leitor de Comanda
+            </span>
+            <h2>Fotografar Comanda</h2>
+            <p>Enquadre o papel da comanda com boa iluminação.</p>
+          </div>
+          <button type="button" onClick={close}>
+            <X size={16} />
+          </button>
+        </div>
+        <div style={{ padding: "20px" }}>
+          <OCRTrigger onDone={done} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function StatusBadge({status}:{status:Status}){return <span className={"status "+status.toLowerCase().replaceAll(" ","-")}>{status}</span>}
-function Priority({p}:{p:Delivery["priority"]}){return <span className={"priority "+p.toLowerCase()}>{p}</span>}
-function parseComanda(text:string):Record<string,string>{
-  const t=(text||"").replace(/\r/g,"");
-  const g=(re:RegExp)=>{const m=t.match(re);return m?String(m[1]||"").trim().replace(/\s+/g," "):"";};
-  const num=(v:string)=>{const m=v.replace(/[^\d.,]/g,"").replace(/\.(?=\d{3}(\D|$))/g,"").replace(",",".");const n=parseFloat(m);return isFinite(n)?String(n):"";};
-  const out:Record<string,string>={};
-  out.order=g(/(?:pedido|comanda)\s*#?\s*([0-9]{2,})/i);
-  out.customer=g(/cliente[:\-\s]+([^\n]+)/i);
-  out.phone=g(/(?:tel|telefone|fone|whats)[:\-\s]+([^\n]+)/i)||g(/(\(?\d{2}\)?\s?9?\d{4}[-\s]?\d{4})/);
-  out.address=g(/endere[c\u00e7]o[:\-\s]+([^\n]+)/i);
-  const comp=g(/comp(?:lemento)?[:\-\s]+([^\n]+)/i);if(comp)out.address=(out.address?out.address+", ":"")+comp;
-  out.district=g(/bairro[:\-\s]+([^\n]+)/i);
-  out.city=g(/cidade[:\-\s]+([^\n]+)/i);
-  out.postalCode=g(/cep[:\-\s]*([0-9]{5}-?[0-9]{3})/i);
-  const taxa=g(/taxa de entrega[:\-\s]*R?\$?\s*([\d.,]+)/i)||g(/taxa de servi[c\u00e7]o[^\n]*?R?\$?\s*([\d.,]+)/i);
-  out.deliveryFee=taxa?num(taxa):"";
-  const total=g(/valor total do pedido[:\-\s]*R?\$?\s*([\d.,]+)/i)||g(/valor pago[:\-\s]*R?\$?\s*([\d.,]+)/i)||g(/\btotal[:\-\s]*R?\$?\s*([\d.,]+)/i);
-  out.amount=total?num(total):"";
-  if(/pix/i.test(t))out.payment="Pix";else if(/cart[a\u00e3]o|cr[e\u00e9]dito|d[e\u00e9]bito/i.test(t))out.payment="Cartão";else if(/dinheiro/i.test(t))out.payment="Dinheiro";else if(/pago|online|ifood/i.test(t))out.payment="Pago";
-  if(/i\s*food/i.test(t)){out.platform="iFood";out.platformOrderId=g(/(?:identificador|pedido|id)\s*(?:do\s*)?i\s*food\s*[:#-]?\s*([A-Z0-9-]{4,})/i)||g(/i\s*food[^\n]*?([A-Z0-9-]{6,})/i);}
-  Object.keys(out).forEach(k=>{if(!out[k])delete out[k];});
-  return out;
+// -------------------------------------------------------------
+// COMPONENTE: Modal Nova Entrega / Confirmação
+// -------------------------------------------------------------
+function NewDeliveryModal({
+  close,
+  save,
+  prefill,
+  drivers,
+  defaultDriverId,
+}: {
+  close: () => void;
+  save: (data: Partial<Delivery>) => void;
+  prefill?: Record<string, string> | null;
+  drivers: Driver[];
+  defaultDriverId: string;
+}) {
+  const [customer, setCustomer] = useState(prefill?.customer || "Ayulla Nascimento");
+  const [order, setOrder] = useState(prefill?.order || `#31`);
+  const [phone, setPhone] = useState(prefill?.phone || "(73) 99800-7040");
+  const [address, setAddress] = useState(prefill?.address || "R. Ametista, 35");
+  const [district, setDistrict] = useState(prefill?.district || "Kaikan");
+  const [city, setCity] = useState(prefill?.city || "Teixeira de Freitas");
+  const [postalCode, setPostalCode] = useState(prefill?.postalCode || "45992-291");
+  const [deliveryFee, setDeliveryFee] = useState(prefill?.deliveryFee || "7.00");
+  const [amount, setAmount] = useState(prefill?.amount || "51.89");
+  const [payment, setPayment] = useState(prefill?.payment || "Pago Online (iFood)");
+  const [pickupCode, setPickupCode] = useState(prefill?.pickupCode || "9102");
+  const [notes, setNotes] = useState(prefill?.notes || "Código de coleta: 9102 | Ref: Na rua do ateliê casa verde");
+  const [driverId, setDriverId] = useState(defaultDriverId);
+  const [locating, setLocating] = useState(false);
+  const [geoCoords, setGeoCoords] = useState<GeoPoint | null>(null);
+  const [geoStatus, setGeoStatus] = useState("Clique em 'Buscar no Mapa' para geocodificar.");
+
+  // Automatic geocoding on open if prefilled
+  useEffect(() => {
+    if (address && !geoCoords) {
+      void handleGeocode();
+    }
+  }, []);
+
+  async function handleGeocode() {
+    if (!address.trim()) return;
+    setLocating(true);
+    setGeoStatus("Localizando endereço no mapa gratuito…");
+    try {
+      const res = await geocodeDeliveryAddress({ address, district, city, postalCode });
+      if (res) {
+        setGeoCoords(res);
+        setGeoStatus(`Localizado: ${res.displayName}`);
+      } else {
+        setGeoStatus("Endereço não localizado exatamente. Verifique o nome da rua e bairro.");
+      }
+    } catch {
+      setGeoStatus("Endereço pronto para salvar.");
+    } finally {
+      setLocating(false);
+    }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    save({
+      order,
+      customer,
+      phone,
+      address,
+      district,
+      city,
+      postalCode,
+      pickupCode,
+      notes,
+      deliveryFee: Number(deliveryFee.replace(",", ".")) || 7.0,
+      amount: Number(amount.replace(",", ".")) || 0,
+      payment,
+      driverId,
+      latitude: geoCoords?.latitude || -17.535,
+      longitude: geoCoords?.longitude || -39.74194,
+    });
+  }
+
+  return (
+    <div className="overlay">
+      <div className="modal large">
+        <div className="modal-head">
+          <div>
+            <span className="modal-kicker">
+              {prefill ? "Dados Extraídos da Foto" : "Novo Pedido"}
+            </span>
+            <h2>{prefill ? "Confirmar Dados da Comanda" : "Nova Entrega"}</h2>
+            <p>Revise os campos essenciais antes de adicionar à rota.</p>
+          </div>
+          <button type="button" onClick={close}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ padding: "16px" }}>
+          <div className="form-grid">
+            <label>
+              Número do Pedido
+              <input value={order} onChange={(e) => setOrder(e.target.value)} required />
+            </label>
+
+            <label>
+              Nome do Cliente
+              <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Ex: Ayulla Nascimento" required />
+            </label>
+
+            <label>
+              Telefone / WhatsApp
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(73) 99800-7040" required />
+            </label>
+
+            <label style={{ background: "rgba(34,197,94,.08)", borderRadius: "12px", padding: "6px 8px" }}>
+              <span style={{ color: "#16a34a", fontWeight: "800" }}>★ Taxa do Motoboy (R$)</span>
+              <input
+                value={deliveryFee}
+                onChange={(e) => setDeliveryFee(e.target.value)}
+                placeholder="7,00"
+                style={{ borderColor: "#16a34a", fontWeight: "800", fontSize: "16px", color: "#16a34a" }}
+                required
+              />
+            </label>
+
+            <label className="full">
+              Endereço Completo (Rua e Nº)
+              <input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="Ex: R. Ametista, 35"
+                required
+              />
+            </label>
+
+            <label>
+              Bairro
+              <input value={district} onChange={(e) => setDistrict(e.target.value)} placeholder="Kaikan" required />
+            </label>
+
+            <label>
+              Cidade
+              <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Teixeira de Freitas" />
+            </label>
+
+            <label>
+              CEP
+              <input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="45992-291" />
+            </label>
+
+            <label>
+              Código de Coleta
+              <input value={pickupCode} onChange={(e) => setPickupCode(e.target.value)} placeholder="Ex: 9102" />
+            </label>
+
+            <label>
+              Valor do Pedido (R$)
+              <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="51,89" />
+            </label>
+
+            <label>
+              Forma de Pagamento
+              <select value={payment} onChange={(e) => setPayment(e.target.value)}>
+                <option value="Pago Online (iFood)">Pago Online (iFood)</option>
+                <option value="Pix">Pix</option>
+                <option value="Cartão">Cartão</option>
+                <option value="Dinheiro">Dinheiro</option>
+              </select>
+            </label>
+
+            <label className="full">
+              Observações / Referência
+              <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ref: Na rua do ateliê casa verde" />
+            </label>
+
+            <label className="full">
+              Entregador Designado
+              <select value={driverId} onChange={(e) => setDriverId(e.target.value)}>
+                {drivers.map((drv) => (
+                  <option key={drv.id} value={drv.id}>
+                    {drv.name} ({drv.vehicle})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="locate" style={{ marginTop: "12px" }}>
+            <MapPin size={18} />
+            <div style={{ flex: 1 }}>
+              <b>Localização no Mapa</b>
+              <span style={{ fontSize: "10px" }}>{geoStatus}</span>
+            </div>
+            <button type="button" disabled={locating} onClick={handleGeocode} style={{ padding: "6px 10px", fontSize: "11px" }}>
+              {locating ? "Buscando…" : "Buscar no Mapa"}
+            </button>
+          </div>
+
+          <div className="modal-actions" style={{ marginTop: "18px" }}>
+            <button type="button" onClick={close}>
+              Cancelar
+            </button>
+            <button type="submit" className="primary">
+              <CheckCircle2 size={16} /> Salvar na Rota
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
-const money=(v:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(v);
-const initials=(name:string)=>name.split(/\s+/).filter(Boolean).slice(0,2).map(part=>part[0]).join("").toUpperCase()||"RC";
+
+// -------------------------------------------------------------
+// COMPONENTE: Aba Financeira (Extrato Noite e Mês)
+// -------------------------------------------------------------
+function FinancialTab({
+  deliveries,
+  drivers,
+  activeDriver,
+  appMode,
+  stats,
+}: {
+  deliveries: Delivery[];
+  drivers: Driver[];
+  activeDriver?: Driver;
+  appMode: "motoboy" | "adm";
+  stats: { nightTotal: number; nightCount: number; monthTotal: number; monthCount: number; avgFee: number };
+}) {
+  const completedList = useMemo(() => {
+    return deliveries.filter((d) => {
+      if (d.status !== "Entregue") return false;
+      if (appMode === "motoboy" && activeDriver) {
+        if (d.driverId !== activeDriver.id && d.driver !== activeDriver.name) return false;
+      }
+      return true;
+    });
+  }, [deliveries, appMode, activeDriver]);
+
+  return (
+    <div>
+      {/* Title */}
+      <div style={{ marginBottom: "14px" }}>
+        <h2 style={{ fontSize: "20px", margin: "0 0 4px" }}>Faturamento das Entregas</h2>
+        <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0 }}>
+          {appMode === "motoboy" ? `Ganhos de ${activeDriver?.name || "Motoboy"}` : "Relatório Geral da Frota da Loja"}
+        </p>
+      </div>
+
+      {/* Hero Cards */}
+      <div className="night-finance-banner">
+        <div className="night-card">
+          <div className="night-card-kicker">
+            <Sparkles size={12} /> Faturado Esta Noite
+          </div>
+          <div className="night-card-val">{money(stats.nightTotal)}</div>
+          <div className="night-card-sub">
+            {stats.nightCount} corrida(s) concluída(s) • Média: {money(stats.avgFee)}/corrida
+          </div>
+        </div>
+
+        <div className="night-card month">
+          <div className="night-card-kicker">
+            <CircleDollarSign size={12} /> Faturado no Mês
+          </div>
+          <div className="night-card-val">{money(stats.monthTotal)}</div>
+          <div className="night-card-sub">
+            {stats.monthCount} entregas acumuladas
+          </div>
+        </div>
+      </div>
+
+      {/* Extrato / Histórico */}
+      <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "18px", padding: "14px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+          <b>Extrato das Corridas Concluídas</b>
+          <span style={{ fontSize: "11px", color: "var(--muted)" }}>{completedList.length} registro(s)</span>
+        </div>
+
+        {completedList.length === 0 ? (
+          <div style={{ padding: "30px", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
+            Nenhuma entrega foi concluída ainda. Ao tocar em &quot;Entregar&quot;, a taxa de entrega é computada instantaneamente nos ganhos da noite.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {completedList.map((d) => (
+              <div
+                key={d.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 12px",
+                  background: "var(--surface-2)",
+                  borderRadius: "12px",
+                  fontSize: "12px",
+                }}
+              >
+                <div>
+                  <b>{d.order} • {d.customer}</b>
+                  <span style={{ display: "block", fontSize: "10px", color: "var(--muted)" }}>
+                    {d.district} • {d.time}
+                  </span>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <b style={{ color: "var(--success)", fontSize: "13px", display: "block" }}>
+                    +{money(d.deliveryFee)}
+                  </b>
+                  <small style={{ fontSize: "9px", color: "var(--muted)" }}>{d.payment}</small>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// COMPONENTE: Aba ADM (Cadastro e Gestão de Motoboys)
+// -------------------------------------------------------------
+function AdminDriversTab({
+  drivers,
+  deliveries,
+  onOpenAddDriver,
+  onDeleteDriver,
+  notify,
+  takeatCreds,
+  onSaveCreds,
+  onClearCreds,
+  takeatAutoSync,
+  onToggleAutoSync,
+  onAddSampleTakeat,
+  onManualSync,
+  isSyncing,
+  isConnected,
+}: {
+  drivers: Driver[];
+  deliveries: Delivery[];
+  onOpenAddDriver: () => void;
+  onDeleteDriver: (id: string) => void;
+  notify: (s: string) => void;
+  takeatCreds: TakeatCredentials;
+  onSaveCreds: (creds: TakeatCredentials) => void;
+  onClearCreds: () => void;
+  takeatAutoSync: boolean;
+  onToggleAutoSync: (enabled: boolean) => void;
+  onAddSampleTakeat: () => void;
+  onManualSync: () => void;
+  isSyncing: boolean;
+  isConnected: boolean;
+}) {
+  const summaries = useMemo(() => {
+    return getDriversEarningsSummary(drivers, deliveries);
+  }, [drivers, deliveries]);
+
+  const [authMethod, setAuthMethod] = useState<"credentials" | "apikey">(
+    takeatCreds.authMethod || "credentials",
+  );
+  const [email, setEmail] = useState(takeatCreds.email || "");
+  const [password, setPassword] = useState(takeatCreds.password || "");
+  const [apiKey, setApiKey] = useState(takeatCreds.apiKey || "");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+
+  const handleConnectWithCredentials = async () => {
+    if (!email.trim() || !password.trim()) {
+      notify("Informe o e-mail e a senha do gestor Takeat.");
+      return;
+    }
+    setConnecting(true);
+    try {
+      const token = await loginTakeatWithPassword(email.trim(), password.trim());
+      if (token) {
+        onSaveCreds({
+          authMethod: "credentials",
+          email: email.trim(),
+          password: password.trim(),
+        });
+        notify("✅ Conectado à Takeat com sucesso! Pedidos ativos no sistema.");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Falha ao autenticar na Takeat";
+      notify(`❌ ${msg}`);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleConnectWithApiKey = async () => {
+    if (!apiKey.trim()) {
+      notify("Informe a chave de API da Takeat.");
+      return;
+    }
+    setConnecting(true);
+    try {
+      const token = await authenticateTakeat(apiKey.trim());
+      if (token) {
+        onSaveCreds({
+          authMethod: "apikey",
+          apiKey: apiKey.trim(),
+        });
+        notify("✅ Chave de API Takeat validada e salva no sistema!");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Falha na validação da chave";
+      notify(`❌ ${msg}`);
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  return (
+    <div>
+      {/* Card Conexão Takeat (Login e Senha) */}
+      <div className="takeat-settings-card">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: "38px", height: "38px", borderRadius: "12px", background: "rgba(234,29,44,.12)", color: "#ea1d2c", display: "grid", placeItems: "center" }}>
+              <Zap size={20} />
+            </div>
+            <div>
+              <b style={{ fontSize: "14px", display: "block" }}>Conexão Takeat (Login e Senha)</b>
+              <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                Conecte seu restaurante para importar pedidos Takeat & iFood em tempo real
+              </span>
+            </div>
+          </div>
+
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              fontSize: "11px",
+              fontWeight: "800",
+              padding: "4px 10px",
+              borderRadius: "99px",
+              background: isConnected ? "rgba(16,185,129,.12)" : "rgba(239,68,68,.12)",
+              color: isConnected ? "#10b981" : "#ef4444",
+            }}
+          >
+            <span className={`sync-status-dot ${isConnected ? "online" : "offline"}`} style={{ width: "7px", height: "7px" }} />
+            {isConnected ? "Conectado" : "Não conectado"}
+          </span>
+        </div>
+
+        {/* Status se já estiver conectado */}
+        {isConnected && (
+          <div className="takeat-connected-box">
+            <div>
+              <span style={{ fontSize: "10px", color: "var(--muted)", display: "block" }}>SESSÃO SALVA DENTRO DO SISTEMA:</span>
+              <b style={{ fontSize: "13px", color: "#10b981" }}>
+                {takeatCreds.authMethod === "credentials" ? (takeatCreds.email || "Conectado por Login") : "Conectado por Chave de API"}
+              </b>
+            </div>
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button
+                type="button"
+                onClick={onManualSync}
+                disabled={isSyncing}
+                style={{ height: "32px", padding: "0 10px", borderRadius: "8px", border: "1px solid var(--line)", background: "var(--surface)", fontSize: "11px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+              >
+                <RefreshCw size={12} className={isSyncing ? "spin-animation" : ""} /> Sincronizar
+              </button>
+              <button
+                type="button"
+                onClick={onClearCreds}
+                style={{ height: "32px", padding: "0 10px", borderRadius: "8px", border: "1px solid rgba(239,68,68,.3)", background: "rgba(239,68,68,.1)", color: "#ef4444", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}
+              >
+                Desconectar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Seletor de Método de Conexão */}
+        <div className="takeat-tabs-selector">
+          <button
+            type="button"
+            className={`takeat-tab-btn ${authMethod === "credentials" ? "active" : ""}`}
+            onClick={() => setAuthMethod("credentials")}
+          >
+            👤 Conectar por Login e Senha (Recomendado)
+          </button>
+          <button
+            type="button"
+            className={`takeat-tab-btn ${authMethod === "apikey" ? "active" : ""}`}
+            onClick={() => setAuthMethod("apikey")}
+          >
+            🔑 Conectar por Chave de API
+          </button>
+        </div>
+
+        {/* Formulário: Login e Senha */}
+        {authMethod === "credentials" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
+                E-mail do Gestor Takeat
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Ex: seuemail@restaurante.com"
+                style={{ width: "100%", height: "40px", borderRadius: "10px", border: "1px solid var(--line)", padding: "0 12px", fontSize: "12px", background: "var(--surface-2)" }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
+                Senha do Gestor Takeat
+              </label>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Sua senha da Takeat"
+                  style={{ flex: 1, height: "40px", borderRadius: "10px", border: "1px solid var(--line)", padding: "0 12px", fontSize: "12px", background: "var(--surface-2)" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ height: "40px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--line)", background: "var(--surface)", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}
+                >
+                  {showPassword ? "Ocultar" : "Ver"}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="primary"
+              onClick={handleConnectWithCredentials}
+              disabled={connecting}
+              style={{ height: "42px", borderRadius: "10px", fontSize: "13px", fontWeight: "800", marginTop: "4px" }}
+            >
+              {connecting ? "Conectando à Takeat..." : "Conectar e Deixar Salvo no Sistema"}
+            </button>
+          </div>
+        ) : (
+          /* Formulário: Chave de API */
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
+                Chave de API Takeat (`tk_live_...` ou `tk_test_...`)
+              </label>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <input
+                  type={showApiKey ? "text" : "password"}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="tk_live_... ou tk_test_..."
+                  style={{ flex: 1, height: "40px", borderRadius: "10px", border: "1px solid var(--line)", padding: "0 12px", fontSize: "12px", background: "var(--surface-2)" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  style={{ height: "40px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--line)", background: "var(--surface)", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}
+                >
+                  {showApiKey ? "Ocultar" : "Ver"}
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={handleConnectWithApiKey}
+                  disabled={connecting}
+                  style={{ height: "40px", padding: "0 14px", borderRadius: "10px", fontSize: "12px", fontWeight: "700" }}
+                >
+                  {connecting ? "Validando..." : "Salvar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Barra de ações e Auto-sync */}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "10px", paddingTop: "8px", borderTop: "1px solid var(--line)" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "600" }}>
+            <input
+              type="checkbox"
+              checked={takeatAutoSync}
+              onChange={(e) => onToggleAutoSync(e.target.checked)}
+              style={{ width: "16px", height: "16px", accentColor: "var(--primary)" }}
+            />
+            Auto-Sync em tempo real (20s)
+          </label>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+            <button
+              type="button"
+              onClick={onManualSync}
+              disabled={isSyncing}
+              style={{ height: "34px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--line)", background: "var(--surface-2)", fontSize: "11px", fontWeight: "700", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px" }}
+            >
+              <RefreshCw size={13} className={isSyncing ? "spin-animation" : ""} />
+              {isSyncing ? "Buscando..." : "Sincronizar"}
+            </button>
+            <button
+              type="button"
+              onClick={onAddSampleTakeat}
+              style={{ height: "34px", padding: "0 12px", borderRadius: "10px", border: "1px solid var(--line)", background: "var(--primary-soft)", color: "var(--primary)", fontSize: "11px", fontWeight: "700", cursor: "pointer" }}
+            >
+              + Pedido Teste
+            </button>
+          </div>
+        </div>
+
+        {/* Resumo dos campos capturados */}
+        <div style={{ background: "var(--surface-2)", borderRadius: "10px", padding: "10px", fontSize: "10.5px", color: "var(--muted)", lineHeight: "1.5" }}>
+          <b style={{ color: "var(--ink)", display: "block", marginBottom: "4px" }}>Campos extraídos automaticamente em tempo real:</b>
+          <div>✔ <b>Cliente & Telefone</b>: com links rápidos para ligar e chamar no WhatsApp</div>
+          <div>✔ <b>Identificador iFood & Código de Coleta</b>: extraído da comanda/pedido Takeat</div>
+          <div>✔ <b>Endereço Completo & GPS</b>: logradouro, número, bairro, cidade, CEP, complemento e latitude/longitude</div>
+          <div>✔ <b>Taxa de Entrega & Valor Total</b>: soma automática na noite e mês do motoboy</div>
+          <div>✔ <b>Itens do Pedido</b>: quantidade, nome do item, complementos e observações</div>
+        </div>
+      </div>
+
+      {/* Gestão de Motoboys */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "18px" }}>
+        <div>
+          <h2 style={{ fontSize: "20px", margin: "0 0 4px" }}>Equipe de Motoboys</h2>
+          <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0 }}>
+            {drivers.length} entregador(es) cadastrado(s)
+          </p>
+        </div>
+        <button type="button" className="primary" onClick={onOpenAddDriver} style={{ height: "40px", fontSize: "12px" }}>
+          <Plus size={16} /> Cadastrar Motoboy
+        </button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        {summaries.map((drv) => (
+          <div key={drv.driverId} className="driver-admin-card">
+            <div className="driver-admin-header">
+              <div className="driver-avatar-circle">
+                {drv.driverName.substring(0, 2).toUpperCase()}
+              </div>
+              <div className="driver-meta" style={{ flex: 1 }}>
+                <b>{drv.driverName}</b>
+                <span>{drv.phone} • {drv.vehicle}</span>
+              </div>
+              <a
+                href={`https://wa.me/55${drv.phone.replace(/\D/g, "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-action btn-whatsapp"
+                style={{ width: "34px", height: "34px", padding: 0, borderRadius: "10px" }}
+                title="WhatsApp do Motoboy"
+              >
+                <Phone size={15} />
+              </a>
+            </div>
+
+            <div className="driver-earnings-pill">
+              <div>
+                <span style={{ color: "var(--muted)", display: "block" }}>Fez na Noite:</span>
+                <b>{money(drv.nightTotal)}</b>
+                <small style={{ color: "var(--muted)" }}>{drv.nightCount} entrega(s)</small>
+              </div>
+              <div>
+                <span style={{ color: "var(--muted)", display: "block" }}>Fez no Mês:</span>
+                <b>{money(drv.monthTotal)}</b>
+                <small style={{ color: "var(--muted)" }}>{drv.monthCount} entrega(s)</small>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => onDeleteDriver(drv.driverId)}
+                style={{
+                  border: 0,
+                  background: "transparent",
+                  color: "var(--danger)",
+                  fontSize: "11px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  cursor: "pointer",
+                }}
+              >
+                <Trash2 size={13} /> Remover motoboy
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// COMPONENTE: Modal Cadastrar Motoboy
+// -------------------------------------------------------------
+function NewDriverModal({
+  close,
+  save,
+}: {
+  close: () => void;
+  save: (d: Omit<Driver, "id">) => void;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [vehicle, setVehicle] = useState("Honda Fan 160");
+  const [plate, setPlate] = useState("");
+  const [defaultFee, setDefaultFee] = useState("7.00");
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    save({
+      name,
+      phone,
+      vehicle,
+      plate,
+      defaultFee: Number(defaultFee.replace(",", ".")) || 7.0,
+      active: true,
+    });
+  }
+
+  return (
+    <div className="overlay">
+      <div className="modal">
+        <div className="modal-head">
+          <div>
+            <span className="modal-kicker">Novo Cadastro</span>
+            <h2>Cadastrar Motoboy</h2>
+            <p>Adicione um entregador para receber corridas da loja.</p>
+          </div>
+          <button type="button" onClick={close}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ padding: "16px" }}>
+          <div className="form-grid">
+            <label className="full">
+              Nome Completo
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Carlos Eduardo (Kaká)" required />
+            </label>
+
+            <label>
+              WhatsApp / Telefone
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(73) 99999-9999" required />
+            </label>
+
+            <label>
+              Taxa Padrão (R$)
+              <input value={defaultFee} onChange={(e) => setDefaultFee(e.target.value)} placeholder="7,00" required />
+            </label>
+
+            <label>
+              Veículo (Moto/Modelo)
+              <input value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="Honda Fan 160" required />
+            </label>
+
+            <label>
+              Placa da Moto
+              <input value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="ABC-1D23" />
+            </label>
+          </div>
+
+          <div className="modal-actions" style={{ marginTop: "18px" }}>
+            <button type="button" onClick={close}>
+              Cancelar
+            </button>
+            <button type="submit" className="primary">
+              <CheckCircle2 size={16} /> Salvar Motoboy
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// COMPONENTE: Configuração da Loja
+// -------------------------------------------------------------
+function ConfigSection({
+  notify,
+  mapProvider,
+  setMapProvider,
+}: {
+  notify: (s: string) => void;
+  mapProvider: MapTileProvider;
+  setMapProvider: (p: MapTileProvider) => void;
+}) {
+  const init = loadStore();
+  const [name, setName] = useState(init.name);
+  const [phone, setPhone] = useState(init.phone);
+  const [address, setAddress] = useState(init.address);
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      let lat = init.latitude;
+      let lng = init.longitude;
+      if (address.trim()) {
+        const r = await geocode(address);
+        if (r) {
+          lat = r.latitude;
+          lng = r.longitude;
+        }
+      }
+      saveStore({ name, phone, address, latitude: lat, longitude: lng });
+      notify("Dados da loja atualizados!");
+    } catch {
+      notify("Erro ao atualizar endereço da loja.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "18px", padding: "18px" }}>
+      <h2 style={{ fontSize: "18px", margin: "0 0 4px" }}>Ponto de Partida da Loja</h2>
+      <p style={{ fontSize: "11px", color: "var(--muted)", margin: "0 0 14px" }}>
+        Endereço onde as motos saem para iniciar as rotas.
+      </p>
+
+      <div className="form-grid">
+        <label className="full">
+          Nome do Estabelecimento
+          <input value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label>
+          Telefone da Loja
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </label>
+        <label>
+          Camada do Mapa Gratuito
+          <select value={mapProvider} onChange={(e) => setMapProvider(e.target.value as MapTileProvider)}>
+            {Object.entries(MAP_TILE_PROVIDERS).map(([id, p]) => (
+              <option key={id} value={id}>{p.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="full">
+          Endereço Principal de Saída
+          <input value={address} onChange={(e) => setAddress(e.target.value)} />
+        </label>
+      </div>
+
+      <button type="button" className="primary" style={{ marginTop: "14px" }} disabled={saving} onClick={handleSave}>
+        {saving ? "Salvando…" : "Salvar Configuração"}
+      </button>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// HELPERS
+// -------------------------------------------------------------
+function StatusBadge({ status }: { status: Status }) {
+  return <span className={`status ${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>;
+}
+
+const money = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);

@@ -26,11 +26,21 @@ export type DeliveryRecord = {
   amount: number;
   deliveryFee: number;
   paymentMethod: string;
-  platform?: "ifood" | "other";
+  platform?: "ifood" | "other" | "takeat";
   platformOrderId?: string;
+  pickupCode?: string;
   priority?: "normal" | "high" | "urgent";
-  source?: "manual" | "ocr";
+  source?: "manual" | "ocr" | "takeat";
   notes?: string;
+  items?: {
+    name: string;
+    amount: number;
+    price: number;
+    totalPrice?: number;
+    details?: string;
+    complements?: string[];
+  }[];
+  itemsSummary?: string;
   status: DeliveryRecordStatus;
   driverId?: string;
   routeId?: string;

@@ -1,8 +1,8 @@
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
-
-import { auth, db, firebaseConfigured } from "../services/firebase";
+import { auth, firebaseConfigured } from "../services/firebase";
+import { getUserProfileRTDB, saveUserProfileRTDB } from "../services/realtimeDbService";
+import { getStoredUser, setStoredUser } from "../services/authService";
 import type { User } from "../types";
 
 type AuthState = {
@@ -23,43 +23,81 @@ export function useAuth() {
   const [state, setState] = useState<AuthState>(initialState);
 
   useEffect(() => {
-    if (!firebaseConfigured || !auth || !db) {
-      setState({ ...initialState, loading: false });
+    // Se Firebase não estiver configurado, usa usuário local se houver
+    if (!firebaseConfigured || !auth) {
+      const local = getStoredUser();
+      setState({
+        firebaseUser: null,
+        profile: local,
+        loading: false,
+        error: "",
+      });
       return;
     }
-    const firestore = db;
 
-    return onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
+        setStoredUser(null);
         setState({ firebaseUser: null, profile: null, loading: false, error: "" });
         return;
       }
+
       try {
-        const snapshot = await getDoc(doc(firestore, "users", firebaseUser.uid));
-        if (!snapshot.exists()) {
-          setState({
-            firebaseUser,
-            profile: null,
-            loading: false,
-            error: "Sua conta ainda não possui um perfil de acesso.",
-          });
-          return;
+        // Tenta buscar perfil no Realtime Database
+        let profile = await getUserProfileRTDB(firebaseUser.uid);
+
+        if (!profile) {
+          // Verifica se temos perfil salvo localmente
+          const local = getStoredUser();
+          const isOwnerAdmin =
+            firebaseUser.email?.toLowerCase() === "gleucedias1@gmail.com" ||
+            firebaseUser.email?.toLowerCase() === "houseburgertx@gmail.com" ||
+            firebaseUser.email?.toLowerCase().includes("house") ||
+            firebaseUser.email?.toLowerCase().includes("burger") ||
+            firebaseUser.email?.toLowerCase().includes("admin") ||
+            firebaseUser.email?.toLowerCase().includes("loja");
+
+          const role = local?.role || (isOwnerAdmin ? "admin" : "driver");
+          const name =
+            local?.name ||
+            firebaseUser.displayName ||
+            firebaseUser.email?.split("@")[0].toUpperCase() ||
+            "Usuário";
+
+          profile = {
+            id: firebaseUser.uid,
+            name,
+            email: firebaseUser.email || "",
+            phone: local?.phone || "",
+            role: role as "admin" | "driver",
+            companyId: "house-burger-190",
+            active: true,
+          };
+
+          // Salva no RTDB para persistência permanente
+          await saveUserProfileRTDB(firebaseUser.uid, profile);
         }
+
+        setStoredUser(profile);
         setState({
           firebaseUser,
-          profile: { id: snapshot.id, ...snapshot.data() } as User,
+          profile,
           loading: false,
           error: "",
         });
-      } catch {
+      } catch (err) {
+        console.warn("Erro ao sincronizar perfil do usuário:", err);
+        const fallback = getStoredUser();
         setState({
           firebaseUser,
-          profile: null,
+          profile: fallback,
           loading: false,
-          error: "Não foi possível carregar seu perfil.",
+          error: "",
         });
       }
     });
+
+    return unsubscribe;
   }, []);
 
   return state;

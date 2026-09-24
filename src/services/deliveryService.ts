@@ -100,3 +100,17 @@ export async function updateDeliveryLocation(
     updatedAt: serverTimestamp(),
   });
 }
+
+export async function updateDeliveryDriver(
+  companyId: string,
+  deliveryId: string,
+  driverId: string,
+) {
+  if (!db) throw new Error("Firebase não está configurado.");
+  await updateDoc(doc(db, "companies", companyId, "deliveries", deliveryId), {
+    driverId,
+    status: "assigned",
+    updatedAt: serverTimestamp(),
+  });
+}
+
