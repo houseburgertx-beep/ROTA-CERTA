@@ -253,7 +253,7 @@ function MobileDeliveryApp({
   const [statusFilter, setStatusFilter] = useState<string>("Todas");
   const [deliveryTabMode, setDeliveryTabMode] = useState<"active" | "completed">("active");
   const [selectedForRouteIds, setSelectedForRouteIds] = useState<string[]>([]);
-  const [modal, setModal] = useState<"new" | "ocr" | "driver" | null>(null);
+  const [modal, setModal] = useState<"new" | "ocr" | "driver" | "profile" | null>(null);
   const [ocrData, setOcrData] = useState<Record<string, string> | null>(null);
   const [ifoodConfirmDelivery, setIfoodConfirmDelivery] = useState<Delivery | null>(null);
   const [toast, setToast] = useState("");
@@ -846,115 +846,95 @@ function MobileDeliveryApp({
 
   return (
     <div className="app-shell">
-      {/* Top Bar Mobile */}
-      <header className="mobile-top-bar">
-        <div style={{ display: "flex", alignItems: "center", gap: "9px", minWidth: 0, flexShrink: 1 }}>
-          <div className="brandmark" style={{ width: "34px", height: "34px", borderRadius: "10px", flexShrink: 0, background: "linear-gradient(135deg, #7c3aed, #6366f1)", color: "#fff", display: "grid", placeItems: "center", boxShadow: "0 4px 12px rgba(124,58,237,.25)" }}>
-            <Route size={18} />
+      {/* Native Mobile App Header */}
+      <header className="app-header-native">
+        {/* Left: User Avatar & Live Status - Tapping opens Profile Sheet */}
+        <button
+          type="button"
+          className="app-header-user-btn"
+          onClick={() => setModal("profile")}
+          title="Abrir perfil e configurações do app"
+        >
+          <div className="app-header-avatar">
+            {currentUser.name.slice(0, 2).toUpperCase()}
+            <span className="avatar-online-dot" />
           </div>
-          <div style={{ minWidth: 0, overflow: "hidden" }}>
-            <b style={{ fontSize: "14px", lineHeight: "1.2", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Rota Certa</b>
-            <span style={{ fontSize: "10px", color: "var(--muted)", display: "flex", alignItems: "center", gap: "5px", whiteSpace: "nowrap" }}>
-              <span className="live-dot" style={{ width: "6px", height: "6px", flexShrink: 0 }} />
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                {currentUser.role === "driver"
-                  ? `${currentUser.name.split(" ")[0]} · Online`
-                  : `${currentUser.name} (ADM)`}
-              </span>
-            </span>
+          <div>
+            <div className="app-header-user-name">
+              {currentUser.name.split(" ")[0]}
+            </div>
+            <div className="app-header-user-role">
+              {currentUser.role === "driver" ? "● Em serviço" : "● Loja (ADM)"}
+            </div>
           </div>
-        </div>
+        </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-          {/* Mode Switcher apenas para Loja (ADM) */}
+        {/* Right: Quick Controls (Loja/Moto switch for ADM, Theme Toggle) */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           {currentUser.role === "admin" && (
-            <div className="mode-toggle">
+            <div className="mode-toggle" style={{ padding: "2px" }}>
               <button
                 type="button"
                 className={appMode === "adm" ? "active" : ""}
                 onClick={() => setAppMode("adm")}
+                style={{ padding: "4px 8px", fontSize: "10.5px" }}
                 title="Modo Loja"
               >
-                <Users size={13} /> Loja
+                <Users size={12} /> Loja
               </button>
               <button
                 type="button"
                 className={appMode === "motoboy" ? "active" : ""}
                 onClick={() => setAppMode("motoboy")}
+                style={{ padding: "4px 8px", fontSize: "10.5px" }}
                 title="Ver como Motoboy"
               >
-                <Bike size={13} /> Moto
+                <Bike size={12} /> Moto
               </button>
             </div>
           )}
 
-          {/* Theme toggle */}
           <button
             type="button"
             className="icon-btn theme-toggle"
-            style={{ width: "34px", height: "34px", borderRadius: "10px" }}
+            style={{ width: "34px", height: "34px", borderRadius: "11px", border: "1px solid var(--line)" }}
             onClick={() => setTheme((v) => (v === "light" ? "dark" : "light"))}
             aria-label="Alternar tema"
           >
             {theme === "light" ? <Moon size={15} /> : <Sun size={15} />}
-          </button>
-
-          {/* Logout button */}
-          <button
-            type="button"
-            onClick={onLogout}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              background: "rgba(239,68,68,.1)",
-              color: "#ef4444",
-              border: "1px solid rgba(239,68,68,.22)",
-              padding: "6px 11px",
-              borderRadius: "10px",
-              fontSize: "11px",
-              fontWeight: 700,
-              cursor: "pointer",
-              flexShrink: 0,
-            }}
-            title="Sair da Conta e Trocar de Usuário"
-          >
-            <LogOut size={13} />
-            <span>Sair</span>
           </button>
         </div>
       </header>
 
       {/* Main View Area */}
       <main style={{ paddingBottom: "calc(90px + env(safe-area-inset-bottom, 16px))" }}>
-        <div className="content" style={{ padding: "14px 14px 20px" }}>
+        <div className="content" style={{ padding: "12px 14px 20px" }}>
           {/* TAB 1: ENTREGAS */}
           {activeTab === "entregas" && (
             <div>
-              {/* Financial Highlight Banner */}
-              <div className="night-finance-banner">
-                <div className="night-card" onClick={() => setActiveTab("financeiro")} style={{ cursor: "pointer" }}>
-                  <div className="night-card-kicker">
-                    <Sparkles size={12} /> {appMode === "motoboy" ? "Fez Esta Noite" : "Total Loja Noite"}
+              {/* Native Shift Earnings Ticker (Compact & Tactile) */}
+              <div
+                className="app-earnings-ticker"
+                onClick={() => setActiveTab("financeiro")}
+                title="Ver extrato completo de ganhos"
+              >
+                <div className="ticker-left">
+                  <div className="ticker-icon-circle">
+                    <Sparkles size={17} />
                   </div>
-                  <div className="night-card-val">{money(financialStats.nightTotal)}</div>
-                  <div className="night-card-sub">
-                    {financialStats.nightCount} entrega(s) concluída(s) hoje
+                  <div>
+                    <div className="ticker-amount">{money(financialStats.nightTotal)}</div>
+                    <div className="ticker-label">
+                      {appMode === "motoboy" ? "Ganhos Hoje" : "Total Hoje"} • {financialStats.nightCount} entrega(s)
+                    </div>
                   </div>
                 </div>
-
-                <div className="night-card month" onClick={() => setActiveTab("financeiro")} style={{ cursor: "pointer" }}>
-                  <div className="night-card-kicker">
-                    <CircleDollarSign size={12} /> Total do Mês
-                  </div>
-                  <div className="night-card-val">{money(financialStats.monthTotal)}</div>
-                  <div className="night-card-sub">
-                    {financialStats.monthCount} entregas acumuladas
-                  </div>
+                <div className="ticker-action-pill">
+                  <span>Extrato</span>
+                  <ChevronRight size={13} />
                 </div>
               </div>
 
-              {/* Motoboy selector in Motoboy mode */}
               {/* Motoboy selector in Motoboy mode (apenas quando ADM estiver pré-visualizando) */}
               {appMode === "motoboy" && currentUser.role === "admin" && drivers.length > 1 && (
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", overflowX: "auto", paddingBottom: "4px" }}>
@@ -965,8 +945,8 @@ function MobileDeliveryApp({
                       type="button"
                       onClick={() => setSelectedDriverId(d.id)}
                       style={{
-                        padding: "6px 12px",
-                        borderRadius: "12px",
+                        padding: "5px 11px",
+                        borderRadius: "11px",
                         border: "1px solid var(--line)",
                         fontSize: "11px",
                         fontWeight: "700",
@@ -981,104 +961,89 @@ function MobileDeliveryApp({
                 </div>
               )}
 
-              {/* Quick Actions */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
-                <button
-                  type="button"
-                  className="primary"
-                  style={{ height: "40px", borderRadius: "12px", fontSize: "12px", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
-                  onClick={() => setModal("ocr")}
-                >
-                  <Camera size={16} /> Foto Comanda
-                </button>
-                <button
-                  type="button"
-                  style={{
-                    height: "40px",
-                    borderRadius: "12px",
-                    border: "1px solid var(--line)",
-                    background: "var(--surface)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                    fontSize: "12px",
-                    fontWeight: "700",
-                    color: "var(--ink)",
-                  }}
-                  onClick={() => setActiveTab("mapa")}
-                >
-                  <MapPinned size={16} /> Rota no Mapa
-                </button>
-              </div>
-
-              {/* Takeat Live Sync Bar (Visível para Loja e Motoboy) */}
-              <div className="takeat-sync-bar" style={{ marginBottom: "12px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                  <span className={`sync-status-dot ${isTakeatConnected ? "online" : "offline"}`} />
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span style={{ fontSize: "12px", fontWeight: "800" }}>Takeat & iFood</span>
-                      {isTakeatConnected && (
-                        <span style={{ fontSize: "9px", background: "rgba(16,185,129,.15)", color: "#10b981", padding: "1px 6px", borderRadius: "6px", fontWeight: "800" }}>
-                          AO VIVO
-                        </span>
-                      )}
-                    </div>
-                    <small style={{ fontSize: "10px", color: "var(--muted)" }}>
-                      {takeatSyncing
-                        ? "Buscando pedidos..."
-                        : isTakeatConnected
-                        ? (currentUser.role === "driver" ? "Sincronizado com a loja" : (takeatAutoSync ? "Auto-sync ativo (15s)" : "Pronto para sincronizar"))
-                        : (currentUser.role === "driver" ? "Aguardando conexão da loja" : "Conexão pendente (configure no ADM)")}
-                    </small>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {/* Quick Actions (Apenas Loja/ADM) */}
+              {currentUser.role === "admin" && (
+                <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
                   <button
                     type="button"
-                    className="btn-sync-takeat"
-                    onClick={handleManualSyncTakeat}
-                    disabled={takeatSyncing}
-                    title="Buscar pedidos atribuídos na Takeat"
+                    className="primary"
+                    style={{ flex: 1, height: "38px", borderRadius: "12px", fontSize: "11.5px", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
+                    onClick={() => setModal("ocr")}
                   >
-                    <RefreshCw size={13} className={takeatSyncing ? "spin-animation" : ""} />
-                    {takeatSyncing ? "..." : (currentUser.role === "driver" ? "Atualizar" : "Sincronizar")}
+                    <Camera size={15} /> Foto Comanda
                   </button>
-                  {currentUser.role === "admin" && (
-                    <button
-                      type="button"
-                      className="btn-sync-takeat"
-                      style={{ padding: "0 8px", background: "var(--primary-soft)", color: "var(--primary)", borderColor: "color-mix(in srgb,var(--primary) 30%,transparent)" }}
-                      onClick={handleAddSampleTakeat}
-                      title="Adicionar pedido Takeat/iFood demonstrativo para teste"
-                    >
-                      + Demo
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    style={{
+                      flex: 1,
+                      height: "38px",
+                      borderRadius: "12px",
+                      border: "1px solid var(--line)",
+                      background: "var(--surface)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      fontSize: "11.5px",
+                      fontWeight: "700",
+                      color: "var(--ink)",
+                    }}
+                    onClick={() => setModal("new")}
+                  >
+                    <Plus size={15} /> Manual
+                  </button>
                 </div>
-              </div>
+              )}
 
-              {/* Sub-abas: Atribuídos Agora vs Já Entregues */}
-              <div className="delivery-tab-switcher">
+              {/* Native Live Sync Status Pill */}
+              <div className="app-sync-pill">
+                <div className="app-sync-pill-left">
+                  <span className="app-sync-dot" />
+                  <span>
+                    Takeat & iFood: <b>{isTakeatConnected ? "Conectado" : "Aguardando loja"}</b>
+                  </span>
+                </div>
                 <button
                   type="button"
-                  className={`delivery-tab-btn ${deliveryTabMode === "active" ? "active" : ""}`}
+                  onClick={handleManualSyncTakeat}
+                  disabled={takeatSyncing}
+                  style={{
+                    border: 0,
+                    background: "transparent",
+                    color: "var(--primary)",
+                    fontWeight: "700",
+                    fontSize: "10.5px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                  }}
+                  title="Atualizar pedidos agora"
+                >
+                  <RefreshCw size={11} className={takeatSyncing ? "spin-animation" : ""} />
+                  {takeatSyncing ? "Buscando..." : "Atualizar"}
+                </button>
+              </div>
+
+              {/* Native Segmented Delivery Tabs */}
+              <div className="native-segment-control">
+                <button
+                  type="button"
+                  className={`native-segment-btn ${deliveryTabMode === "active" ? "active" : ""}`}
                   onClick={() => setDeliveryTabMode("active")}
                 >
-                  <Bike size={16} />
+                  <Bike size={15} />
                   <span>Atribuídos Agora</span>
-                  <span className="delivery-tab-count active-count">{activeDeliveries.length}</span>
+                  <span className="native-segment-badge highlight">{activeDeliveries.length}</span>
                 </button>
                 <button
                   type="button"
-                  className={`delivery-tab-btn ${deliveryTabMode === "completed" ? "active" : ""}`}
+                  className={`native-segment-btn ${deliveryTabMode === "completed" ? "active" : ""}`}
                   onClick={() => setDeliveryTabMode("completed")}
                 >
-                  <CheckCircle2 size={16} />
-                  <span>Já Entregues</span>
-                  <span className="delivery-tab-count">{completedDeliveries.length}</span>
+                  <CheckCircle2 size={15} />
+                  <span>Concluídos</span>
+                  <span className="native-segment-badge">{completedDeliveries.length}</span>
                 </button>
               </div>
 
@@ -1096,42 +1061,40 @@ function MobileDeliveryApp({
                 </div>
               )}
 
-              {/* Search & Status Filters */}
-              <div style={{ marginBottom: "12px" }}>
-                <div className="toolbar" style={{ marginBottom: "8px" }}>
-                  <label style={{ height: "40px", borderRadius: "12px" }}>
-                    <Search size={15} />
-                    <input
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder={deliveryTabMode === "active" ? "Buscar entregas ativas por cliente ou rua" : "Buscar entregas concluídas"}
-                    />
-                  </label>
-                </div>
-                {deliveryTabMode === "active" && (
-                  <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px" }}>
-                    {["Todas", "Aguardando", "Em rota"].map((st) => (
-                      <button
-                        key={st}
-                        type="button"
-                        onClick={() => setStatusFilter(st)}
-                        style={{
-                          padding: "5px 12px",
-                          borderRadius: "10px",
-                          border: "1px solid var(--line)",
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          whiteSpace: "nowrap",
-                          background: statusFilter === st ? "var(--surface-2)" : "transparent",
-                          color: statusFilter === st ? "var(--primary)" : "var(--muted)",
-                        }}
-                      >
-                        {st}
-                      </button>
-                    ))}
-                  </div>
+              {/* Native Search Bar */}
+              <div className="native-search-bar">
+                <Search size={15} style={{ color: "var(--muted)", flexShrink: 0 }} />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={deliveryTabMode === "active" ? "Buscar por cliente ou rua..." : "Buscar entregas concluídas..."}
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    style={{ border: 0, background: "transparent", color: "var(--muted)", cursor: "pointer", padding: "2px" }}
+                  >
+                    <X size={14} />
+                  </button>
                 )}
               </div>
+
+              {/* Status Filter Scroll Chips */}
+              {deliveryTabMode === "active" && (
+                <div className="native-filter-scroll">
+                  {["Todas", "Aguardando", "Em rota"].map((st) => (
+                    <button
+                      key={st}
+                      type="button"
+                      className={`native-filter-pill ${statusFilter === st ? "active" : ""}`}
+                      onClick={() => setStatusFilter(st)}
+                    >
+                      {st === "Todas" ? `Todas (${activeDeliveries.length})` : st}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Delivery Cards List */}
               <div className="mobile-card-list">
@@ -1509,6 +1472,110 @@ function MobileDeliveryApp({
           close={() => setModal(null)}
           save={handleAddDriver}
         />
+      )}
+
+      {modal === "profile" && (
+        <div className="app-sheet-backdrop" onClick={() => setModal(null)}>
+          <div className="app-sheet-content" onClick={(e) => e.stopPropagation()}>
+            <div className="app-sheet-handle" />
+
+            <div className="app-profile-header">
+              <div className="app-profile-header-left">
+                <div className="app-profile-avatar-big">
+                  {currentUser.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="app-profile-info">
+                  <b>{currentUser.name}</b>
+                  <span>{currentUser.role === "admin" ? "Administrador da Loja" : "Motoboy Parceiro"}</span>
+                  <span style={{ fontSize: "10px", color: "var(--success)", fontWeight: "700", marginTop: "2px" }}>
+                    ● Aplicativo Conectado
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModal(null)}
+                style={{
+                  border: 0,
+                  background: "var(--surface-2)",
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                  display: "grid",
+                  placeItems: "center",
+                  color: "var(--muted)",
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="app-profile-section">
+              <div className="app-profile-row">
+                <span style={{ color: "var(--muted)" }}>Tema Visual</span>
+                <button
+                  type="button"
+                  onClick={() => setTheme((v) => (v === "light" ? "dark" : "light"))}
+                  style={{
+                    border: "1px solid var(--line)",
+                    background: "var(--surface)",
+                    padding: "6px 12px",
+                    borderRadius: "9px",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    cursor: "pointer",
+                    color: "var(--ink)",
+                  }}
+                >
+                  {theme === "light" ? <><Moon size={13} /> Modo Escuro</> : <><Sun size={13} /> Modo Claro</>}
+                </button>
+              </div>
+
+              {currentUser.role === "admin" && (
+                <div className="app-profile-row">
+                  <span style={{ color: "var(--muted)" }}>Visão Atual</span>
+                  <div className="mode-toggle">
+                    <button
+                      type="button"
+                      className={appMode === "adm" ? "active" : ""}
+                      onClick={() => setAppMode("adm")}
+                    >
+                      <Users size={12} /> Loja
+                    </button>
+                    <button
+                      type="button"
+                      className={appMode === "motoboy" ? "active" : ""}
+                      onClick={() => setAppMode("motoboy")}
+                    >
+                      <Bike size={12} /> Moto
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="app-profile-row">
+                <span style={{ color: "var(--muted)" }}>Versão do App</span>
+                <span style={{ fontSize: "11px", color: "var(--ink)", fontWeight: "700" }}>v2.4 (Mobile Native)</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="btn-logout-native"
+              onClick={() => {
+                setModal(null);
+                onLogout();
+              }}
+            >
+              <LogOut size={16} />
+              <span>Sair da Conta (Logout)</span>
+            </button>
+          </div>
+        </div>
       )}
 
       {ifoodConfirmDelivery && (
