@@ -275,7 +275,7 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={isDriver ? "guilherme (ou seu e-mail)" : "houseburgertx@gmail.com"}
+                placeholder={isDriver ? "Digite seu usuário ou e-mail" : "Digite o e-mail da loja"}
                 autoCapitalize="none"
                 autoCorrect="off"
                 style={{
