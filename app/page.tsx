@@ -1572,11 +1572,17 @@ function MobileDeliveryCard({
     ? `https://waze.com/ul?ll=${delivery.latitude},${delivery.longitude}&navigate=yes`
     : `https://waze.com/ul?q=${encodeURIComponent(`${delivery.address}, ${delivery.district}`)}&navigate=yes`;
 
+  const cleanNotes = delivery.notes
+    ?.split("|")
+    .map((s) => s.trim())
+    .filter((s) => !s.toLowerCase().includes("código de coleta") && !s.toLowerCase().includes("codigo de coleta"))
+    .join(" • ");
+
   return (
     <article className={`delivery-card ${isDelivered ? "is-delivered" : ""} ${selected ? "is-selected" : ""}`}>
-      {/* Top line: Minimal Checkbox + Order # + Status + Fee */}
-      <div className="delivery-card-top">
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      {/* SaaS Premium Header: Order # + Platform + Time on left, Fee + Status on right */}
+      <div className="delivery-card-header">
+        <div className="delivery-card-header-left">
           {showSelectCheckbox && !isDelivered && (
             <button
               type="button"
@@ -1590,53 +1596,63 @@ function MobileDeliveryCard({
               {selected && <Check size={14} strokeWidth={3} />}
             </button>
           )}
-          <span className="order-badge">{delivery.order}</span>
+          <span className="order-num-badge">{delivery.order}</span>
           {delivery.platform === "ifood" && (
-            <span style={{ fontSize: "10px", fontWeight: "800", color: "#ea1d2c", background: "rgba(234,29,44,.1)", padding: "2px 6px", borderRadius: "6px" }}>
-              iFood
-            </span>
+            <span className="platform-pill ifood">iFood</span>
           )}
-          {delivery.ifoodConfirmed ? (
-            <span className="ifood-shield-badge" title="Entrega confirmada e blindada no iFood">
-              <ShieldCheck size={11} /> Blindado
-            </span>
-          ) : delivery.ifoodLocalizer ? (
-            <span className="ifood-localizer-badge" title="Código localizador do iFood">
-              Loc: {delivery.ifoodLocalizer}
-            </span>
-          ) : null}
           {delivery.platform === "takeat" && (
-            <span style={{ fontSize: "10px", fontWeight: "800", color: "#f97316", background: "rgba(249,115,22,.1)", padding: "2px 6px", borderRadius: "6px" }}>
-              Takeat
-            </span>
+            <span className="platform-pill takeat">Takeat</span>
           )}
-          {delivery.pickupCode && (
-            <span style={{ fontSize: "10px", fontWeight: "800", color: "#2563eb", background: "rgba(37,99,235,.1)", padding: "2px 6px", borderRadius: "6px" }}>
-              Coleta: {delivery.pickupCode}
-            </span>
-          )}
-          <span style={{ fontSize: "10px", color: "var(--muted)" }}>{delivery.time}</span>
+          <span className="order-time-text">{delivery.time}</span>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <span className="fee-badge-highlight">
-            Taxa: {money(delivery.deliveryFee)}
+        <div className="delivery-card-header-right">
+          <span className="fee-chip">
+            Taxa {money(delivery.deliveryFee)}
           </span>
           <StatusBadge status={delivery.status} />
         </div>
       </div>
 
+      {/* Metadata Strip: Coleta, Localizador, Blindagem (zero overflow) */}
+      {(delivery.pickupCode || delivery.ifoodLocalizer || delivery.ifoodConfirmed) && (
+        <div className="delivery-meta-strip">
+          {delivery.pickupCode && (
+            <span className="meta-chip coleta">
+              <strong>Coleta</strong> #{delivery.pickupCode}
+            </span>
+          )}
+          {delivery.pickupCode && (delivery.ifoodLocalizer || delivery.ifoodConfirmed) && (
+            <span className="meta-chip-divider" />
+          )}
+          {delivery.ifoodLocalizer && (
+            <span className="meta-chip localizador" title="Localizador iFood">
+              <strong>Loc</strong> {delivery.ifoodLocalizer}
+            </span>
+          )}
+          {delivery.ifoodConfirmed && (
+            <>
+              {delivery.ifoodLocalizer && <span className="meta-chip-divider" />}
+              <span className="meta-chip blindado" title="Entrega Blindada e Confirmada">
+                <ShieldCheck size={12} /> Blindado
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Customer Info */}
       <div className="customer-block">
         <b>{delivery.customer}</b>
-        <span>
-          <MapPin /> {delivery.address} {delivery.district ? `· ${delivery.district}` : ""}
-        </span>
-        {delivery.notes && (
-          <small style={{ color: "var(--muted)", fontSize: "10px", marginTop: "2px", display: "block" }}>
-            {delivery.notes}
-          </small>
-        )}
+        <div className="customer-address-line">
+          <MapPin />
+          <span>{delivery.address} {delivery.district ? `· ${delivery.district}` : ""}</span>
+        </div>
+        {cleanNotes ? (
+          <div className="customer-notes-pill">
+            <span>{cleanNotes}</span>
+          </div>
+        ) : null}
       </div>
 
       {/* Itens do Pedido (Takeat / iFood / Comanda) */}
@@ -1692,109 +1708,127 @@ function MobileDeliveryCard({
       {/* Price & Payment */}
       <div className="price-row">
         <div>
-          <span>Pedido: <b>{money(delivery.amount)}</b></span>
+          <span className="price-row-amount">{money(delivery.amount)}</span>
           <span style={{ margin: "0 6px", color: "var(--muted)" }}>•</span>
-          <span>{delivery.payment}</span>
+          <span className="price-row-payment">{delivery.payment}</span>
         </div>
-        <small>Motoboy: <b>{delivery.driver}</b></small>
+        <div className="price-row-driver">
+          <span>Motoboy:</span>
+          <b>{delivery.driver}</b>
+        </div>
       </div>
 
-      {/* Botão de Confirmação iFood (Blindagem) */}
+      {/* Modern iFood Confirmation Banner / Action */}
       {(delivery.platform === "ifood" || Boolean(delivery.ifoodLocalizer)) && (
-        <div style={{ marginTop: "2px" }}>
+        <div>
           {delivery.ifoodConfirmed ? (
             <div className="ifood-confirmed-banner">
               <ShieldCheck size={14} />
               <span>Entrega Blindada e Confirmada no iFood</span>
             </div>
           ) : !isDelivered ? (
-            <button
-              type="button"
-              className="btn-action-ifood-confirm"
-              onClick={onOpenIfoodConfirm}
-              title="Abrir confirmação de entrega própria no iFood e blindar pedido"
-            >
-              <ShieldCheck size={15} />
-              <span>Confirmar no iFood {delivery.ifoodLocalizer ? `(Loc: ${delivery.ifoodLocalizer})` : ""}</span>
-            </button>
+            <div className="ifood-action-card">
+              <div className="ifood-action-card-left">
+                <div className="ifood-action-card-icon">
+                  <ShieldCheck size={16} />
+                </div>
+                <div>
+                  <b>Confirmação de Entrega iFood</b>
+                  <span>{delivery.ifoodLocalizer ? `Localizador: ${delivery.ifoodLocalizer}` : "Blindar e validar no iFood"}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn-ifood-action-pill"
+                onClick={onOpenIfoodConfirm}
+                title="Abrir confirmação de entrega própria no iFood"
+              >
+                Confirmar <ExternalLink size={12} />
+              </button>
+            </div>
           ) : null}
         </div>
       )}
 
-      {/* Action Buttons Toolbar */}
-      <div className="card-actions-grid">
-        {cleanPhone ? (
-          <a
-            href={whatsappUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-action btn-whatsapp"
-            title="Chamar no WhatsApp"
-          >
-            <Phone size={14} /> WhatsApp
-          </a>
-        ) : (
-          <a
-            href={`tel:${delivery.phone}`}
-            className="btn-action btn-call"
-            title="Ligar para cliente"
-          >
-            <Phone size={14} /> Ligar
-          </a>
-        )}
-
-        <a
-          href={mapsUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-action btn-maps"
-          title="Abrir no Google Maps"
-        >
-          <Navigation size={14} /> Maps
-        </a>
-
-        <a
-          href={wazeUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-action"
-          style={{ background: "#33ccff", color: "#fff", padding: "0 10px" }}
-          title="Abrir no Waze"
-        >
-          Waze
-        </a>
-
+      {/* Action Buttons Stack (Hero Deliver Button + 3 Modern Tools) */}
+      <div className="delivery-actions-stack">
         {!isDelivered ? (
           <button
             type="button"
-            className="btn-action btn-done"
+            className="btn-primary-deliver"
             onClick={onMarkDelivered}
             title="Marcar como entregue e somar na noite"
           >
-            <CheckCircle2 size={15} /> Entregar
+            <CheckCircle2 size={16} /> Concluir Entrega
           </button>
         ) : (
-          <button
-            type="button"
-            className="btn-action"
-            style={{ background: "var(--surface-2)", color: "var(--muted)", padding: "0 10px" }}
-            onClick={() => onUpdateStatus("Aguardando")}
-            title="Reabrir entrega"
-          >
-            Reabrir
-          </button>
+          <div className="delivery-completed-bar">
+            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <CheckCircle2 size={15} /> Pedido Entregue
+            </span>
+            <button
+              type="button"
+              className="btn-reopen-pill"
+              onClick={() => onUpdateStatus("Aguardando")}
+              title="Reabrir entrega"
+            >
+              Reabrir
+            </button>
+          </div>
         )}
+
+        <div className="delivery-tools-row">
+          {cleanPhone ? (
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-tool-action wa"
+              title="Chamar no WhatsApp"
+            >
+              <Phone size={13} /> WhatsApp
+            </a>
+          ) : (
+            <a
+              href={`tel:${delivery.phone}`}
+              className="btn-tool-action wa"
+              title="Ligar para cliente"
+            >
+              <Phone size={13} /> Ligar
+            </a>
+          )}
+
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-tool-action maps"
+            title="Abrir no Google Maps"
+          >
+            <Navigation size={13} /> Maps
+          </a>
+
+          <a
+            href={wazeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-tool-action waze"
+            title="Abrir no Waze"
+          >
+            Waze
+          </a>
+        </div>
       </div>
 
       {/* ADM extras: assign driver or delete */}
       {isAdm && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "8px", borderTop: "1px solid var(--line)", fontSize: "11px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ color: "var(--muted)" }}>Atribuir:</span>
+        <div className="delivery-card-adm-footer">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ color: "var(--muted)", fontWeight: "600" }}>Atribuir motoboy:</span>
             <select
               value={delivery.driverId || ""}
               onChange={(e) => onAssignDriver(e.target.value)}
-              style={{ height: "28px", borderRadius: "8px", border: "1px solid var(--line)", fontSize: "11px", background: "var(--surface-2)" }}
+              className="adm-assign-select"
             >
               <option value="">Selecione motoboy</option>
               {drivers.map((drv) => (
@@ -1805,10 +1839,10 @@ function MobileDeliveryCard({
           <button
             type="button"
             onClick={onRemove}
-            style={{ border: 0, background: "transparent", color: "var(--danger)", padding: "4px", cursor: "pointer" }}
+            className="btn-delete-card"
             title="Excluir entrega"
           >
-            <Trash2 size={15} />
+            <Trash2 size={16} />
           </button>
         </div>
       )}
