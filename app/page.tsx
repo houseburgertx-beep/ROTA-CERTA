@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bike,
   Camera,
+  Check,
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
@@ -249,6 +250,8 @@ function MobileDeliveryApp({
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("Todas");
+  const [deliveryTabMode, setDeliveryTabMode] = useState<"active" | "completed">("active");
+  const [selectedForRouteIds, setSelectedForRouteIds] = useState<string[]>([]);
   const [modal, setModal] = useState<"new" | "ocr" | "driver" | null>(null);
   const [ocrData, setOcrData] = useState<Record<string, string> | null>(null);
   const [toast, setToast] = useState("");
@@ -619,29 +622,61 @@ function MobileDeliveryApp({
     return calculateFinancialStats(deliveries, filterName);
   }, [deliveries, appMode, activeDriver, currentUser]);
 
-  // Filtered deliveries list
-  const filteredDeliveries = useMemo(() => {
+  // Entregas visíveis para o usuário atual (filtro estrito de motoboy ou simulação da loja)
+  const scopedDeliveries = useMemo(() => {
     return deliveries.filter((d) => {
-      // REGRA DE OURO: Se o usuário logado for motoboy, ele SÓ VÊ entregas atribuídas a ele no Takeat!
       if (currentUser.role === "driver") {
-        if (!isDeliveryForThisDriver(d)) return false;
-      } else if (appMode === "motoboy" && activeDriver) {
-        // Modo simulação para ADM
-        const isHis = d.driverId === activeDriver.id || d.driver === activeDriver.name;
-        if (!isHis) return false;
+        return isDeliveryForThisDriver(d);
       }
+      if (appMode === "motoboy" && activeDriver) {
+        return d.driverId === activeDriver.id || d.driver === activeDriver.name;
+      }
+      return true;
+    });
+  }, [deliveries, currentUser, appMode, activeDriver]);
 
+  const isDeliveryDone = (status: string) => {
+    const s = (status || "").toLowerCase().trim();
+    return s === "entregue" || s === "delivered" || s === "cancelada" || s === "concluída";
+  };
+
+  const activeDeliveries = useMemo(() => {
+    return scopedDeliveries.filter((d) => !isDeliveryDone(d.status));
+  }, [scopedDeliveries]);
+
+  const completedDeliveries = useMemo(() => {
+    return scopedDeliveries.filter((d) => isDeliveryDone(d.status));
+  }, [scopedDeliveries]);
+
+  // Lista filtrada para exibição (separa Atribuídos Agora vs Já Entregues)
+  const filteredDeliveries = useMemo(() => {
+    const base = deliveryTabMode === "active" ? activeDeliveries : completedDeliveries;
+    return base.filter((d) => {
       if (statusFilter !== "Todas" && d.status !== statusFilter) return false;
-
-      const matchQuery = (d.customer + d.order + d.address + d.district + d.phone)
+      if (!query.trim()) return true;
+      return (d.customer + d.order + d.address + d.district + d.phone)
         .toLowerCase()
         .includes(query.toLowerCase());
-      return matchQuery;
     });
-  }, [deliveries, appMode, activeDriver, currentUser, statusFilter, query]);
+  }, [deliveryTabMode, activeDeliveries, completedDeliveries, statusFilter, query]);
+
+  const toggleDeliverySelection = (id: string) => {
+    setSelectedForRouteIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const clearRouteSelection = () => {
+    setSelectedForRouteIds([]);
+  };
+
+  const selectAllActiveForRoute = () => {
+    setSelectedForRouteIds(activeDeliveries.map((d) => d.id));
+  };
 
   // Delivery action: complete delivery and register earnings
   async function markAsDelivered(id: string) {
+    setSelectedForRouteIds((prev) => prev.filter((x) => x !== id));
     const nowIso = new Date().toISOString();
     setDeliveries((prev) =>
       prev.map((d) => {
@@ -735,6 +770,7 @@ function MobileDeliveryApp({
 
   // Remove delivery
   async function removeDelivery(id: string) {
+    setSelectedForRouteIds((prev) => prev.filter((x) => x !== id));
     setDeliveries((prev) => prev.filter((d) => d.id !== id));
     notify("Entrega removida");
     try {
@@ -986,6 +1022,42 @@ function MobileDeliveryApp({
                 </div>
               </div>
 
+              {/* Sub-abas: Atribuídos Agora vs Já Entregues */}
+              <div className="delivery-tab-switcher">
+                <button
+                  type="button"
+                  className={`delivery-tab-btn ${deliveryTabMode === "active" ? "active" : ""}`}
+                  onClick={() => setDeliveryTabMode("active")}
+                >
+                  <Bike size={16} />
+                  <span>Atribuídos Agora</span>
+                  <span className="delivery-tab-count active-count">{activeDeliveries.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`delivery-tab-btn ${deliveryTabMode === "completed" ? "active" : ""}`}
+                  onClick={() => setDeliveryTabMode("completed")}
+                >
+                  <CheckCircle2 size={16} />
+                  <span>Já Entregues</span>
+                  <span className="delivery-tab-count">{completedDeliveries.length}</span>
+                </button>
+              </div>
+
+              {/* Quick Select All bar when multiple active deliveries */}
+              {deliveryTabMode === "active" && activeDeliveries.length > 1 && (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", fontSize: "11px", color: "var(--muted)", padding: "0 2px" }}>
+                  <span>Selecione para montar rota agrupada:</span>
+                  <button
+                    type="button"
+                    onClick={selectedForRouteIds.length === activeDeliveries.length ? clearRouteSelection : selectAllActiveForRoute}
+                    style={{ border: 0, background: "transparent", color: "var(--primary)", fontWeight: "700", cursor: "pointer", fontSize: "11px" }}
+                  >
+                    {selectedForRouteIds.length === activeDeliveries.length ? "Desmarcar todos" : "Selecionar todos para rota"}
+                  </button>
+                </div>
+              )}
+
               {/* Search & Status Filters */}
               <div style={{ marginBottom: "12px" }}>
                 <div className="toolbar" style={{ marginBottom: "8px" }}>
@@ -994,37 +1066,68 @@ function MobileDeliveryApp({
                     <input
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Buscar cliente, endereço ou pedido"
+                      placeholder={deliveryTabMode === "active" ? "Buscar entregas ativas por cliente ou rua" : "Buscar entregas concluídas"}
                     />
                   </label>
                 </div>
-                <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px" }}>
-                  {["Todas", "Aguardando", "Em rota", "Entregue"].map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => setStatusFilter(st)}
-                      style={{
-                        padding: "5px 12px",
-                        borderRadius: "10px",
-                        border: "1px solid var(--line)",
-                        fontSize: "11px",
-                        fontWeight: "600",
-                        whiteSpace: "nowrap",
-                        background: statusFilter === st ? "var(--surface-2)" : "transparent",
-                        color: statusFilter === st ? "var(--primary)" : "var(--muted)",
-                      }}
-                    >
-                      {st}
-                    </button>
-                  ))}
-                </div>
+                {deliveryTabMode === "active" && (
+                  <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px" }}>
+                    {["Todas", "Aguardando", "Em rota"].map((st) => (
+                      <button
+                        key={st}
+                        type="button"
+                        onClick={() => setStatusFilter(st)}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "10px",
+                          border: "1px solid var(--line)",
+                          fontSize: "11px",
+                          fontWeight: "600",
+                          whiteSpace: "nowrap",
+                          background: statusFilter === st ? "var(--surface-2)" : "transparent",
+                          color: statusFilter === st ? "var(--primary)" : "var(--muted)",
+                        }}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Delivery Cards List */}
               <div className="mobile-card-list">
                 {filteredDeliveries.length === 0 ? (
-                  currentUser.role === "driver" ? (
+                  deliveryTabMode === "completed" ? (
+                    <div style={{ padding: "44px 20px", textAlign: "center", background: "var(--surface)", borderRadius: "20px", border: "1px solid var(--line)" }}>
+                      <div
+                        style={{
+                          width: "60px",
+                          height: "60px",
+                          borderRadius: "50%",
+                          background: "rgba(16,185,129,.12)",
+                          color: "#10b981",
+                          display: "grid",
+                          placeItems: "center",
+                          margin: "0 auto 14px",
+                        }}
+                      >
+                        <CheckCircle2 size={30} />
+                      </div>
+                      <b style={{ display: "block", fontSize: "16px", color: "var(--text)" }}>Nenhuma entrega finalizada ainda</b>
+                      <p style={{ color: "var(--muted)", fontSize: "12px", margin: "6px auto 16px", maxWidth: "280px", lineHeight: "1.4" }}>
+                        Quando você concluir pedidos na aba "Atribuídos Agora", o histórico e o resumo de taxas aparecerão aqui.
+                      </p>
+                      <button
+                        type="button"
+                        className="primary"
+                        style={{ height: "40px", padding: "0 18px", borderRadius: "10px", fontSize: "12px", fontWeight: "700" }}
+                        onClick={() => setDeliveryTabMode("active")}
+                      >
+                        Ver Atribuídos Agora ({activeDeliveries.length})
+                      </button>
+                    </div>
+                  ) : currentUser.role === "driver" ? (
                     <div style={{ padding: "44px 20px", textAlign: "center", background: "var(--surface)", borderRadius: "20px", border: "1px solid var(--line)" }}>
                       <div
                         style={{
@@ -1042,7 +1145,7 @@ function MobileDeliveryApp({
                       </div>
                       <b style={{ display: "block", fontSize: "16px", color: "var(--text)" }}>Nenhuma entrega para você agora</b>
                       <p style={{ color: "var(--muted)", fontSize: "12px", margin: "6px auto 16px", maxWidth: "280px", lineHeight: "1.4" }}>
-                        Aguarde a loja despachar seus pedidos ou tire uma foto de uma comanda física para adicionar.
+                        Aguarde a loja despachar seus pedidos no Takeat ou tire uma foto de uma comanda física para adicionar.
                       </p>
                       <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
                         <button
@@ -1120,6 +1223,9 @@ function MobileDeliveryApp({
                       onRemove={() => removeDelivery(d.id)}
                       isAdm={appMode === "adm"}
                       drivers={drivers}
+                      showSelectCheckbox={deliveryTabMode === "active"}
+                      selected={selectedForRouteIds.includes(d.id)}
+                      onToggleSelect={() => toggleDeliverySelection(d.id)}
                       onAssignDriver={(driverId) => {
                         const drv = drivers.find((x) => x.id === driverId);
                         const driverName = drv ? drv.name : "Não atribuído";
@@ -1137,6 +1243,39 @@ function MobileDeliveryApp({
                   ))
                 )}
               </div>
+
+              {/* Floating Bottom Bar para Rota Agrupada */}
+              {selectedForRouteIds.length > 0 && activeTab === "entregas" && (
+                <div className="floating-route-bar">
+                  <div className="floating-route-bar-info">
+                    <span className="floating-badge">{selectedForRouteIds.length}</span>
+                    <div>
+                      <b style={{ fontSize: "12px", display: "block" }}>
+                        {selectedForRouteIds.length === 1 ? "1 entrega selecionada" : `${selectedForRouteIds.length} entregas selecionadas`}
+                      </b>
+                      <span style={{ fontSize: "10px", opacity: 0.8 }}>Pronto para traçar o mapa</span>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="btn-floating-clear"
+                      onClick={clearRouteSelection}
+                    >
+                      Limpar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-floating-route"
+                      onClick={() => {
+                        setActiveTab("mapa");
+                      }}
+                    >
+                      <Route size={16} /> Montar Rota Agrupada ({selectedForRouteIds.length})
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1144,7 +1283,9 @@ function MobileDeliveryApp({
           {activeTab === "mapa" && (
             <div>
               <MobileMapView
-                deliveries={filteredDeliveries}
+                deliveries={scopedDeliveries}
+                selectedRouteIds={selectedForRouteIds}
+                onClearSelection={clearRouteSelection}
                 mapProvider={mapProvider}
                 notify={notify}
                 onMarkDelivered={markAsDelivered}
@@ -1348,6 +1489,9 @@ function MobileDeliveryCard({
   isAdm,
   drivers,
   onAssignDriver,
+  selected = false,
+  onToggleSelect,
+  showSelectCheckbox = false,
 }: {
   delivery: Delivery;
   onMarkDelivered: () => void;
@@ -1356,9 +1500,12 @@ function MobileDeliveryCard({
   isAdm: boolean;
   drivers: Driver[];
   onAssignDriver: (driverId: string) => void;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+  showSelectCheckbox?: boolean;
 }) {
   const [showItemsDetail, setShowItemsDetail] = useState(false);
-  const isDelivered = delivery.status === "Entregue";
+  const isDelivered = delivery.status === "Entregue" || (delivery.status as string) === "delivered";
   const cleanPhone = delivery.phone.replace(/\D/g, "");
   const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(
     `Olá ${delivery.customer}! Sou o motoboy do seu pedido ${delivery.order}. Já estou a caminho do endereço: ${delivery.address}.`,
@@ -1371,10 +1518,23 @@ function MobileDeliveryCard({
     : `https://waze.com/ul?q=${encodeURIComponent(`${delivery.address}, ${delivery.district}`)}&navigate=yes`;
 
   return (
-    <article className={`delivery-card ${isDelivered ? "is-delivered" : ""}`}>
-      {/* Top line: Order # + Status + Fee */}
+    <article className={`delivery-card ${isDelivered ? "is-delivered" : ""} ${selected ? "is-selected" : ""}`}>
+      {/* Top line: Minimal Checkbox + Order # + Status + Fee */}
       <div className="delivery-card-top">
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {showSelectCheckbox && !isDelivered && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleSelect?.();
+              }}
+              className={`minimal-checkbox ${selected ? "is-selected" : ""}`}
+              title={selected ? "Remover da rota agrupada" : "Selecionar para rota agrupada"}
+            >
+              {selected && <Check size={14} strokeWidth={3} />}
+            </button>
+          )}
           <span className="order-badge">{delivery.order}</span>
           {delivery.platform === "ifood" && (
             <span style={{ fontSize: "10px", fontWeight: "800", color: "#ea1d2c", background: "rgba(234,29,44,.1)", padding: "2px 6px", borderRadius: "6px" }}>
@@ -1578,25 +1738,67 @@ function MobileMapView({
   mapProvider,
   notify,
   onMarkDelivered,
+  selectedRouteIds,
+  onClearSelection,
 }: {
   deliveries: Delivery[];
   mapProvider: MapTileProvider;
   notify: (s: string) => void;
   onMarkDelivered: (id: string) => void;
+  selectedRouteIds?: string[];
+  onClearSelection?: () => void;
 }) {
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [userPos, setUserPos] = useState<GeoPoint | null>(null);
-  const pendingDeliveries = useMemo(
-    () => deliveries.filter((d) => d.status !== "Entregue" && typeof d.latitude === "number"),
-    [deliveries],
+
+  const isGroupedRoute = Boolean(selectedRouteIds && selectedRouteIds.length > 0);
+
+  // Filtra apenas entregas pendentes; se houver rota agrupada selecionada, foca apenas nelas
+  const targetDeliveries = useMemo(() => {
+    let list = deliveries.filter(
+      (d) => d.status !== "Entregue" && (d.status as string) !== "delivered" && d.status !== "cancelada",
+    );
+    if (isGroupedRoute) {
+      list = list.filter((d) => selectedRouteIds!.includes(d.id));
+    }
+    return list;
+  }, [deliveries, isGroupedRoute, selectedRouteIds]);
+
+  // Geocodificação automática de precisão para paradas sem latitude/longitude
+  useEffect(() => {
+    const unlocated = targetDeliveries.filter(
+      (d) => typeof d.latitude !== "number" || typeof d.longitude !== "number",
+    );
+    if (unlocated.length > 0) {
+      unlocated.forEach(async (del) => {
+        try {
+          const pt = await geocodeDeliveryAddress({
+            address: del.address,
+            district: del.district,
+            city: del.city,
+            postalCode: del.postalCode,
+          });
+          if (pt) {
+            del.latitude = pt.latitude;
+            del.longitude = pt.longitude;
+            void updateDeliveryRTDB(del.id, { latitude: pt.latitude, longitude: pt.longitude });
+          }
+        } catch {}
+      });
+    }
+  }, [targetDeliveries]);
+
+  const routableDeliveries = useMemo(
+    () => targetDeliveries.filter((d) => typeof d.latitude === "number" && typeof d.longitude === "number"),
+    [targetDeliveries],
   );
 
-  // AUTOMATIC ROUTE CALCULATION
+  // CÁLCULO AUTOMÁTICO DE ROTA OTIMIZADA (TSP)
   useEffect(() => {
     let cancelled = false;
     async function autoRoute() {
-      if (pendingDeliveries.length === 0) {
+      if (routableDeliveries.length === 0) {
         setRoute(null);
         return;
       }
@@ -1605,17 +1807,17 @@ function MobileMapView({
         const startPoint = userPos || STORE_POINT;
         const points = [
           startPoint,
-          ...pendingDeliveries.map((d) => ({ latitude: d.latitude!, longitude: d.longitude! })),
+          ...routableDeliveries.map((d) => ({ latitude: d.latitude!, longitude: d.longitude! })),
         ];
         const res = await calculateRoute(points, false);
         if (!cancelled) {
           setRoute(res);
         }
       } catch (e) {
-        // Fallback: simple line between points so route line always renders
+        // Fallback viário
         const fallbackPoints = [
           userPos || STORE_POINT,
-          ...pendingDeliveries.map((d) => ({ latitude: d.latitude!, longitude: d.longitude! })),
+          ...routableDeliveries.map((d) => ({ latitude: d.latitude!, longitude: d.longitude! })),
         ];
         if (!cancelled) {
           setRoute({
@@ -1634,12 +1836,43 @@ function MobileMapView({
     return () => {
       cancelled = true;
     };
-  }, [pendingDeliveries.length, userPos]);
+  }, [routableDeliveries.length, userPos]);
+
+  // ORDENAÇÃO ESTRITA DAS PARADAS CONFORME A ROTA OTIMIZADA
+  const orderedDeliveries = useMemo(() => {
+    if (!route || !route.orderedPoints || route.orderedPoints.length <= 1) {
+      return routableDeliveries;
+    }
+    // O ponto 0 é o início (loja ou GPS do motoboy). Os pontos 1..N são as paradas na ordem do menor trajeto
+    const routeStops = route.orderedPoints.slice(1);
+    const matched: Delivery[] = [];
+    const remaining = [...routableDeliveries];
+
+    for (const pt of routeStops) {
+      let bestIdx = -1;
+      let bestDist = Infinity;
+      for (let i = 0; i < remaining.length; i++) {
+        const d = remaining[i];
+        if (typeof d.latitude === "number" && typeof d.longitude === "number") {
+          const dist = Math.hypot(d.latitude - pt.latitude, d.longitude - pt.longitude);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestIdx = i;
+          }
+        }
+      }
+      if (bestIdx >= 0) {
+        matched.push(remaining[bestIdx]);
+        remaining.splice(bestIdx, 1);
+      }
+    }
+    return [...matched, ...remaining];
+  }, [routableDeliveries, route]);
 
   function startGoogleMapsFullRoute() {
-    if (pendingDeliveries.length === 0) return;
-    const dest = pendingDeliveries[pendingDeliveries.length - 1];
-    const waypoints = pendingDeliveries
+    if (orderedDeliveries.length === 0) return;
+    const dest = orderedDeliveries[orderedDeliveries.length - 1];
+    const waypoints = orderedDeliveries
       .slice(0, -1)
       .map((d) => `${d.latitude},${d.longitude}`)
       .join("|");
@@ -1652,23 +1885,69 @@ function MobileMapView({
     url.searchParams.set("dir_action", "navigate");
 
     window.open(url.toString(), "_blank", "noopener,noreferrer");
-    notify("Navegação da rota completa aberta no Google Maps!");
+    notify("Navegação da rota otimizada aberta no Google Maps!");
   }
 
   function startWazeFirstStop() {
-    if (pendingDeliveries.length === 0) return;
-    const first = pendingDeliveries[0];
+    if (orderedDeliveries.length === 0) return;
+    const first = orderedDeliveries[0];
     const url = `https://waze.com/ul?ll=${first.latitude},${first.longitude}&navigate=yes`;
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
   return (
     <div>
+      {/* Banner de Rota Agrupada Ativa */}
+      {isGroupedRoute && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "10px 14px",
+            background: "rgba(124,58,237,.12)",
+            border: "1px solid rgba(124,58,237,.3)",
+            borderRadius: "14px",
+            marginBottom: "12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Route size={18} style={{ color: "var(--primary)" }} />
+            <div>
+              <b style={{ fontSize: "13px", color: "var(--ink)", display: "block" }}>
+                Rota Agrupada ({orderedDeliveries.length} entregas)
+              </b>
+              <span style={{ fontSize: "10px", color: "var(--muted)" }}>
+                Paradas ordenadas na sequência mais rápida
+              </span>
+            </div>
+          </div>
+          {onClearSelection && (
+            <button
+              type="button"
+              onClick={onClearSelection}
+              style={{
+                border: "1px solid var(--line)",
+                background: "var(--surface)",
+                padding: "6px 12px",
+                borderRadius: "10px",
+                fontSize: "11px",
+                fontWeight: "700",
+                cursor: "pointer",
+                color: "var(--ink)",
+              }}
+            >
+              Ver Todas
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="mobile-map-container">
         {/* Floating Top Route Summary */}
         <div className="map-floating-bar">
           <div>
-            <b>{pendingDeliveries.length} parada(s) na rota</b>
+            <b>{orderedDeliveries.length} parada(s) na rota</b>
             <span>
               {route
                 ? `${(route.distanceMeters / 1000).toFixed(1)} km · ~${Math.round(route.durationSeconds / 60)} min de moto`
@@ -1680,7 +1959,7 @@ function MobileMapView({
               type="button"
               className="primary"
               style={{ padding: "8px 12px", fontSize: "11px", borderRadius: "10px" }}
-              disabled={loading || pendingDeliveries.length === 0}
+              disabled={loading || orderedDeliveries.length === 0}
               onClick={startGoogleMapsFullRoute}
             >
               <Navigation size={14} /> Maps
@@ -1696,6 +1975,7 @@ function MobileMapView({
                 fontSize: "11px",
                 fontWeight: "700",
               }}
+              disabled={orderedDeliveries.length === 0}
               onClick={startWazeFirstStop}
             >
               Waze
@@ -1703,9 +1983,9 @@ function MobileMapView({
           </div>
         </div>
 
-        {/* Map component */}
+        {/* Map component com paradas na ordem correta da rota */}
         <FreeMapInternal
-          deliveries={pendingDeliveries}
+          deliveries={orderedDeliveries}
           mapProvider={mapProvider}
           route={route}
           onGpsFound={(pos) => setUserPos(pos)}
@@ -1715,62 +1995,136 @@ function MobileMapView({
       {/* Stop Cards Below Map */}
       <div style={{ marginTop: "14px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-          <h3 style={{ fontSize: "14px", margin: 0 }}>Sequência Otimizada de Entregas</h3>
-          <small style={{ color: "var(--muted)", fontSize: "10px" }}>Ordem mais rápida</small>
+          <div>
+            <h3 style={{ fontSize: "14px", margin: 0 }}>Sequência Otimizada de Entregas</h3>
+            <small style={{ color: "var(--muted)", fontSize: "10px" }}>
+              {orderedDeliveries.length} paradas na ordem mais rápida
+            </small>
+          </div>
+          {orderedDeliveries.length > 0 && (
+            <button
+              type="button"
+              className="primary"
+              style={{ padding: "5px 10px", fontSize: "11px", borderRadius: "8px", display: "flex", alignItems: "center", gap: "4px" }}
+              onClick={startGoogleMapsFullRoute}
+            >
+              <Navigation size={12} /> Iniciar no Maps
+            </button>
+          )}
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {pendingDeliveries.length === 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {orderedDeliveries.length === 0 ? (
             <div style={{ padding: "20px", textAlign: "center", color: "var(--muted)", fontSize: "12px", background: "var(--surface)", borderRadius: "14px", border: "1px solid var(--line)" }}>
-              Nenhuma parada pendente. Todas as entregas foram concluídas!
+              Nenhuma parada pendente. Todas as entregas selecionadas foram concluídas!
             </div>
           ) : (
-            pendingDeliveries.map((d, index) => (
-              <div
-                key={d.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "10px 12px",
-                  background: "var(--surface)",
-                  border: "1px solid var(--line)",
-                  borderRadius: "14px",
-                }}
-              >
+            orderedDeliveries.map((d, index) => {
+              const stopMapsUrl = d.latitude && d.longitude
+                ? `https://www.google.com/maps/dir/?api=1&destination=${d.latitude},${d.longitude}&travelmode=driving`
+                : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${d.address}, ${d.district}, ${d.city || ""}`)}&travelmode=driving`;
+              const stopWazeUrl = d.latitude && d.longitude
+                ? `https://waze.com/ul?ll=${d.latitude},${d.longitude}&navigate=yes`
+                : `https://waze.com/ul?q=${encodeURIComponent(`${d.address}, ${d.district}`)}&navigate=yes`;
+              const cleanPhone = (d.phone || "").replace(/\D/g, "");
+              const stopWaUrl = cleanPhone ? `https://wa.me/55${cleanPhone}` : "";
+
+              return (
                 <div
+                  key={d.id}
                   style={{
-                    width: "30px",
-                    height: "30px",
-                    borderRadius: "10px",
-                    background: index === 0 ? "#2563eb" : "var(--primary)",
-                    color: "#fff",
-                    display: "grid",
-                    placeItems: "center",
-                    fontWeight: "800",
-                    fontSize: "13px",
+                    background: "var(--surface)",
+                    border: "1px solid var(--line)",
+                    borderRadius: "16px",
+                    padding: "12px 14px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                    boxShadow: "var(--shadow-sm)",
                   }}
                 >
-                  {index + 1}
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "10px",
+                        background: index === 0 ? "#2563eb" : "var(--primary)",
+                        color: "#fff",
+                        display: "grid",
+                        placeItems: "center",
+                        fontWeight: "800",
+                        fontSize: "14px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {index + 1}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
+                        <b style={{ fontSize: "13px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {d.customer}
+                        </b>
+                        <span className="fee-badge-highlight" style={{ fontSize: "11px", padding: "2px 8px" }}>
+                          {money(d.deliveryFee)}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "11px", color: "var(--ink)", marginTop: "2px", fontWeight: "600" }}>
+                        Pedido {d.order}
+                      </div>
+                      <span style={{ fontSize: "11px", color: "var(--muted)", display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
+                        <MapPin size={12} style={{ flexShrink: 0 }} /> {d.address} {d.district ? `· ${d.district}` : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: "6px", paddingTop: "8px", borderTop: "1px solid var(--line)" }}>
+                    <a
+                      href={stopMapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-action btn-maps"
+                      style={{ height: "32px", fontSize: "11px" }}
+                      title="Navegar até esta parada no Google Maps"
+                    >
+                      <Navigation size={13} /> Maps
+                    </a>
+                    <a
+                      href={stopWazeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-action"
+                      style={{ height: "32px", fontSize: "11px", background: "#33ccff", color: "#fff" }}
+                      title="Navegar até esta parada no Waze"
+                    >
+                      Waze
+                    </a>
+                    {cleanPhone && (
+                      <a
+                        href={stopWaUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-action btn-whatsapp"
+                        style={{ height: "32px", padding: "0 10px", fontSize: "11px" }}
+                        title="WhatsApp"
+                      >
+                        <Phone size={13} />
+                      </a>
+                    )}
+                    <button
+                      type="button"
+                      className="btn-action btn-done"
+                      style={{ height: "32px", padding: "0 12px", fontSize: "11px" }}
+                      onClick={() => onMarkDelivered(d.id)}
+                      title="Marcar entrega concluída"
+                    >
+                      <CheckCircle2 size={13} /> Entregue
+                    </button>
+                  </div>
                 </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <b style={{ fontSize: "12px", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {d.customer} · {d.order}
-                  </b>
-                  <span style={{ fontSize: "10px", color: "var(--muted)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {d.address} ({d.district})
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  className="btn-action btn-done"
-                  style={{ height: "32px", padding: "0 10px", fontSize: "11px" }}
-                  onClick={() => onMarkDelivered(d.id)}
-                >
-                  Entregue
-                </button>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

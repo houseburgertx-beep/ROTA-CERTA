@@ -1,5 +1,6 @@
 import type { Delivery, Driver, OrderItem } from "../types";
 import { saveTakeatConfigRTDB, saveDriverRTDB, getDriversRTDB } from "./realtimeDbService";
+import { geocodeDeliveryAddress } from "./geocodingService";
 
 export interface TakeatBuyerAddress {
   country?: string;
@@ -953,9 +954,10 @@ export function mapTakeatSessionToDelivery(
   defaultDriverName = "Carlos Eduardo (Kaká)",
   defaultDriverId = "driver-1"
 ): Delivery {
+  const rawSession = session as unknown as Record<string, unknown>;
   const bill = session.bills?.[0];
-  const buyer = bill?.buyer;
-  const addressObj = buyer?.delivery_address;
+  const buyer = bill?.buyer || (rawSession.buyer as TakeatBuyer | undefined);
+  const addressObj = buyer?.delivery_address || (rawSession.delivery_address as TakeatBuyerAddress | undefined) || (rawSession.address as TakeatBuyerAddress | undefined);
 
   const { items, itemsSummary } = extractTakeatItems(session);
 
@@ -1141,8 +1143,14 @@ export function mapTakeatSessionToDelivery(
 
   if (addressObj?.complement) delivery.complement = addressObj.complement;
   if (addressObj?.reference) delivery.reference = addressObj.reference;
-  if (addressObj?.latitude) delivery.latitude = addressObj.latitude;
-  if (addressObj?.longitude) delivery.longitude = addressObj.longitude;
+  const rawLat = addressObj?.latitude ?? (rawSession.latitude as number | undefined);
+  const rawLng = addressObj?.longitude ?? (rawSession.longitude as number | undefined);
+  if (rawLat !== undefined && rawLat !== null && !isNaN(Number(rawLat)) && Number(rawLat) !== 0) {
+    delivery.latitude = Number(rawLat);
+  }
+  if (rawLng !== undefined && rawLng !== null && !isNaN(Number(rawLng)) && Number(rawLng) !== 0) {
+    delivery.longitude = Number(rawLng);
+  }
   if (ifoodId) delivery.platformOrderId = ifoodId;
   if (pickupCode) delivery.pickupCode = pickupCode;
   if (notes) delivery.notes = notes;
@@ -1243,6 +1251,11 @@ export async function syncTakeatDeliveries(
           current.driverId = mapped.driverId;
           changed = true;
         }
+        if ((!current.latitude || !current.longitude) && mapped.latitude && mapped.longitude) {
+          current.latitude = mapped.latitude;
+          current.longitude = mapped.longitude;
+          changed = true;
+        }
         if (!current.items || current.items.length === 0) {
           current.items = mapped.items;
           current.itemsSummary = mapped.itemsSummary;
@@ -1259,6 +1272,25 @@ export async function syncTakeatDeliveries(
       if (mapped.platformOrderId) existingMap.set(mapped.platformOrderId, mapped);
       addedCount++;
     }
+  }
+
+  // Geocodifica automaticamente entregas ativas que ainda estejam sem coordenadas GPS
+  const pendingGeocode = result.filter(
+    (d) => (!d.latitude || !d.longitude) && d.status !== "Entregue" && d.address
+  ).slice(0, 5);
+  for (const item of pendingGeocode) {
+    try {
+      const geo = await geocodeDeliveryAddress({
+        address: item.address,
+        district: item.district,
+        city: item.city || "Teixeira de Freitas",
+        postalCode: item.postalCode,
+      });
+      if (geo) {
+        item.latitude = geo.latitude;
+        item.longitude = geo.longitude;
+      }
+    } catch {}
   }
 
   return { deliveries: result, addedCount, updatedCount };
