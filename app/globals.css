@@ -32,13 +32,19 @@ main{min-height:100vh;margin-left:242px}header{height:78px;position:sticky;top:0
 .driver-select-pill{font-size:11px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);padding:0 8px;font-weight:600;color:var(--ink);max-width:180px}
 
 /* Financial Highlights (Night & Month) */
-.night-finance-banner{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
-.night-card{background:linear-gradient(135deg,#1f1c2e,#110e1a);color:#fff;border-radius:18px;padding:15px;box-shadow:var(--shadow);position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.08)}
-.night-card.month{background:linear-gradient(135deg,#0d382b,#081f18)}
-.night-card-kicker{display:flex;align-items:center;gap:5px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:800;color:#a3e635;margin-bottom:6px}
+.night-finance-banner{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.night-card{background:linear-gradient(135deg,#1c192c,#110e1d);color:#fff;border-radius:16px;padding:12px 13px;box-shadow:0 4px 16px rgba(0,0,0,.08);position:relative;overflow:hidden;border:1px solid rgba(139,114,255,.16);transition:transform .15s ease,box-shadow .15s ease;user-select:none}
+.night-card:active{transform:scale(.98)}
+.night-card.month{background:linear-gradient(135deg,#0c2e23,#071a14);border:1px solid rgba(52,211,153,.22)}
+:root:not([data-theme="dark"]) .night-card{background:linear-gradient(135deg,#faf8ff,#f2eeff);color:#19181f;border:1px solid rgba(117,87,246,.18);box-shadow:0 4px 14px rgba(117,87,246,.06)}
+:root:not([data-theme="dark"]) .night-card.month{background:linear-gradient(135deg,#f2fcf6,#e7f8ee);border:1px solid rgba(63,147,103,.22);box-shadow:0 4px 14px rgba(63,147,103,.06)}
+.night-card-kicker{display:flex;align-items:center;gap:5px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:800;color:#a78bfa;margin-bottom:4px}
+:root:not([data-theme="dark"]) .night-card-kicker{color:#6344e8}
 .night-card.month .night-card-kicker{color:#34d399}
-.night-card-val{font-size:22px;font-weight:800;letter-spacing:-.5px;line-height:1.1;margin-bottom:4px}
-.night-card-sub{font-size:10px;opacity:.78}
+:root:not([data-theme="dark"]) .night-card.month .night-card-kicker{color:#15803d}
+.night-card-val{font-size:19px;font-weight:800;letter-spacing:-.4px;line-height:1.15;margin-bottom:2px}
+.night-card-sub{font-size:9.5px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:root:not([data-theme="dark"]) .night-card-sub{color:var(--muted);opacity:.9}
 
 /* Mobile Delivery Cards */
 .mobile-card-list{display:flex;flex-direction:column;gap:11px}

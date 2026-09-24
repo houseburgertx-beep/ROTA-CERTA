@@ -121,25 +121,10 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
               {isDriver ? <Bike size={24} /> : <Building2 size={24} />}
             </div>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <strong style={{ fontSize: "19px", letterSpacing: "-.5px" }}>
-                  {isDriver ? "Área do Motoboy" : "Área da Loja"}
-                </strong>
-                <span
-                  style={{
-                    fontSize: "9px",
-                    fontWeight: "800",
-                    background: isDriver ? "rgba(124,58,237,.15)" : "rgba(249,115,22,.15)",
-                    color: isDriver ? "#7c3aed" : "#ea580c",
-                    padding: "2px 6px",
-                    borderRadius: "6px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {isDriver ? "🛵 Entregador" : "🏪 Gestão ADM"}
-                </span>
-              </div>
-              <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+              <strong style={{ fontSize: "18px", letterSpacing: "-.4px", display: "block" }}>
+                {isDriver ? "Área do Motoboy" : "Área da Loja"}
+              </strong>
+              <span style={{ fontSize: "11px", color: "var(--muted)", display: "block", marginTop: "2px" }}>
                 {isDriver ? "Rota Certa • Suas Corridas" : "Rota Certa • Painel de Controle"}
               </span>
             </div>
@@ -149,16 +134,17 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "4px",
-              fontSize: "10px",
+              gap: "5px",
+              fontSize: "11px",
               color: "#16a34a",
-              background: "rgba(34,197,94,.12)",
-              padding: "4px 8px",
+              background: "rgba(34,197,94,.1)",
+              padding: "4px 10px",
               borderRadius: "99px",
               fontWeight: 700,
             }}
           >
-            <Flame size={12} /> Firebase
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#22c55e", boxShadow: "0 0 0 3px rgba(34,197,94,.2)" }} />
+            Online
           </div>
         </div>
 

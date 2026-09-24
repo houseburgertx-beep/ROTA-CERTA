@@ -812,24 +812,26 @@ function MobileDeliveryApp({
     <div className="app-shell">
       {/* Top Bar Mobile */}
       <header className="mobile-top-bar">
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div className="brandmark" style={{ width: "34px", height: "34px", borderRadius: "10px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "9px", minWidth: 0, flexShrink: 1 }}>
+          <div className="brandmark" style={{ width: "34px", height: "34px", borderRadius: "10px", flexShrink: 0, background: "linear-gradient(135deg, #7c3aed, #6366f1)", color: "#fff", display: "grid", placeItems: "center", boxShadow: "0 4px 12px rgba(124,58,237,.25)" }}>
             <Route size={18} />
           </div>
-          <div>
-            <b style={{ fontSize: "14px", lineHeight: "1.2", display: "block" }}>Rota Certa</b>
-            <span style={{ fontSize: "9px", color: "var(--muted)", display: "flex", alignItems: "center", gap: "4px" }}>
-              <span className="live-dot" style={{ width: "6px", height: "6px" }} />
-              {currentUser.role === "driver"
-                ? `🛵 Motoboy: ${currentUser.name}`
-                : `🏪 ${currentUser.name} (ADM)`}
+          <div style={{ minWidth: 0, overflow: "hidden" }}>
+            <b style={{ fontSize: "14px", lineHeight: "1.2", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Rota Certa</b>
+            <span style={{ fontSize: "10px", color: "var(--muted)", display: "flex", alignItems: "center", gap: "5px", whiteSpace: "nowrap" }}>
+              <span className="live-dot" style={{ width: "6px", height: "6px", flexShrink: 0 }} />
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                {currentUser.role === "driver"
+                  ? `${currentUser.name.split(" ")[0]} · Online`
+                  : `${currentUser.name} (ADM)`}
+              </span>
             </span>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
           {/* Mode Switcher apenas para Loja (ADM) */}
-          {currentUser.role === "admin" ? (
+          {currentUser.role === "admin" && (
             <div className="mode-toggle">
               <button
                 type="button"
@@ -837,7 +839,7 @@ function MobileDeliveryApp({
                 onClick={() => setAppMode("adm")}
                 title="Modo Loja"
               >
-                <Users size={14} /> Loja
+                <Users size={13} /> Loja
               </button>
               <button
                 type="button"
@@ -845,25 +847,8 @@ function MobileDeliveryApp({
                 onClick={() => setAppMode("motoboy")}
                 title="Ver como Motoboy"
               >
-                <Bike size={14} /> Moto
+                <Bike size={13} /> Moto
               </button>
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                background: "rgba(34,197,94,.12)",
-                color: "#16a34a",
-                padding: "4px 8px",
-                borderRadius: "99px",
-                fontSize: "10px",
-                fontWeight: 800,
-              }}
-            >
-              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#16a34a" }} />
-              Disponível
             </div>
           )}
 
@@ -871,7 +856,7 @@ function MobileDeliveryApp({
           <button
             type="button"
             className="icon-btn theme-toggle"
-            style={{ width: "34px", height: "34px" }}
+            style={{ width: "34px", height: "34px", borderRadius: "10px" }}
             onClick={() => setTheme((v) => (v === "light" ? "dark" : "light"))}
             aria-label="Alternar tema"
           >
@@ -886,14 +871,15 @@ function MobileDeliveryApp({
               display: "flex",
               alignItems: "center",
               gap: "5px",
-              background: "rgba(239,68,68,.12)",
+              background: "rgba(239,68,68,.1)",
               color: "#ef4444",
-              border: "1px solid rgba(239,68,68,.25)",
-              padding: "6px 10px",
-              borderRadius: "8px",
+              border: "1px solid rgba(239,68,68,.22)",
+              padding: "6px 11px",
+              borderRadius: "10px",
               fontSize: "11px",
               fontWeight: 700,
               cursor: "pointer",
+              flexShrink: 0,
             }}
             title="Sair da Conta e Trocar de Usuário"
           >
@@ -960,32 +946,33 @@ function MobileDeliveryApp({
               )}
 
               {/* Quick Actions */}
-              <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "8px", marginBottom: "14px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "12px" }}>
                 <button
                   type="button"
                   className="primary"
-                  style={{ height: "46px", borderRadius: "14px", fontSize: "13px", fontWeight: "800" }}
+                  style={{ height: "40px", borderRadius: "12px", fontSize: "12px", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}
                   onClick={() => setModal("ocr")}
                 >
-                  <Camera size={18} /> Tirar Foto Comanda
+                  <Camera size={16} /> Foto Comanda
                 </button>
                 <button
                   type="button"
                   style={{
-                    height: "46px",
-                    borderRadius: "14px",
+                    height: "40px",
+                    borderRadius: "12px",
                     border: "1px solid var(--line)",
                     background: "var(--surface)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "6px",
-                    fontSize: "13px",
+                    fontSize: "12px",
                     fontWeight: "700",
+                    color: "var(--ink)",
                   }}
                   onClick={() => setActiveTab("mapa")}
                 >
-                  <MapPinned size={17} /> Rota no Mapa
+                  <MapPinned size={16} /> Rota no Mapa
                 </button>
               </div>
 
