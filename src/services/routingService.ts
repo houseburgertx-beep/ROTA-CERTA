@@ -193,3 +193,68 @@ export async function calculateRoute(
   }
   return localRoute(points);
 }
+
+export function formatDistance(meters: number): string {
+  if (meters < 1000) {
+    return `${Math.round(meters)} m`;
+  }
+  return `${(meters / 1000).toFixed(1)} km`;
+}
+
+export function optimizeDeliverySequence<T extends { id: string; latitude?: number; longitude?: number }>(
+  deliveries: T[],
+  startPoint: GeoPoint,
+): {
+  ordered: T[];
+  distancesMeters: Record<string, number>;
+} {
+  const withCoords: T[] = [];
+  const withoutCoords: T[] = [];
+
+  for (const d of deliveries) {
+    if (
+      typeof d.latitude === "number" &&
+      typeof d.longitude === "number" &&
+      !isNaN(d.latitude) &&
+      !isNaN(d.longitude)
+    ) {
+      withCoords.push(d);
+    } else {
+      withoutCoords.push(d);
+    }
+  }
+
+  const ordered: T[] = [];
+  const distancesMeters: Record<string, number> = {};
+  const pending = [...withCoords];
+  let current: GeoPoint = startPoint;
+
+  while (pending.length > 0) {
+    let bestIdx = 0;
+    let minDistance = haversine(current, {
+      latitude: pending[0].latitude!,
+      longitude: pending[0].longitude!,
+    });
+
+    for (let i = 1; i < pending.length; i++) {
+      const dist = haversine(current, {
+        latitude: pending[i].latitude!,
+        longitude: pending[i].longitude!,
+      });
+      if (dist < minDistance) {
+        minDistance = dist;
+        bestIdx = i;
+      }
+    }
+
+    const chosen = pending.splice(bestIdx, 1)[0];
+    distancesMeters[chosen.id] = Math.round(minDistance);
+    ordered.push(chosen);
+    current = { latitude: chosen.latitude!, longitude: chosen.longitude! };
+  }
+
+  return {
+    ordered: [...ordered, ...withoutCoords],
+    distancesMeters,
+  };
+}

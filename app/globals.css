@@ -506,6 +506,148 @@ main{min-height:100vh;margin-left:242px}header{height:78px;position:sticky;top:0
   display: block;
 }
 
+/* ===== FUNÇÃO 1: CHEGUEI NO PORTÃO (WHATSAPP 1-TOQUE) ===== */
+.btn-arrived-whatsapp {
+  width: 100%;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #25d366, #128c7e);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  text-decoration: none !important;
+  cursor: pointer;
+  box-shadow: 0 3px 12px rgba(37, 211, 102, 0.28);
+  transition: all 0.16s ease;
+  user-select: none;
+}
+.btn-arrived-whatsapp:active {
+  transform: scale(0.98);
+  filter: brightness(0.95);
+}
+
+/* Sequence Stop Badge on Card */
+.stop-sequence-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(99, 102, 241, 0.15));
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  letter-spacing: -0.2px;
+}
+
+/* ===== FUNÇÃO 7: SEQUÊNCIA DE ENTREGA INTELIGENTE (HERO WIDGET) ===== */
+.smart-route-hero-card {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 12%, var(--surface)), var(--surface));
+  border: 1.5px solid color-mix(in srgb, var(--primary) 35%, var(--line));
+  border-radius: 18px;
+  padding: 13px 15px;
+  margin-bottom: 12px;
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.smart-route-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.smart-route-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--primary);
+  letter-spacing: 0.04em;
+}
+.smart-route-dist {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 2px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+}
+.smart-route-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.smart-route-customer b {
+  font-size: 14.5px;
+  color: var(--ink);
+  display: block;
+  letter-spacing: -0.3px;
+}
+.smart-route-customer span {
+  font-size: 11.5px;
+  color: var(--muted);
+  display: block;
+  margin-top: 2px;
+}
+.smart-route-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+  gap: 6px;
+  margin-top: 2px;
+}
+.btn-smart-nav {
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none !important;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.btn-smart-nav.waze {
+  background: #33ccff;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(51, 204, 255, 0.3);
+}
+.btn-smart-nav.maps {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+.btn-smart-deliver {
+  height: 36px;
+  border-radius: 10px;
+  border: 0;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.btn-smart-deliver:active, .btn-smart-nav:active {
+  transform: scale(0.96);
+}
+
 /* Profile Bottom Sheet (iOS/Android Native) */
 .app-sheet-backdrop {
   position: fixed;
@@ -622,7 +764,7 @@ main{min-height:100vh;margin-left:242px}header{height:78px;position:sticky;top:0
 
 /* Card Header */
 .delivery-card-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.delivery-card-header-left{display:flex;align-items:center;gap:7px;min-width:0}
+.delivery-card-header-left{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
 .delivery-card-header-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
 .order-num-badge{font-size:14px;font-weight:800;color:var(--ink);letter-spacing:-.3px}
 .platform-pill{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:.04em;display:inline-flex;align-items:center}

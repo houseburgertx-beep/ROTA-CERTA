@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
+  Compass,
   Copy,
   ExternalLink,
   LogOut,
@@ -44,7 +45,11 @@ import {
   geocode,
   geocodeDeliveryAddress,
 } from "../src/services/geocodingService";
-import { calculateRoute } from "../src/services/routingService";
+import {
+  calculateRoute,
+  formatDistance,
+  optimizeDeliverySequence,
+} from "../src/services/routingService";
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from "../src/services/mapProviders";
 import type { Delivery, DeliveryPriority, DeliveryStatus, Driver, GeoPoint, OrderItem, RouteResult, User } from "../src/types";
 import { useAuth } from "../src/hooks/useAuth";
@@ -658,9 +663,47 @@ function MobileDeliveryApp({
     return scopedDeliveries.filter((d) => isDeliveryDone(d.status));
   }, [scopedDeliveries]);
 
+  // Sequenciamento Inteligente de Entregas & Próxima Parada (Função 7)
+  const [driverGps, setDriverGps] = useState<GeoPoint | null>(null);
+
+  useEffect(() => {
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setDriverGps({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+        () => {},
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+      );
+    }
+  }, []);
+
+  const routeOrigin: GeoPoint = useMemo(() => {
+    if (driverGps) return driverGps;
+    return { latitude: STORE_POINT.latitude, longitude: STORE_POINT.longitude };
+  }, [driverGps]);
+
+  const { optimizedActiveDeliveries, deliveryDistances } = useMemo(() => {
+    const res = optimizeDeliverySequence(activeDeliveries, routeOrigin);
+    return {
+      optimizedActiveDeliveries: res.ordered,
+      deliveryDistances: res.distancesMeters,
+    };
+  }, [activeDeliveries, routeOrigin]);
+
+  const stopNumberMap = useMemo(() => {
+    const map = new Map<string, number>();
+    optimizedActiveDeliveries.forEach((d, idx) => {
+      map.set(d.id, idx + 1);
+    });
+    return map;
+  }, [optimizedActiveDeliveries]);
+
+  const nextDelivery = useMemo(() => {
+    return optimizedActiveDeliveries.length > 0 ? optimizedActiveDeliveries[0] : null;
+  }, [optimizedActiveDeliveries]);
+
   // Lista filtrada para exibição (separa Atribuídos Agora vs Já Entregues)
   const filteredDeliveries = useMemo(() => {
-    const base = deliveryTabMode === "active" ? activeDeliveries : completedDeliveries;
+    const base = deliveryTabMode === "active" ? optimizedActiveDeliveries : completedDeliveries;
     return base.filter((d) => {
       if (statusFilter !== "Todas" && d.status !== statusFilter) return false;
       if (!query.trim()) return true;
@@ -668,7 +711,7 @@ function MobileDeliveryApp({
         .toLowerCase()
         .includes(query.toLowerCase());
     });
-  }, [deliveryTabMode, activeDeliveries, completedDeliveries, statusFilter, query]);
+  }, [deliveryTabMode, optimizedActiveDeliveries, completedDeliveries, statusFilter, query]);
 
   const toggleDeliverySelection = (id: string) => {
     setSelectedForRouteIds((prev) =>
@@ -1233,34 +1276,95 @@ function MobileDeliveryApp({
                     </div>
                   )
                 ) : (
-                  filteredDeliveries.map((d) => (
-                    <MobileDeliveryCard
-                      key={d.id}
-                      delivery={d}
-                      onMarkDelivered={() => markAsDelivered(d.id)}
-                      onUpdateStatus={(st) => updateStatus(d.id, st)}
-                      onRemove={() => removeDelivery(d.id)}
-                      isAdm={appMode === "adm"}
-                      drivers={drivers}
-                      showSelectCheckbox={deliveryTabMode === "active"}
-                      selected={selectedForRouteIds.includes(d.id)}
-                      onToggleSelect={() => toggleDeliverySelection(d.id)}
-                      onOpenIfoodConfirm={() => setIfoodConfirmDelivery(d)}
-                      onAssignDriver={(driverId) => {
-                        const drv = drivers.find((x) => x.id === driverId);
-                        const driverName = drv ? drv.name : "Não atribuído";
-                        setDeliveries((prev) =>
-                          prev.map((item) =>
-                            item.id === d.id
-                              ? { ...item, driverId, driver: driverName }
-                              : item,
-                          ),
-                        );
-                        void updateDeliveryRTDB(d.id, { driverId, driver: driverName });
-                        notify(`🛵 Entrega atribuída a ${driverName}`);
-                      }}
-                    />
-                  ))
+                  <>
+                    {deliveryTabMode === "active" && nextDelivery && (
+                      <div className="smart-route-hero-card">
+                        <div className="smart-route-header">
+                          <div className="smart-route-badge">
+                            <Compass size={14} />
+                            <span>Próxima Parada (1ª de {activeDeliveries.length})</span>
+                          </div>
+                          {deliveryDistances[nextDelivery.id] !== undefined && (
+                            <span className="smart-route-dist">
+                              ~{formatDistance(deliveryDistances[nextDelivery.id])}
+                            </span>
+                          )}
+                        </div>
+                        <div className="smart-route-body">
+                          <div className="smart-route-customer">
+                            <b>{nextDelivery.customer} • Pedido #{nextDelivery.order}</b>
+                            <span>{nextDelivery.address}{nextDelivery.district ? ` · ${nextDelivery.district}` : ""}</span>
+                          </div>
+                        </div>
+                        <div className="smart-route-actions">
+                          <a
+                            href={
+                              nextDelivery.latitude && nextDelivery.longitude
+                                ? `https://waze.com/ul?ll=${nextDelivery.latitude},${nextDelivery.longitude}&navigate=yes`
+                                : `https://waze.com/ul?q=${encodeURIComponent(`${nextDelivery.address}, ${nextDelivery.district}`)}&navigate=yes`
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-smart-nav waze"
+                            title="Navegar no Waze"
+                          >
+                            Waze
+                          </a>
+                          <a
+                            href={
+                              nextDelivery.latitude && nextDelivery.longitude
+                                ? `https://www.google.com/maps/dir/?api=1&destination=${nextDelivery.latitude},${nextDelivery.longitude}&travelmode=driving`
+                                : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${nextDelivery.address}, ${nextDelivery.district}`)}&travelmode=driving`
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-smart-nav maps"
+                            title="Navegar no Google Maps"
+                          >
+                            Maps
+                          </a>
+                          <button
+                            type="button"
+                            className="btn-smart-deliver"
+                            onClick={() => markAsDelivered(nextDelivery.id)}
+                            title="Concluir primeira entrega"
+                          >
+                            <CheckCircle2 size={14} /> Concluir
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {filteredDeliveries.map((d) => (
+                      <MobileDeliveryCard
+                        key={d.id}
+                        delivery={d}
+                        stopNumber={stopNumberMap.get(d.id)}
+                        onMarkDelivered={() => markAsDelivered(d.id)}
+                        onUpdateStatus={(st) => updateStatus(d.id, st)}
+                        onRemove={() => removeDelivery(d.id)}
+                        isAdm={appMode === "adm"}
+                        drivers={drivers}
+                        showSelectCheckbox={deliveryTabMode === "active"}
+                        selected={selectedForRouteIds.includes(d.id)}
+                        onToggleSelect={() => toggleDeliverySelection(d.id)}
+                        onOpenIfoodConfirm={() => setIfoodConfirmDelivery(d)}
+                        onAssignDriver={(driverId) => {
+                          const drv = drivers.find((x) => x.id === driverId);
+                          const driverName = drv ? drv.name : "Não atribuído";
+                          setDeliveries((prev) =>
+                            prev.map((item) =>
+                              item.id === d.id
+                                ? { ...item, driverId, driver: driverName }
+                                : item,
+                            ),
+                          );
+                          void updateDeliveryRTDB(d.id, { driverId, driver: driverName });
+                          notify(`🛵 Entrega atribuída a ${driverName}`);
+                        }}
+                      />
+                    ))}
+                  </>
                 )}
               </div>
 
@@ -1631,6 +1735,7 @@ function MobileDeliveryCard({
   onToggleSelect,
   showSelectCheckbox = false,
   onOpenIfoodConfirm,
+  stopNumber,
 }: {
   delivery: Delivery;
   onMarkDelivered: () => void;
@@ -1643,13 +1748,27 @@ function MobileDeliveryCard({
   onToggleSelect?: () => void;
   showSelectCheckbox?: boolean;
   onOpenIfoodConfirm?: () => void;
+  stopNumber?: number;
 }) {
   const [showItemsDetail, setShowItemsDetail] = useState(false);
   const isDelivered = delivery.status === "Entregue" || (delivery.status as string) === "delivered";
-  const cleanPhone = delivery.phone.replace(/\D/g, "");
-  const whatsappUrl = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(
-    `Olá ${delivery.customer}! Sou o motoboy do seu pedido ${delivery.order}. Já estou a caminho do endereço: ${delivery.address}.`,
-  )}`;
+  const rawPhone = delivery.phone.replace(/\D/g, "");
+  const cleanPhone =
+    rawPhone.length >= 12 && rawPhone.startsWith("55")
+      ? rawPhone
+      : rawPhone
+        ? `55${rawPhone}`
+        : "";
+  const whatsappUrl = cleanPhone
+    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+        `Olá ${delivery.customer}! Sou o motoboy do seu pedido ${delivery.order}. Já estou a caminho do endereço: ${delivery.address}.`,
+      )}`
+    : "";
+  const whatsappArrivedUrl = cleanPhone
+    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
+        `Olá ${delivery.customer}! Sou o motoboy com seu pedido #${delivery.order}. Já cheguei no seu endereço e estou no portão te aguardando! 🛵💨 Pode retirar, por favor? Obrigado!`,
+      )}`
+    : "";
   const mapsUrl = delivery.latitude && delivery.longitude
     ? `https://www.google.com/maps/dir/?api=1&destination=${delivery.latitude},${delivery.longitude}&travelmode=driving`
     : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${delivery.address}, ${delivery.district}, ${delivery.city || ""}`)}&travelmode=driving`;
@@ -1680,6 +1799,11 @@ function MobileDeliveryCard({
             >
               {selected && <Check size={14} strokeWidth={3} />}
             </button>
+          )}
+          {stopNumber !== undefined && !isDelivered && (
+            <span className="stop-sequence-badge" title={`Parada #${stopNumber} da rota otimizada`}>
+              <Bike size={11} /> {stopNumber}ª Parada
+            </span>
           )}
           <span className="order-num-badge">{delivery.order}</span>
           {delivery.platform === "ifood" && (
@@ -1860,6 +1984,19 @@ function MobileDeliveryCard({
               Reabrir
             </button>
           </div>
+        )}
+
+        {!isDelivered && cleanPhone && (
+          <a
+            href={whatsappArrivedUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-arrived-whatsapp"
+            title="Avisar cliente no WhatsApp que já chegou no portão"
+          >
+            <Bike size={15} />
+            <span>🛵 Cheguei no Portão! (Avisar Cliente)</span>
+          </a>
         )}
 
         <div className="delivery-tools-row">
