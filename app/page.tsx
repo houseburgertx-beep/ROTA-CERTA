@@ -255,7 +255,22 @@ function MobileDeliveryApp({
   const [modal, setModal] = useState<"new" | "ocr" | "driver" | null>(null);
   const [ocrData, setOcrData] = useState<Record<string, string> | null>(null);
   const [toast, setToast] = useState("");
-  const [mapProvider, setMapProvider] = useState<MapTileProvider>("carto");
+  const [mapProvider, setMapProvider] = useState<MapTileProvider>(() => {
+    try {
+      if (typeof localStorage !== "undefined") {
+        const saved = localStorage.getItem("rotacerta_map_provider") as MapTileProvider;
+        if (saved && saved !== "carto" && saved in MAP_TILE_PROVIDERS) return saved;
+      }
+    } catch {}
+    return "osm";
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("rotacerta_map_provider", mapProvider);
+    } catch {}
+  }, [mapProvider]);
+
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     typeof localStorage !== "undefined" && localStorage.getItem("rotacerta_theme") === "dark" ? "dark" : "light",
   );
@@ -889,7 +904,7 @@ function MobileDeliveryApp({
       </header>
 
       {/* Main View Area */}
-      <main style={{ paddingBottom: "82px" }}>
+      <main style={{ paddingBottom: "calc(90px + env(safe-area-inset-bottom, 16px))" }}>
         <div className="content" style={{ padding: "14px 14px 20px" }}>
           {/* TAB 1: ENTREGAS */}
           {activeTab === "entregas" && (
@@ -1378,17 +1393,26 @@ function MobileDeliveryApp({
           type="button"
           className={activeTab === "entregas" ? "active" : ""}
           onClick={() => setActiveTab("entregas")}
+          title="Ver entregas"
         >
-          <Package size={20} />
-          <span>{currentUser.role === "driver" ? "Minhas Entregas" : "Pedidos"}</span>
+          <div className="nav-icon-container">
+            {currentUser.role === "driver" ? <Bike size={20} /> : <Package size={20} />}
+            {activeDeliveries.length > 0 && (
+              <span className="nav-badge-pill">{activeDeliveries.length}</span>
+            )}
+          </div>
+          <span>{currentUser.role === "driver" ? "Entregas" : "Pedidos"}</span>
         </button>
 
         <button
           type="button"
           className={activeTab === "mapa" ? "active" : ""}
           onClick={() => setActiveTab("mapa")}
+          title="Ver rota no mapa"
         >
-          <MapPinned size={20} />
+          <div className="nav-icon-container">
+            <Route size={20} />
+          </div>
           <span>{currentUser.role === "driver" ? "Mapa Rota" : "Mapa Geral"}</span>
         </button>
 
@@ -1396,32 +1420,24 @@ function MobileDeliveryApp({
           type="button"
           className={activeTab === "comanda" ? "active" : ""}
           onClick={() => setActiveTab("comanda")}
-          style={{ transform: "translateY(-4px)" }}
+          title="Ler comanda pela foto"
         >
-          <div
-            style={{
-              width: "44px",
-              height: "44px",
-              borderRadius: "50%",
-              background: currentUser.role === "driver" ? "linear-gradient(135deg, #7c3aed 0%, #6366f1 100%)" : "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
-              color: "#fff",
-              display: "grid",
-              placeItems: "center",
-              boxShadow: currentUser.role === "driver" ? "0 6px 18px rgba(124,58,237,.38)" : "0 6px 18px rgba(249,115,22,.38)",
-            }}
-          >
-            <Camera size={22} />
+          <div className="nav-icon-container">
+            <Camera size={20} />
           </div>
-          <span style={{ fontWeight: "800", color: currentUser.role === "driver" ? "#7c3aed" : "#ea580c", marginTop: "2px" }}>Foto</span>
+          <span>Comanda</span>
         </button>
 
         <button
           type="button"
           className={activeTab === "financeiro" ? "active" : ""}
           onClick={() => setActiveTab("financeiro")}
+          title="Ver faturamento e taxas"
         >
-          <CircleDollarSign size={20} />
-          <span>{currentUser.role === "driver" ? "Meus Ganhos" : "Financeiro"}</span>
+          <div className="nav-icon-container">
+            <CircleDollarSign size={20} />
+          </div>
+          <span>{currentUser.role === "driver" ? "Ganhos" : "Financeiro"}</span>
         </button>
 
         {currentUser.role === "admin" && (
@@ -1429,8 +1445,11 @@ function MobileDeliveryApp({
             type="button"
             className={activeTab === "adm" || activeTab === "config" ? "active" : ""}
             onClick={() => setActiveTab("adm")}
+            title="Gestão de equipe e motoboys"
           >
-            <Users size={20} />
+            <div className="nav-icon-container">
+              <Users size={20} />
+            </div>
             <span>Equipe</span>
           </button>
         )}
@@ -2156,14 +2175,14 @@ function FreeMapInternal({
       if (!active || !element.current) return;
       map.current?.remove();
 
-      const instance = L.map(element.current, { zoomControl: false }).setView(
+      const instance = L.map(element.current, { zoomControl: false, attributionControl: false }).setView(
         [STORE_POINT.latitude, STORE_POINT.longitude],
         14,
       );
       map.current = instance;
 
-      const tile = MAP_TILE_PROVIDERS[mapProvider];
-      L.tileLayer(tile.url, { attribution: tile.attribution, maxZoom: tile.maxZoom }).addTo(instance);
+      const tile = MAP_TILE_PROVIDERS[mapProvider] || MAP_TILE_PROVIDERS.osm;
+      L.tileLayer(tile.url, { maxZoom: tile.maxZoom }).addTo(instance);
 
       // Store Point (Start)
       L.circleMarker([STORE_POINT.latitude, STORE_POINT.longitude], {

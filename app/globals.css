@@ -267,4 +267,141 @@ main{min-height:100vh;margin-left:242px}header{height:78px;position:sticky;top:0
   background: #6d28d9;
 }
 
+/* ===== MODERN NATIVE-GRADE BOTTOM NAVIGATION ===== */
+.bottom-nav {
+  position: fixed;
+  z-index: 700;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 66px;
+  padding: 4px 8px calc(4px + env(safe-area-inset-bottom, 12px));
+  display: flex !important;
+  align-items: center;
+  justify-content: space-around;
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
+}
+
+:root[data-theme="dark"] .bottom-nav {
+  background: rgba(18, 16, 26, 0.95);
+  border-top-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.4);
+}
+
+@media (min-width: 761px) {
+  .bottom-nav {
+    max-width: 480px;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    border-radius: 20px 20px 0 0;
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.15);
+  }
+}
+
+.bottom-nav button {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 3px 2px;
+  border-radius: 12px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-nav button .nav-icon-container {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 28px;
+  border-radius: 14px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bottom-nav button.active .nav-icon-container {
+  background: var(--primary-soft);
+  color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.bottom-nav button.active {
+  color: var(--primary);
+}
+
+.bottom-nav button span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  line-height: 1.1;
+  transition: color 0.15s ease, font-weight 0.15s ease;
+}
+
+.bottom-nav button.active span {
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.nav-badge-pill {
+  position: absolute;
+  top: -3px;
+  right: 4px;
+  min-width: 17px;
+  height: 17px;
+  border-radius: 99px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  padding: 0 4px;
+  border: 2px solid var(--surface);
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.4);
+  animation: pulse-badge 1.8s infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+/* Leaflet Attribution Cleanup for Mobile */
+.leaflet-control-attribution {
+  font-size: 8px !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(4px);
+  padding: 1px 6px !important;
+  border-radius: 6px !important;
+  margin: 4px !important;
+  max-width: 60vw !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+:root[data-theme="dark"] .leaflet-control-attribution {
+  background: rgba(20, 16, 30, 0.7) !important;
+  color: #aaa !important;
+}
+:root[data-theme="dark"] .leaflet-control-attribution a {
+  color: #c4b5fd !important;
+}
+
+
 
