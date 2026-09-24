@@ -970,23 +970,50 @@ export function mapTakeatSessionToDelivery(
   const state = addressObj?.state || "BA";
   const postalCode = addressObj?.zip_code || "";
 
-  // Telefone do comprador
-  const phone = buyer?.phone || "";
+  // Telefone do comprador (tenta buyer, delivery_address, session ou notas)
+  let rawPhoneCandidate =
+    buyer?.phone ||
+    (session as unknown as Record<string, string>).phone ||
+    (addressObj as unknown as Record<string, string>)?.phone ||
+    "";
+  if (!rawPhoneCandidate || rawPhoneCandidate.replace(/\D/g, "").startsWith("00")) {
+    const noteMatch = `${String(rawSession.notes || "")} ${String(rawSession.client_notes || "")}`.match(
+      /(?:(?:wa\.me\/|zap|whats|tel|cel|contato|fone)?\s*\(?(\d{2})\)?\s*)?(\d{4,5}[-\s]?\d{4})/i
+    );
+    rawPhoneCandidate = noteMatch ? noteMatch[0] : "";
+  }
+  const phone = rawPhoneCandidate;
 
   // Nome do cliente
   const customer = buyer?.name || "Cliente Takeat";
 
+  // Método de pagamento
+  const paymentMethodRaw =
+    session.payments?.[0]?.payment_method?.name ||
+    (session.payments?.[0] as unknown as Record<string, string>)?.name ||
+    "";
+
+  const allNotes = `${String(rawSession.notes || "")} ${String(rawSession.client_notes || "")} ${String(rawSession.description || "")}`.toLowerCase();
+  const paymentLower = paymentMethodRaw.toLowerCase();
+
   // Identificador iFood se houver
   const isIfood =
     Boolean(session.ifood_document) ||
+    paymentLower.includes("ifood") ||
+    allNotes.includes("ifood") ||
+    String(rawSession.channel || "").toLowerCase().includes("ifood") ||
+    String(rawSession.origin || "").toLowerCase().includes("ifood") ||
     session.bills?.some((b) =>
-      b.order_baskets?.some((ob) => ob.channel?.toLowerCase().includes("ifood"))
+      b.order_baskets?.some((ob) => String(ob.channel || "").toLowerCase().includes("ifood"))
+    ) ||
+    session.payments?.some((p) =>
+      String(p.payment_method?.name || (p as unknown as Record<string, string>).name || "").toLowerCase().includes("ifood")
     );
 
   const ifoodId =
     session.ifood_document ||
     session.bills?.[0]?.order_baskets?.[0]?.basket_id ||
-    (session.attendance_password ? `#${session.attendance_password}` : undefined);
+    (isIfood && session.attendance_password ? `#${session.attendance_password}` : undefined);
 
   const pickupCode = session.attendance_password || undefined;
 
@@ -996,10 +1023,8 @@ export function mapTakeatSessionToDelivery(
     session.delivery_tax_price || session.total_delivery_price || "7.00"
   );
 
-  // Método de pagamento
   const paymentMethod =
-    session.payments?.[0]?.payment_method?.name ||
-    (isIfood ? "Pago Online (iFood)" : "A Cobrar na Entrega");
+    paymentMethodRaw || (isIfood ? "Pagamento Online iFood" : "A Cobrar na Entrega");
 
   // Status da sessão Takeat mapeado para o Rota Certa
   let status: Delivery["status"] = "Aguardando";
@@ -1202,11 +1227,14 @@ export async function syncTakeatDeliveries(
     return { deliveries: existingDeliveries, addedCount: 0, updatedCount: 0 };
   }
 
+  const isReliablePlatformId = (id?: string) =>
+    Boolean(id && id.length > 6 && !/^#?\d{1,4}$/.test(id));
+
   const existingMap = new Map<string, Delivery>();
   for (const d of existingDeliveries) {
     existingMap.set(d.id, d);
-    if (d.platformOrderId) {
-      existingMap.set(d.platformOrderId, d);
+    if (isReliablePlatformId(d.platformOrderId)) {
+      existingMap.set(d.platformOrderId!, d);
     }
   }
 
@@ -1221,7 +1249,7 @@ export async function syncTakeatDeliveries(
 
     const existing =
       existingMap.get(takeatId) ||
-      (mapped.platformOrderId ? existingMap.get(mapped.platformOrderId) : undefined);
+      (isReliablePlatformId(mapped.platformOrderId) ? existingMap.get(mapped.platformOrderId!) : undefined);
 
     if (existing) {
       let changed = false;

@@ -15,6 +15,7 @@ import {
   LogOut,
   MapPin,
   MapPinned,
+  MessageSquare,
   Moon,
   Navigation,
   Package,
@@ -84,7 +85,9 @@ import {
 import {
   calculateFinancialStats,
   getDriversEarningsSummary,
+  isSameShiftOrToday,
 } from "../src/services/financialService";
+import { sanitizeWhatsAppNumber } from "../src/services/phoneService";
 import {
   getTakeatCredentials,
   setTakeatCredentials,
@@ -656,7 +659,9 @@ function MobileDeliveryApp({
   };
 
   const activeDeliveries = useMemo(() => {
-    return scopedDeliveries.filter((d) => !isDeliveryDone(d.status));
+    return scopedDeliveries.filter(
+      (d) => !isDeliveryDone(d.status) && isSameShiftOrToday(d.createdAt || d.time)
+    );
   }, [scopedDeliveries]);
 
   const completedDeliveries = useMemo(() => {
@@ -779,6 +784,18 @@ function MobileDeliveryApp({
       });
     } catch (e) {
       console.warn("Erro ao atualizar status da entrega no RTDB:", e);
+    }
+  }
+
+  async function updateDeliveryPhone(deliveryId: string, phone: string) {
+    setDeliveries((prev) =>
+      prev.map((d) => (d.id === deliveryId ? { ...d, phone } : d))
+    );
+    try {
+      await updateDeliveryRTDB(deliveryId, { phone });
+      notify("📱 Telefone WhatsApp atualizado com sucesso!");
+    } catch (e) {
+      console.warn("Erro ao atualizar telefone no RTDB:", e);
     }
   }
 
@@ -1349,6 +1366,7 @@ function MobileDeliveryApp({
                         selected={selectedForRouteIds.includes(d.id)}
                         onToggleSelect={() => toggleDeliverySelection(d.id)}
                         onOpenIfoodConfirm={() => setIfoodConfirmDelivery(d)}
+                        onUpdatePhone={(phone) => updateDeliveryPhone(d.id, phone)}
                         onAssignDriver={(driverId) => {
                           const drv = drivers.find((x) => x.id === driverId);
                           const driverName = drv ? drv.name : "Não atribuído";
@@ -1736,6 +1754,7 @@ function MobileDeliveryCard({
   showSelectCheckbox = false,
   onOpenIfoodConfirm,
   stopNumber,
+  onUpdatePhone,
 }: {
   delivery: Delivery;
   onMarkDelivered: () => void;
@@ -1749,26 +1768,38 @@ function MobileDeliveryCard({
   showSelectCheckbox?: boolean;
   onOpenIfoodConfirm?: () => void;
   stopNumber?: number;
+  onUpdatePhone?: (phone: string) => void;
 }) {
   const [showItemsDetail, setShowItemsDetail] = useState(false);
   const isDelivered = delivery.status === "Entregue" || (delivery.status as string) === "delivered";
-  const rawPhone = delivery.phone.replace(/\D/g, "");
-  const cleanPhone =
-    rawPhone.length >= 12 && rawPhone.startsWith("55")
-      ? rawPhone
-      : rawPhone
-        ? `55${rawPhone}`
-        : "";
-  const whatsappUrl = cleanPhone
-    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-        `Olá ${delivery.customer}! Sou o motoboy do seu pedido ${delivery.order}. Já estou a caminho do endereço: ${delivery.address}.`,
+
+  // Validação e sanitização inteligente de WhatsApp (sem zeros falsos, sem duplicar 55)
+  const validWhatsApp = sanitizeWhatsAppNumber(delivery.phone, delivery.notes);
+
+  const whatsappUrl = validWhatsApp
+    ? `https://wa.me/${validWhatsApp}?text=${encodeURIComponent(
+        `Olá ${delivery.customer}! Sou o motoboy com seu pedido #${delivery.order}. Já estou a caminho do seu endereço: ${delivery.address}.`,
       )}`
-    : "";
-  const whatsappArrivedUrl = cleanPhone
-    ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-        `Olá ${delivery.customer}! Sou o motoboy com seu pedido #${delivery.order}. Já cheguei no seu endereço e estou no portão te aguardando! 🛵💨 Pode retirar, por favor? Obrigado!`,
+    : null;
+
+  const whatsappArrivedUrl = validWhatsApp
+    ? `https://wa.me/${validWhatsApp}?text=${encodeURIComponent(
+        `Olá ${delivery.customer}! Sou o motoboy com seu pedido #${delivery.order}. Já cheguei no seu endereço e estou no portão te aguardando! Pode retirar, por favor? Obrigado!`,
       )}`
-    : "";
+    : null;
+
+  const handlePromptPhone = () => {
+    const input = window.prompt(
+      `Digite o WhatsApp do cliente ${delivery.customer} (com DDD, ex: 73999998888):`
+    );
+    if (!input) return;
+    const sanitized = sanitizeWhatsAppNumber(input);
+    if (!sanitized) {
+      alert("Número inválido! Digite com DDD (ex: 73999998888).");
+      return;
+    }
+    onUpdatePhone?.(sanitized);
+  };
   const mapsUrl = delivery.latitude && delivery.longitude
     ? `https://www.google.com/maps/dir/?api=1&destination=${delivery.latitude},${delivery.longitude}&travelmode=driving`
     : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${delivery.address}, ${delivery.district}, ${delivery.city || ""}`)}&travelmode=driving`;
@@ -1986,38 +2017,55 @@ function MobileDeliveryCard({
           </div>
         )}
 
-        {!isDelivered && cleanPhone && (
+        {!isDelivered && validWhatsApp && (
           <a
-            href={whatsappArrivedUrl}
+            href={whatsappArrivedUrl!}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-arrived-whatsapp"
             title="Avisar cliente no WhatsApp que já chegou no portão"
           >
-            <Bike size={15} />
-            <span>🛵 Cheguei no Portão! (Avisar Cliente)</span>
+            <MessageSquare size={16} />
+            <span>Cheguei no Portão (Avisar no WhatsApp)</span>
           </a>
         )}
 
+        {!isDelivered && !validWhatsApp && (
+          <div className="no-phone-action-box">
+            <span className="no-phone-tag">
+              <ShieldCheck size={13} /> {delivery.platform === "ifood" ? "WhatsApp oculto pelo iFood" : "Sem WhatsApp cadastrado"}
+            </span>
+            <button
+              type="button"
+              className="btn-add-phone-chip"
+              onClick={handlePromptPhone}
+              title="Informar telefone da comanda impressa"
+            >
+              <Pencil size={11} /> Digitar WhatsApp
+            </button>
+          </div>
+        )}
+
         <div className="delivery-tools-row">
-          {cleanPhone ? (
+          {validWhatsApp ? (
             <a
-              href={whatsappUrl}
+              href={whatsappUrl!}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-tool-action wa"
               title="Chamar no WhatsApp"
             >
-              <Phone size={13} /> WhatsApp
+              <MessageSquare size={13} /> WhatsApp
             </a>
           ) : (
-            <a
-              href={`tel:${delivery.phone}`}
-              className="btn-tool-action wa"
-              title="Ligar para cliente"
+            <button
+              type="button"
+              className="btn-tool-action wa is-disabled"
+              onClick={handlePromptPhone}
+              title="Informar número de WhatsApp"
             >
-              <Phone size={13} /> Ligar
-            </a>
+              <MessageSquare size={13} /> Sem WhatsApp
+            </button>
           )}
 
           <a

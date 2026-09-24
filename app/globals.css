@@ -530,6 +530,45 @@ main{min-height:100vh;margin-left:242px}header{height:78px;position:sticky;top:0
   filter: brightness(0.95);
 }
 
+.no-phone-action-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px dashed var(--line);
+  padding: 8px 12px;
+  border-radius: 10px;
+}
+.no-phone-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.btn-add-phone-chip {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-add-phone-chip:active {
+  transform: scale(0.96);
+}
+.btn-tool-action.is-disabled {
+  opacity: 0.55;
+  cursor: pointer;
+}
+
 /* Sequence Stop Badge on Card */
 .stop-sequence-badge {
   font-size: 10px;
