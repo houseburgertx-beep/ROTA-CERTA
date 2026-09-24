@@ -20,35 +20,24 @@ export interface DeliveryItemForFinance {
  * Em entregas de delivery, o turno da noite normalmente vai das 17h até as 04h do dia seguinte.
  */
 export function isSameShiftOrToday(dateStr?: string): boolean {
-  if (!dateStr) return true; // se não tem data explícita, assume data corrente
+  if (!dateStr) return false;
   const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return true;
+  if (isNaN(date.getTime())) return false;
 
   const now = new Date();
-  // Se for o mesmo dia do calendário:
-  if (
-    date.getDate() === now.getDate() &&
-    date.getMonth() === now.getMonth() &&
-    date.getFullYear() === now.getFullYear()
-  ) {
-    return true;
-  }
 
-  // Se for madrugada (antes das 06:00) e a entrega foi ontem após as 18:00
-  if (now.getHours() < 6) {
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    if (
-      date.getDate() === yesterday.getDate() &&
-      date.getMonth() === yesterday.getMonth() &&
-      date.getFullYear() === yesterday.getFullYear() &&
-      date.getHours() >= 17
-    ) {
-      return true;
+  // Em operações de delivery e hamburguerias, o dia operacional/turno começa às 06:00
+  // e se estende até as 05:59 da manhã seguinte.
+  // Entregas feitas na madrugada (00:00 às 05:59) pertencem ao turno da noite anterior.
+  const getShiftDateKey = (d: Date) => {
+    const shift = new Date(d);
+    if (shift.getHours() < 6) {
+      shift.setDate(shift.getDate() - 1);
     }
-  }
+    return `${shift.getFullYear()}-${shift.getMonth()}-${shift.getDate()}`;
+  };
 
-  return false;
+  return getShiftDateKey(date) === getShiftDateKey(now);
 }
 
 /**
