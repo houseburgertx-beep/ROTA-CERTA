@@ -1,5 +1,5 @@
 import type { Delivery, Driver, OrderItem } from "../types";
-import { saveTakeatConfigRTDB } from "./realtimeDbService";
+import { saveTakeatConfigRTDB, saveDriverRTDB, getDriversRTDB } from "./realtimeDbService";
 
 export interface TakeatBuyerAddress {
   country?: string;
@@ -579,6 +579,65 @@ export async function fetchTakeatMotoboys(apiKey?: string): Promise<TakeatMotobo
 }
 
 /**
+ * Puxa todos os motoboys cadastrados no Takeat e sincroniza diretamente no Firebase RTDB.
+ */
+export async function syncTakeatMotoboysToRTDB(apiKey?: string): Promise<Driver[]> {
+  try {
+    const list = await fetchTakeatMotoboys(apiKey);
+    if (!list.length) return [];
+
+    const existingDrivers = await getDriversRTDB();
+    const updatedDrivers: Driver[] = [...existingDrivers];
+
+    for (const mb of list) {
+      if (!mb.id || !mb.name) continue;
+      const cleanName = mb.name.trim();
+      const displayName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1).toLowerCase();
+      const slug = cleanName
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, "")
+        .trim() || `motoboy${mb.id}`;
+      const email = `${slug}@motoboy.com`;
+      const phone = mb.phone && mb.phone !== "null" ? mb.phone.trim() : "";
+
+      const idx = updatedDrivers.findIndex(
+        (d) =>
+          (d.takeatId && Number(d.takeatId) === Number(mb.id)) ||
+          d.name.toLowerCase() === displayName.toLowerCase() ||
+          (d.email && d.email.toLowerCase() === email.toLowerCase())
+      );
+
+      const driverRecord: Driver = {
+        id: idx >= 0 ? updatedDrivers[idx].id : `drv-takeat-${mb.id}`,
+        name: displayName,
+        email: idx >= 0 && updatedDrivers[idx].email ? updatedDrivers[idx].email : email,
+        phone: phone || (idx >= 0 ? updatedDrivers[idx].phone : ""),
+        vehicle: "Moto",
+        defaultFee: idx >= 0 && updatedDrivers[idx].defaultFee ? updatedDrivers[idx].defaultFee : 7.0,
+        active: mb.active !== false,
+        companyId: "house-burger-190",
+        takeatId: mb.id,
+        createdAt: idx >= 0 && updatedDrivers[idx].createdAt ? updatedDrivers[idx].createdAt : new Date().toISOString(),
+      };
+
+      await saveDriverRTDB(driverRecord);
+      if (idx >= 0) {
+        updatedDrivers[idx] = driverRecord;
+      } else {
+        updatedDrivers.push(driverRecord);
+      }
+    }
+
+    return updatedDrivers;
+  } catch (err) {
+    console.error("Erro ao sincronizar motoboys da Takeat:", err);
+    return [];
+  }
+}
+
+/**
  * Busca as cestas (pedidos ativos em tempo real) da Takeat com o motoboy atribuído.
  */
 export async function fetchTakeatBaskets(apiKey?: string): Promise<{
@@ -984,9 +1043,10 @@ export function mapTakeatSessionToDelivery(
     const rawName = assignedMotoboy.name.trim();
     const candLower = rawName.toLowerCase();
 
-    // 1. Procura match na lista de motoristas cadastrados
+    // 1. Procura match na lista de motoristas cadastrados (por takeatId, nome ou email)
     let match = driversList.find((d) => {
       if (d.active === false) return false;
+      if (d.takeatId && Number(d.takeatId) === Number(assignedMotoboy.id)) return true;
       const dLower = d.name.toLowerCase().trim();
       return (
         dLower === candLower ||
@@ -995,6 +1055,18 @@ export function mapTakeatSessionToDelivery(
         (d.email && d.email.toLowerCase().includes(candLower))
       );
     });
+
+    // 1.1 Match por telefone se o nome não bater exatamente
+    if (!match && assignedMotoboy.phone) {
+      const cleanAssignedPhone = assignedMotoboy.phone.replace(/\D/g, "");
+      if (cleanAssignedPhone.length >= 8) {
+        match = driversList.find((d) => {
+          if (!d.phone) return false;
+          const cleanDPhone = d.phone.replace(/\D/g, "");
+          return cleanDPhone.includes(cleanAssignedPhone) || cleanAssignedPhone.includes(cleanDPhone);
+        });
+      }
+    }
 
     // 2. Se for Guilherme (motoboy configurado pelo usuário para testes e entregas)
     if (!match && candLower.includes("guilherme")) {
@@ -1059,6 +1131,7 @@ export function mapTakeatSessionToDelivery(
     status,
     driver: driverName,
     driverId,
+    driverPhone: assignedMotoboy?.phone || undefined,
     time,
     items,
     itemsSummary,

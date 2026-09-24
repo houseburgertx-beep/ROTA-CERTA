@@ -122,8 +122,10 @@ export function getDriversEarningsSummary(
     return {
       driverId: driver.id,
       driverName: driver.name,
+      email: driver.email,
       phone: driver.phone,
       vehicle: `${driver.vehicle}${driver.plate ? ` (${driver.plate})` : ""}`,
+      takeatId: driver.takeatId,
       nightTotal: stats.nightTotal,
       nightCount: stats.nightCount,
       monthTotal: stats.monthTotal,

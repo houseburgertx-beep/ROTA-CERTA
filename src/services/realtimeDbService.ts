@@ -182,6 +182,32 @@ export function subscribeToDriversRTDB(
   return unsubscribe;
 }
 
+export async function getDriversRTDB(): Promise<Driver[]> {
+  try {
+    const cached = localStorage.getItem(DRIVERS_CACHE_KEY);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    }
+  } catch {}
+
+  if (!rtdb) return [];
+  try {
+    const driversRef = ref(rtdb, "rotacerta/drivers");
+    const snapshot = await get(driversRef);
+    if (snapshot.exists()) {
+      const list = normalizeDrivers(snapshot.val());
+      try {
+        localStorage.setItem(DRIVERS_CACHE_KEY, JSON.stringify(list));
+      } catch {}
+      return list;
+    }
+  } catch (e) {
+    console.warn("Erro ao buscar motoristas do RTDB:", e);
+  }
+  return [];
+}
+
 export async function saveDriverRTDB(driver: Driver): Promise<void> {
   try {
     const cached = localStorage.getItem(DRIVERS_CACHE_KEY);

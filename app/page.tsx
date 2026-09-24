@@ -90,6 +90,7 @@ import {
   isTakeatSyncEnabled,
   setTakeatSyncEnabled,
   syncTakeatDeliveries,
+  syncTakeatMotoboysToRTDB,
   getSampleTakeatDelivery,
   authenticateTakeat,
   type TakeatCredentials,
@@ -558,6 +559,12 @@ function MobileDeliveryApp({
       (activeDriver?.id || "").toLowerCase().trim(),
     ]);
 
+    if (currentUser.takeatId) {
+      validDriverIds.add(String(currentUser.takeatId).toLowerCase().trim());
+      validDriverIds.add(`takeat-${currentUser.takeatId}`.toLowerCase().trim());
+      validDriverIds.add(`drv-takeat-${currentUser.takeatId}`.toLowerCase().trim());
+    }
+
     if (myName.includes("guilherme")) {
       validDriverIds.add("182368");
       validDriverIds.add("takeat-182368");
@@ -567,18 +574,35 @@ function MobileDeliveryApp({
 
     for (const drv of drivers) {
       const drvClean = (drv.name || "").toLowerCase().trim();
+      const drvEmail = (drv.email || "").toLowerCase().trim();
+      const drvEmailPrefix = drvEmail.split("@")[0];
       if (
         drvClean === myName ||
         drvClean.includes(myName) ||
         myName.includes(drvClean) ||
-        (drv.email && drv.email.toLowerCase() === currentUser.email.toLowerCase())
+        (myEmailPrefix && (drvEmailPrefix === myEmailPrefix || drvClean.includes(myEmailPrefix))) ||
+        (drvEmail && drvEmail === currentUser.email.toLowerCase())
       ) {
         validDriverIds.add(drv.id.toLowerCase().trim());
+        if (drv.takeatId) {
+          validDriverIds.add(String(drv.takeatId).toLowerCase().trim());
+          validDriverIds.add(`takeat-${drv.takeatId}`.toLowerCase().trim());
+          validDriverIds.add(`drv-takeat-${drv.takeatId}`.toLowerCase().trim());
+        }
       }
     }
 
     if (d.driverId && validDriverIds.has(d.driverId.toLowerCase().trim())) {
       return true;
+    }
+
+    // 4. Match por telefone cadastrado
+    if (currentUser.phone && d.driverPhone) {
+      const myP = currentUser.phone.replace(/\D/g, "");
+      const dP = d.driverPhone.replace(/\D/g, "");
+      if (myP.length >= 8 && dP.length >= 8 && (myP.includes(dP) || dP.includes(myP))) {
+        return true;
+      }
     }
 
     return false;
@@ -2374,6 +2398,23 @@ function AdminDriversTab({
   const [showPassword, setShowPassword] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [syncingTakeatMotoboys, setSyncingTakeatMotoboys] = useState(false);
+
+  const handleSyncTakeatMotoboys = async () => {
+    setSyncingTakeatMotoboys(true);
+    try {
+      const updated = await syncTakeatMotoboysToRTDB();
+      if (updated && updated.length) {
+        notify(`✅ ${updated.length} motoboy(s) sincronizados com o Takeat!`);
+      } else {
+        notify("⚠️ Nenhum motoboy retornado do Takeat. Verifique a conexão.");
+      }
+    } catch {
+      notify("Erro ao sincronizar motoboys do Takeat.");
+    } finally {
+      setSyncingTakeatMotoboys(false);
+    }
+  };
 
   const handleConnectWithCredentials = async () => {
     if (!email.trim() || !password.trim()) {
@@ -2632,16 +2673,40 @@ function AdminDriversTab({
       </div>
 
       {/* Gestão de Motoboys */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "18px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", marginTop: "18px", flexWrap: "wrap", gap: "10px" }}>
         <div>
           <h2 style={{ fontSize: "20px", margin: "0 0 4px" }}>Equipe de Motoboys</h2>
           <p style={{ fontSize: "11px", color: "var(--muted)", margin: 0 }}>
             {drivers.length} entregador(es) cadastrado(s)
           </p>
         </div>
-        <button type="button" className="primary" onClick={onOpenAddDriver} style={{ height: "40px", fontSize: "12px" }}>
-          <Plus size={16} /> Cadastrar Motoboy
-        </button>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={handleSyncTakeatMotoboys}
+            disabled={syncingTakeatMotoboys}
+            style={{
+              height: "40px",
+              fontSize: "12px",
+              background: "rgba(124,58,237,.12)",
+              color: "#7c3aed",
+              border: "1px solid rgba(124,58,237,.25)",
+              borderRadius: "10px",
+              padding: "0 12px",
+              fontWeight: "700",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              cursor: syncingTakeatMotoboys ? "not-allowed" : "pointer",
+            }}
+          >
+            <RefreshCw size={14} className={syncingTakeatMotoboys ? "spin-animation" : ""} />
+            {syncingTakeatMotoboys ? "Puxando..." : "Puxar Motoboys Takeat"}
+          </button>
+          <button type="button" className="primary" onClick={onOpenAddDriver} style={{ height: "40px", fontSize: "12px" }}>
+            <Plus size={16} /> Cadastrar Motoboy
+          </button>
+        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -2652,8 +2717,27 @@ function AdminDriversTab({
                 {drv.driverName.substring(0, 2).toUpperCase()}
               </div>
               <div className="driver-meta" style={{ flex: 1 }}>
-                <b>{drv.driverName}</b>
-                <span>{drv.phone} • {drv.vehicle}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                  <b>{drv.driverName}</b>
+                  {drv.takeatId && (
+                    <span
+                      style={{
+                        fontSize: "9px",
+                        fontWeight: 800,
+                        background: "rgba(234,29,44,.12)",
+                        color: "#ea1d2c",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      Takeat #{drv.takeatId}
+                    </span>
+                  )}
+                </div>
+                <span>{drv.phone || "Sem telefone"} • {drv.vehicle}</span>
+                <span style={{ fontSize: "11px", color: "var(--muted)", display: "block", marginTop: "2px" }}>
+                  Login: <strong style={{ color: "var(--text)" }}>{drv.email ? drv.email.split("@")[0] : drv.driverName.toLowerCase()}</strong> • Senha: <code style={{ fontSize: "10px" }}>123456</code>
+                </span>
               </div>
               <a
                 href={`https://wa.me/55${drv.phone.replace(/\D/g, "")}`}

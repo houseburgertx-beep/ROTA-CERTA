@@ -21,7 +21,7 @@ export type DeliveryPriority =
   | "urgente";
 
 export interface GeoPoint { latitude:number; longitude:number }
-export interface User { id:string; name:string; email:string; phone:string; role:UserRole; companyId:string; active:boolean }
+export interface User { id:string; name:string; email:string; phone:string; role:UserRole; companyId:string; active:boolean; takeatId?: number | string }
 export interface Company { id:string; name:string; phone:string; city:string; state:string; defaultAddress:string; defaultLatitude?:number; defaultLongitude?:number }
 export interface Driver {
   id: string;
@@ -34,6 +34,7 @@ export interface Driver {
   active: boolean;
   companyId?: string;
   createdAt?: string;
+  takeatId?: number | string;
 }
 export interface OrderItem {
   id?: string | number;
@@ -70,6 +71,7 @@ export interface Delivery {
   status: DeliveryStatus;
   driver?: string;
   driverId?: string;
+  driverPhone?: string;
   time?: string;
   source?: "manual" | "ocr" | "importação" | "takeat";
   platform?: "ifood" | "takeat" | "other";
@@ -100,8 +102,10 @@ export interface FinancialStats {
 export interface DriverEarningsSummary {
   driverId: string;
   driverName: string;
+  email?: string;
   phone: string;
   vehicle: string;
+  takeatId?: number | string;
   nightTotal: number;
   nightCount: number;
   monthTotal: number;
