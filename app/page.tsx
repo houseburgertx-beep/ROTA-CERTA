@@ -100,6 +100,7 @@ import {
 } from "../src/services/takeatService";
 import type { DeliveryRecord, DeliveryRecordStatus } from "../src/types/delivery";
 import { LoginView } from "../src/components/LoginView";
+import { playIfoodNotificationSound, unlockAudioOnFirstGesture } from "../src/services/soundService";
 
 type Status = DeliveryStatus;
 
@@ -382,82 +383,14 @@ function MobileDeliveryApp({
   const driversRef = useRef(drivers);
   driversRef.current = drivers;
 
-  // Desbloqueia AudioContext em qualquer primeiro toque do usuário
+  // Desbloqueia pipeline de áudio móvel no primeiro gesto do usuário
   useEffect(() => {
-    const unlockAudio = () => {
-      try {
-        const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        if (AudioCtx) {
-          const testCtx = new AudioCtx();
-          if (testCtx.state === "suspended") {
-            void testCtx.resume();
-          }
-        }
-      } catch {}
-      window.removeEventListener("touchstart", unlockAudio);
-      window.removeEventListener("click", unlockAudio);
-    };
-    window.addEventListener("touchstart", unlockAudio, { passive: true });
-    window.addEventListener("click", unlockAudio, { passive: true });
-    return () => {
-      window.removeEventListener("touchstart", unlockAudio);
-      window.removeEventListener("click", unlockAudio);
-    };
+    unlockAudioOnFirstGesture();
   }, []);
 
-  // Alerta Sonoro Autêntico estilo iFood (Arpeggio D6-F#6-A6-D7 com eco e vibração)
+  // Alerta Sonoro Autêntico estilo iFood com HTML5 Audio, WAV e vibração tátil
   const playIfoodSoundAlert = () => {
-    try {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      if (ctx.state === "suspended") {
-        void ctx.resume();
-      }
-
-      // Haptic feedback (duplo toque vibratório estilo iFood)
-      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-        navigator.vibrate([180, 80, 220]);
-      }
-
-      const now = ctx.currentTime;
-      // Melodia clássica do iFood: duplo toque ascendente brilhante
-      const notes = [
-        // Toque 1
-        { freq: 1174.66, time: 0.00, dur: 0.09 }, // D6
-        { freq: 1479.98, time: 0.09, dur: 0.09 }, // F#6
-        { freq: 1760.00, time: 0.18, dur: 0.09 }, // A6
-        { freq: 2349.32, time: 0.27, dur: 0.38 }, // D7
-
-        // Toque 2 (eco característico)
-        { freq: 1174.66, time: 0.46, dur: 0.09 }, // D6
-        { freq: 1479.98, time: 0.55, dur: 0.09 }, // F#6
-        { freq: 1760.00, time: 0.64, dur: 0.09 }, // A6
-        { freq: 2349.32, time: 0.73, dur: 0.55 }, // D7
-      ];
-
-      notes.forEach(({ freq, time, dur }) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        // Timbre de sino / marimba percussiva
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(freq, now + time);
-
-        // Curva percussiva com volume nítido
-        gain.gain.setValueAtTime(0.001, now + time);
-        gain.gain.exponentialRampToValueAtTime(0.75, now + time + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + time + dur);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        osc.start(now + time);
-        osc.stop(now + time + dur);
-      });
-    } catch (e) {
-      console.warn("Falha ao tocar som de novo pedido iFood:", e);
-    }
+    void playIfoodNotificationSound();
   };
 
   const playNewOrderAlert = playIfoodSoundAlert;
