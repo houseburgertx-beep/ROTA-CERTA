@@ -409,5 +409,92 @@ main{min-height:100vh;margin-left:242px}header{height:78px;position:sticky;top:0
   color: #c4b5fd !important;
 }
 
+/* ===== IFOOD ENTREGA PRÓPRIA & BLINDAGEM ===== */
+.btn-action-ifood-confirm {
+  width: 100%;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid rgba(234, 29, 44, 0.3);
+  background: rgba(234, 29, 44, 0.08);
+  color: #ea1d2c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  user-select: none;
+}
+.btn-action-ifood-confirm:hover {
+  background: rgba(234, 29, 44, 0.14);
+  border-color: #ea1d2c;
+  transform: translateY(-1px);
+}
+.btn-action-ifood-confirm:active {
+  transform: scale(0.98);
+}
+:root[data-theme="dark"] .btn-action-ifood-confirm {
+  background: rgba(234, 29, 44, 0.14);
+  border-color: rgba(234, 29, 44, 0.4);
+  color: #f87171;
+}
+.ifood-confirmed-banner {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #059669;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  user-select: none;
+}
+:root[data-theme="dark"] .ifood-confirmed-banner {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.16);
+  border-color: rgba(52, 211, 153, 0.3);
+}
+.ifood-shield-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  padding: 2px 7px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+:root[data-theme="dark"] .ifood-shield-badge {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(52, 211, 153, 0.32);
+}
+.ifood-localizer-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #dc2626;
+  background: rgba(234, 29, 44, 0.08);
+  border: 1px solid rgba(234, 29, 44, 0.2);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+:root[data-theme="dark"] .ifood-localizer-badge {
+  color: #f87171;
+  background: rgba(234, 29, 44, 0.14);
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
 
 

@@ -20,6 +20,7 @@ const receiptSchema = z.object({
   payment: z.enum(["Pix", "Dinheiro", "Cartão", "Pago", "Não identificado"]).default("Não identificado"),
   platform: z.enum(["iFood", "Outro", "Não identificado"]).default("Não identificado"),
   platformOrderId: z.string().default(""),
+  ifoodLocalizer: z.string().default(""),
   uncertainFields: z.array(z.string()).default([]),
   confidence: z.record(z.number().min(0).max(1)).default({}),
 });
@@ -63,10 +64,11 @@ export async function analyzeReceiptWithAI(file: File): Promise<AIReceiptFields>
           payment: { type: "string", enum: ["Pix", "Dinheiro", "Cartão", "Pago", "Não identificado"] },
           platform: { type: "string", enum: ["iFood", "Outro", "Não identificado"] },
           platformOrderId: { type: "string" },
+          ifoodLocalizer: { type: "string" },
           uncertainFields: { type: "array", items: { type: "string" } },
           confidence: { type: "object", additionalProperties: { type: "number" } },
         },
-        required: ["customer", "phone", "address", "number", "district", "city", "postalCode", "complement", "reference", "items", "notes", "amount", "deliveryFee", "payment", "platform", "platformOrderId", "uncertainFields", "confidence"],
+        required: ["customer", "phone", "address", "number", "district", "city", "postalCode", "complement", "reference", "items", "notes", "amount", "deliveryFee", "payment", "platform", "platformOrderId", "ifoodLocalizer", "uncertainFields", "confidence"],
       },
     },
   });
@@ -79,7 +81,7 @@ Regras obrigatórias:
 - normalize telefone brasileiro, CEP e valores em reais;
 - separe logradouro e número; preserve complemento e referência;
 - transcreva itens com quantidade e variações;
-- identifique se a comanda é do iFood e extraia exatamente o identificador/código do pedido impresso, sem inventar;
+- identifique se a comanda é do iFood e extraia o identificador do pedido e o código localizador (8 dígitos, ex: 'Localizador: 12345678') no campo ifoodLocalizer;
 - confidence deve conter uma nota de 0 a 1 para cada campo encontrado;
 - inclua em uncertainFields todo campo ausente, ilegível, ambíguo ou com confiança abaixo de 0.78.
 A resposta deve ser somente o JSON solicitado.`,
@@ -101,6 +103,7 @@ export function receiptFieldsForForm(fields: AIReceiptFields): Record<string, st
     payment: fields.payment === "Não identificado" ? "" : fields.payment,
     platform: fields.platform === "Não identificado" ? "" : fields.platform,
     platformOrderId: fields.platformOrderId,
+    ifoodLocalizer: fields.ifoodLocalizer,
     notes,
     _uncertain: [...uncertain].join(","),
     _source: "Firebase AI · Gemini 3.5 Flash",

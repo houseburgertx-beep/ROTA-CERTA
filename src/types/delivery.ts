@@ -29,6 +29,9 @@ export type DeliveryRecord = {
   platform?: "ifood" | "other" | "takeat";
   platformOrderId?: string;
   pickupCode?: string;
+  ifoodLocalizer?: string;
+  ifoodConfirmed?: boolean;
+  ifoodConfirmedAt?: string;
   priority?: "normal" | "high" | "urgent";
   source?: "manual" | "ocr" | "takeat";
   notes?: string;

@@ -77,6 +77,9 @@ export interface Delivery {
   platform?: "ifood" | "takeat" | "other";
   platformOrderId?: string;
   pickupCode?: string;
+  ifoodLocalizer?: string;
+  ifoodConfirmed?: boolean;
+  ifoodConfirmedAt?: string;
   items?: OrderItem[];
   itemsSummary?: string;
   notes?: string;

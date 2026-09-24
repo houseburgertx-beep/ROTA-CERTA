@@ -17,6 +17,7 @@ export interface ParsedReceiptData {
   platformOrderId?: string;
   notes?: string;
   pickupCode?: string;
+  ifoodLocalizer?: string;
   rawText?: string;
   _source?: string;
 }
@@ -211,8 +212,11 @@ export function parseComandaText(text: string): ParsedReceiptData {
   out.reference = [comp, ref].filter(Boolean).join(" - ");
 
   // 8. CÓDIGO DE COLETA / LOCALIZADOR (MUITO ÚTIL NO IFOOD / TAKEAT)
-  const coleta = g(/(?:c[oó]digo\s*de\s*coleta|coleta|c[oó]digo)[\s.:#-]+([0-9]{4,6})/i);
+  const coleta = g(/(?:c[oó]digo\s*de\s*coleta|coleta)[\s.:#-]+([0-9]{4,6})/i);
   if (coleta) out.pickupCode = coleta;
+
+  const localizador = g(/(?:localizador(?:\s*ifood)?|c[oó]digo\s*localizador)[\s.:#-]+([0-9]{6,10})/i);
+  if (localizador) out.ifoodLocalizer = localizador;
 
   // 9. TAXA DE ENTREGA
   const taxaRaw =

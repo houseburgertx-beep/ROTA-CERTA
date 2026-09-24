@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleDollarSign,
+  Copy,
   ExternalLink,
   LogOut,
   MapPin,
@@ -254,6 +255,7 @@ function MobileDeliveryApp({
   const [selectedForRouteIds, setSelectedForRouteIds] = useState<string[]>([]);
   const [modal, setModal] = useState<"new" | "ocr" | "driver" | null>(null);
   const [ocrData, setOcrData] = useState<Record<string, string> | null>(null);
+  const [ifoodConfirmDelivery, setIfoodConfirmDelivery] = useState<Delivery | null>(null);
   const [toast, setToast] = useState("");
   const [mapProvider, setMapProvider] = useState<MapTileProvider>(() => {
     try {
@@ -705,6 +707,40 @@ function MobileDeliveryApp({
 
     try {
       await updateDeliveryRTDB(id, { status: "Entregue", deliveredAt: nowIso });
+    } catch (e) {
+      console.warn("Erro ao atualizar status da entrega no RTDB:", e);
+    }
+  }
+
+  // Delivery action: complete ifood delivery with blindagem
+  async function confirmIfoodDelivery(deliveryId: string, localizer?: string) {
+    setSelectedForRouteIds((prev) => prev.filter((x) => x !== deliveryId));
+    const nowIso = new Date().toISOString();
+    setDeliveries((prev) =>
+      prev.map((d) => {
+        if (d.id === deliveryId) {
+          notify(`🛡️ Pedido ${d.order} blindado no iFood! Taxa de ${money(d.deliveryFee)} somada.`);
+          return {
+            ...d,
+            status: "Entregue" as Status,
+            deliveredAt: nowIso,
+            ifoodConfirmed: true,
+            ifoodConfirmedAt: nowIso,
+            ...(localizer ? { ifoodLocalizer: localizer } : {}),
+          };
+        }
+        return d;
+      }),
+    );
+
+    try {
+      await updateDeliveryRTDB(deliveryId, {
+        status: "Entregue",
+        deliveredAt: nowIso,
+        ifoodConfirmed: true,
+        ifoodConfirmedAt: nowIso,
+        ...(localizer ? { ifoodLocalizer: localizer } : {}),
+      });
     } catch (e) {
       console.warn("Erro ao atualizar status da entrega no RTDB:", e);
     }
@@ -1228,6 +1264,7 @@ function MobileDeliveryApp({
                       showSelectCheckbox={deliveryTabMode === "active"}
                       selected={selectedForRouteIds.includes(d.id)}
                       onToggleSelect={() => toggleDeliverySelection(d.id)}
+                      onOpenIfoodConfirm={() => setIfoodConfirmDelivery(d)}
                       onAssignDriver={(driverId) => {
                         const drv = drivers.find((x) => x.id === driverId);
                         const driverName = drv ? drv.name : "Não atribuído";
@@ -1474,6 +1511,16 @@ function MobileDeliveryApp({
         />
       )}
 
+      {ifoodConfirmDelivery && (
+        <IfoodConfirmationModal
+          delivery={ifoodConfirmDelivery}
+          close={() => setIfoodConfirmDelivery(null)}
+          onConfirmSuccess={(id, localizer) => {
+            void confirmIfoodDelivery(id, localizer);
+          }}
+        />
+      )}
+
       {toast && (
         <div className="toast">
           <CheckCircle2 size={18} />
@@ -1498,6 +1545,7 @@ function MobileDeliveryCard({
   selected = false,
   onToggleSelect,
   showSelectCheckbox = false,
+  onOpenIfoodConfirm,
 }: {
   delivery: Delivery;
   onMarkDelivered: () => void;
@@ -1509,6 +1557,7 @@ function MobileDeliveryCard({
   selected?: boolean;
   onToggleSelect?: () => void;
   showSelectCheckbox?: boolean;
+  onOpenIfoodConfirm?: () => void;
 }) {
   const [showItemsDetail, setShowItemsDetail] = useState(false);
   const isDelivered = delivery.status === "Entregue" || (delivery.status as string) === "delivered";
@@ -1547,6 +1596,15 @@ function MobileDeliveryCard({
               iFood
             </span>
           )}
+          {delivery.ifoodConfirmed ? (
+            <span className="ifood-shield-badge" title="Entrega confirmada e blindada no iFood">
+              <ShieldCheck size={11} /> Blindado
+            </span>
+          ) : delivery.ifoodLocalizer ? (
+            <span className="ifood-localizer-badge" title="Código localizador do iFood">
+              Loc: {delivery.ifoodLocalizer}
+            </span>
+          ) : null}
           {delivery.platform === "takeat" && (
             <span style={{ fontSize: "10px", fontWeight: "800", color: "#f97316", background: "rgba(249,115,22,.1)", padding: "2px 6px", borderRadius: "6px" }}>
               Takeat
@@ -1640,6 +1698,28 @@ function MobileDeliveryCard({
         </div>
         <small>Motoboy: <b>{delivery.driver}</b></small>
       </div>
+
+      {/* Botão de Confirmação iFood (Blindagem) */}
+      {(delivery.platform === "ifood" || Boolean(delivery.ifoodLocalizer)) && (
+        <div style={{ marginTop: "2px" }}>
+          {delivery.ifoodConfirmed ? (
+            <div className="ifood-confirmed-banner">
+              <ShieldCheck size={14} />
+              <span>Entrega Blindada e Confirmada no iFood</span>
+            </div>
+          ) : !isDelivered ? (
+            <button
+              type="button"
+              className="btn-action-ifood-confirm"
+              onClick={onOpenIfoodConfirm}
+              title="Abrir confirmação de entrega própria no iFood e blindar pedido"
+            >
+              <ShieldCheck size={15} />
+              <span>Confirmar no iFood {delivery.ifoodLocalizer ? `(Loc: ${delivery.ifoodLocalizer})` : ""}</span>
+            </button>
+          ) : null}
+        </div>
+      )}
 
       {/* Action Buttons Toolbar */}
       <div className="card-actions-grid">
@@ -2318,6 +2398,7 @@ function OCRTrigger({ onDone }: { onDone: (fields: Record<string, string>) => vo
         platform: res.fields.platform || "iFood",
         platformOrderId: res.fields.platformOrderId || "#3664",
         pickupCode: res.fields.pickupCode || "9102",
+        ifoodLocalizer: res.fields.ifoodLocalizer || "84729103",
         notes: res.fields.notes || "Código de coleta: 9102 | Ref: Na rua do ateliê casa verde",
         _source: res.fields._source || "OCR Inteligente",
       };
@@ -2421,6 +2502,7 @@ function NewDeliveryModal({
   const [amount, setAmount] = useState(prefill?.amount || "51.89");
   const [payment, setPayment] = useState(prefill?.payment || "Pago Online (iFood)");
   const [pickupCode, setPickupCode] = useState(prefill?.pickupCode || "9102");
+  const [ifoodLocalizer, setIfoodLocalizer] = useState(prefill?.ifoodLocalizer || "");
   const [notes, setNotes] = useState(prefill?.notes || "Código de coleta: 9102 | Ref: Na rua do ateliê casa verde");
   const [driverId, setDriverId] = useState(defaultDriverId);
   const [locating, setLocating] = useState(false);
@@ -2464,6 +2546,8 @@ function NewDeliveryModal({
       city,
       postalCode,
       pickupCode,
+      ifoodLocalizer: ifoodLocalizer.trim() || undefined,
+      platform: ifoodLocalizer.trim() || payment.includes("iFood") ? "ifood" : "other",
       notes,
       deliveryFee: Number(deliveryFee.replace(",", ".")) || 7.0,
       amount: Number(amount.replace(",", ".")) || 0,
@@ -2549,6 +2633,11 @@ function NewDeliveryModal({
             </label>
 
             <label>
+              Localizador iFood (8 dígitos)
+              <input value={ifoodLocalizer} onChange={(e) => setIfoodLocalizer(e.target.value)} placeholder="Ex: 84729103 (da comanda)" />
+            </label>
+
+            <label>
               Valor do Pedido (R$)
               <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="51,89" />
             </label>
@@ -2600,6 +2689,299 @@ function NewDeliveryModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// COMPONENTE: Modal Confirmação de Entrega Própria iFood
+// -------------------------------------------------------------
+function IfoodConfirmationModal({
+  delivery,
+  close,
+  onConfirmSuccess,
+}: {
+  delivery: Delivery;
+  close: () => void;
+  onConfirmSuccess: (deliveryId: string, localizer: string) => void;
+}) {
+  const [localizer, setLocalizer] = useState(delivery.ifoodLocalizer || "");
+  const [copied, setCopied] = useState(false);
+
+  const cleanLocalizer = localizer.replace(/\D/g, "");
+
+  const handleCopy = () => {
+    if (!cleanLocalizer) return;
+    void navigator.clipboard.writeText(cleanLocalizer);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleOpenIfood = () => {
+    if (cleanLocalizer) {
+      void navigator.clipboard.writeText(cleanLocalizer);
+      setCopied(true);
+    }
+    window.open(
+      "https://confirmacao-entrega-propria.ifood.com.br/",
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
+
+  const handleFinish = () => {
+    onConfirmSuccess(delivery.id, cleanLocalizer);
+    close();
+  };
+
+  return (
+    <div className="overlay">
+      <div className="modal" style={{ maxWidth: "450px", borderRadius: "24px", overflow: "hidden" }}>
+        {/* Header Vermelho iFood Oficial */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, #ea1d2c, #be121e)",
+            color: "#fff",
+            padding: "18px 20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div
+              style={{
+                width: "38px",
+                height: "38px",
+                borderRadius: "12px",
+                background: "rgba(255,255,255,.22)",
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
+              <ShieldCheck size={22} color="#fff" />
+            </div>
+            <div>
+              <b style={{ fontSize: "16px", letterSpacing: "-.3px", display: "block" }}>
+                Confirmação iFood
+              </b>
+              <span style={{ fontSize: "11px", opacity: 0.9 }}>
+                Blindagem contra contestações e golpes
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={close}
+            style={{
+              background: "rgba(255,255,255,.2)",
+              border: 0,
+              color: "#fff",
+              width: "32px",
+              height: "32px",
+              borderRadius: "50%",
+              display: "grid",
+              placeItems: "center",
+              cursor: "pointer",
+            }}
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        <div style={{ padding: "18px 20px 22px" }}>
+          {/* Card Resumo do Pedido */}
+          <div
+            style={{
+              background: "var(--surface-2)",
+              border: "1px solid var(--line)",
+              borderRadius: "14px",
+              padding: "12px 14px",
+              marginBottom: "16px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "4px",
+              }}
+            >
+              <span style={{ fontSize: "10px", fontWeight: "800", color: "var(--muted)", textTransform: "uppercase" }}>
+                Pedido da Loja
+              </span>
+              <span className="order-badge">{delivery.order}</span>
+            </div>
+            <b style={{ fontSize: "14px", display: "block", color: "var(--ink)" }}>
+              {delivery.customer}
+            </b>
+            <span style={{ fontSize: "11px", color: "var(--muted)", display: "block", marginTop: "2px" }}>
+              <MapPin size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: "3px" }} />
+              {delivery.address} {delivery.district ? `· ${delivery.district}` : ""}
+            </span>
+          </div>
+
+          {/* Código Localizador */}
+          <div style={{ marginBottom: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+              <label style={{ fontSize: "11px", fontWeight: "800", color: "var(--ink)" }}>
+                CÓDIGO LOCALIZADOR (8 DÍGITOS)
+              </label>
+              {cleanLocalizer.length === 8 && (
+                <span style={{ fontSize: "10px", color: "#16a34a", fontWeight: "700" }}>
+                  ✔ 8 dígitos identificados
+                </span>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <input
+                type="text"
+                value={localizer}
+                onChange={(e) => setLocalizer(e.target.value)}
+                placeholder="Ex: 84729103"
+                maxLength={14}
+                style={{
+                  flex: 1,
+                  height: "46px",
+                  borderRadius: "12px",
+                  border: "2px solid var(--line)",
+                  background: "var(--surface)",
+                  color: "var(--ink)",
+                  padding: "0 12px",
+                  fontSize: "17px",
+                  fontWeight: "800",
+                  letterSpacing: "2px",
+                  fontFamily: "monospace",
+                  outline: "none",
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleCopy}
+                disabled={!cleanLocalizer}
+                style={{
+                  height: "46px",
+                  padding: "0 14px",
+                  borderRadius: "12px",
+                  border: "1px solid var(--line)",
+                  background: copied ? "#16a34a" : "var(--surface-2)",
+                  color: copied ? "#fff" : "var(--ink)",
+                  fontSize: "12px",
+                  fontWeight: "800",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  cursor: "pointer",
+                  transition: "all .16s ease",
+                  flexShrink: 0,
+                }}
+              >
+                {copied ? <Check size={16} /> : <Copy size={16} />}
+                <span>{copied ? "Copiado!" : "Copiar"}</span>
+              </button>
+            </div>
+            <small style={{ fontSize: "10px", color: "var(--muted)", display: "block", marginTop: "5px" }}>
+              Impresso na comanda física do iFood ou transmitido pelo sistema.
+            </small>
+          </div>
+
+          {/* Guia Rápido de 3 Passos */}
+          <div
+            style={{
+              background: "rgba(234,29,44,.05)",
+              border: "1px dashed rgba(234,29,44,.28)",
+              borderRadius: "14px",
+              padding: "12px 14px",
+              marginBottom: "18px",
+            }}
+          >
+            <b
+              style={{
+                fontSize: "12px",
+                color: "#ea1d2c",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                marginBottom: "8px",
+              }}
+            >
+              <Zap size={14} /> Passo a passo na entrega:
+            </b>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "11px", color: "var(--ink)" }}>
+              <div><b>1.</b> Copie o <b>código localizador</b> acima.</div>
+              <div><b>2.</b> Peça ao cliente o <b>código de 4 dígitos</b> (ou 4 últimos dígitos do celular).</div>
+              <div><b>3.</b> Abra o portal do iFood abaixo, cole o localizador e digite o código do cliente.</div>
+            </div>
+          </div>
+
+          {/* Botões de Ação */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "9px" }}>
+            <button
+              type="button"
+              onClick={handleOpenIfood}
+              style={{
+                width: "100%",
+                height: "46px",
+                borderRadius: "14px",
+                border: "0",
+                background: "linear-gradient(135deg, #ea1d2c, #dc2626)",
+                color: "#fff",
+                fontSize: "13px",
+                fontWeight: "800",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                cursor: "pointer",
+                boxShadow: "0 6px 18px rgba(234,29,44,.25)",
+              }}
+            >
+              <ExternalLink size={16} />
+              <span>Abrir Portal de Confirmação iFood ↗</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleFinish}
+              style={{
+                width: "100%",
+                height: "44px",
+                borderRadius: "14px",
+                border: "1px solid rgba(22,163,74,.3)",
+                background: "rgba(22,163,74,.1)",
+                color: "#16a34a",
+                fontSize: "13px",
+                fontWeight: "800",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "7px",
+                cursor: "pointer",
+              }}
+            >
+              <ShieldCheck size={16} />
+              <span>Concluir Entrega e Blindar Pedido</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={close}
+              style={{
+                border: "0",
+                background: "transparent",
+                color: "var(--muted)",
+                fontSize: "12px",
+                fontWeight: "600",
+                padding: "6px",
+                cursor: "pointer",
+              }}
+            >
+              Voltar sem alterar
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
