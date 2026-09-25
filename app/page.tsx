@@ -81,7 +81,16 @@ import {
   subscribeToDriversRTDB,
   subscribeToTakeatConfigRTDB,
   updateDeliveryRTDB,
+  updateDriverGpsLocationRTDB,
 } from "../src/services/realtimeDbService";
+import { CustomerTrackingView } from "../src/components/CustomerTrackingView";
+import {
+  isDeviceOnline,
+  onConnectionChange,
+  flushOfflineQueue,
+  getOfflineQueue,
+  enqueueOfflineAction,
+} from "../src/services/offlineQueueService";
 import {
   calculateFinancialStats,
   getDriversEarningsSummary,
@@ -188,6 +197,14 @@ function fromRecord(item: DeliveryRecord, driversList: Driver[]): Delivery {
 const initialDeliveries: Delivery[] = [];
 
 export default function Home() {
+  const [rastreioId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("rastreio") || p.get("tracking") || null;
+    }
+    return null;
+  });
+
   const [currentUser, setCurrentUser] = useState<User | null>(() => getStoredUser());
   const session = useAuth();
 
@@ -196,6 +213,11 @@ export default function Home() {
       setCurrentUser(session.profile);
     }
   }, [session.profile]);
+
+  // Se for acesso direto do cliente via link do WhatsApp, exibe a tela de rastreio ao vivo
+  if (rastreioId) {
+    return <CustomerTrackingView deliveryId={rastreioId} />;
+  }
 
   if (session.loading) {
     return (
@@ -300,6 +322,33 @@ function MobileDeliveryApp({
   const [isTakeatConnected, setIsTakeatConnected] = useState(() => isTakeatConfigured());
   const [takeatSyncing, setTakeatSyncing] = useState(false);
   const [takeatAutoSync, setTakeatAutoSync] = useState(() => isTakeatSyncEnabled());
+
+  const [isOnline, setIsOnline] = useState<boolean>(() => isDeviceOnline());
+  const [offlinePendingCount, setOfflinePendingCount] = useState<number>(() => getOfflineQueue().length);
+
+  useEffect(() => {
+    const unbind = onConnectionChange((online) => {
+      setIsOnline(online);
+      if (online) {
+        void flushOfflineQueue().then((res) => {
+          setOfflinePendingCount(getOfflineQueue().length);
+          if (res.syncedCount > 0) {
+            notify(`📶 Conexão restabelecida! ${res.syncedCount} alteração(ões) sincronizada(s) com a loja.`);
+          }
+        });
+      } else {
+        notify("⚠️ Sem sinal 4G. Modo offline ativado: entregas continuam salvas no aparelho!");
+      }
+    });
+
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      void flushOfflineQueue().then(() => {
+        setOfflinePendingCount(getOfflineQueue().length);
+      });
+    }
+
+    return () => unbind();
+  }, []);
 
   const notify = (s: string) => {
     setToast(s);
@@ -701,6 +750,49 @@ function MobileDeliveryApp({
     }
   }, []);
 
+  // Transmissão contínua de GPS para rastreio do cliente quando houver entrega Em Rota
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+
+    const activeRouteDelivery = deliveries.find(
+      (d) =>
+        (d.status === "Em rota" || (d.status as string) === "em_rota") &&
+        (currentUser.role === "admin" ||
+          d.driverId === activeDriver?.id ||
+          (d.driver && activeDriver && d.driver.toLowerCase() === activeDriver.name.toLowerCase())),
+    );
+
+    if (!activeRouteDelivery) return;
+
+    let lastSent = 0;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const coords = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          heading: pos.coords.heading || undefined,
+        };
+        setDriverGps(coords);
+
+        const now = Date.now();
+        if (now - lastSent >= 6000) {
+          lastSent = now;
+          void updateDriverGpsLocationRTDB(
+            activeRouteDelivery.id,
+            activeDriver?.id || currentUser.id,
+            coords,
+          );
+        }
+      },
+      (err) => console.warn("Erro ao monitorar GPS em rota:", err),
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 },
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [deliveries, currentUser, activeDriver]);
+
   const routeOrigin: GeoPoint = useMemo(() => {
     if (driverGps) return driverGps;
     return { latitude: STORE_POINT.latitude, longitude: STORE_POINT.longitude };
@@ -766,10 +858,19 @@ function MobileDeliveryApp({
       }),
     );
 
+    const updates = { status: "Entregue" as Status, deliveredAt: nowIso };
+    if (!isDeviceOnline()) {
+      enqueueOfflineAction("update_delivery", { deliveryId: id, updates });
+      setOfflinePendingCount(getOfflineQueue().length);
+      return;
+    }
+
     try {
-      await updateDeliveryRTDB(id, { status: "Entregue", deliveredAt: nowIso });
+      await updateDeliveryRTDB(id, updates);
     } catch (e) {
-      console.warn("Erro ao atualizar status da entrega no RTDB:", e);
+      console.warn("Erro ao atualizar status da entrega no RTDB, enfileirando offline:", e);
+      enqueueOfflineAction("update_delivery", { deliveryId: id, updates });
+      setOfflinePendingCount(getOfflineQueue().length);
     }
   }
 
@@ -794,16 +895,26 @@ function MobileDeliveryApp({
       }),
     );
 
+    const updates = {
+      status: "Entregue" as Status,
+      deliveredAt: nowIso,
+      ifoodConfirmed: true,
+      ifoodConfirmedAt: nowIso,
+      ...(localizer ? { ifoodLocalizer: localizer } : {}),
+    };
+
+    if (!isDeviceOnline()) {
+      enqueueOfflineAction("update_delivery", { deliveryId, updates });
+      setOfflinePendingCount(getOfflineQueue().length);
+      return;
+    }
+
     try {
-      await updateDeliveryRTDB(deliveryId, {
-        status: "Entregue",
-        deliveredAt: nowIso,
-        ifoodConfirmed: true,
-        ifoodConfirmedAt: nowIso,
-        ...(localizer ? { ifoodLocalizer: localizer } : {}),
-      });
+      await updateDeliveryRTDB(deliveryId, updates);
     } catch (e) {
-      console.warn("Erro ao atualizar status da entrega no RTDB:", e);
+      console.warn("Erro ao atualizar status da entrega no RTDB, enfileirando offline:", e);
+      enqueueOfflineAction("update_delivery", { deliveryId, updates });
+      setOfflinePendingCount(getOfflineQueue().length);
     }
   }
 
@@ -811,11 +922,20 @@ function MobileDeliveryApp({
     setDeliveries((prev) =>
       prev.map((d) => (d.id === deliveryId ? { ...d, phone } : d))
     );
+    const updates = { phone };
+    if (!isDeviceOnline()) {
+      enqueueOfflineAction("update_delivery", { deliveryId, updates });
+      setOfflinePendingCount(getOfflineQueue().length);
+      notify("📱 Telefone salvo localmente no aparelho (Modo Offline)");
+      return;
+    }
     try {
-      await updateDeliveryRTDB(deliveryId, { phone });
+      await updateDeliveryRTDB(deliveryId, updates);
       notify("📱 Telefone WhatsApp atualizado com sucesso!");
     } catch (e) {
-      console.warn("Erro ao atualizar telefone no RTDB:", e);
+      console.warn("Erro ao atualizar telefone no RTDB, enfileirando offline:", e);
+      enqueueOfflineAction("update_delivery", { deliveryId, updates });
+      setOfflinePendingCount(getOfflineQueue().length);
     }
   }
 
@@ -825,10 +945,18 @@ function MobileDeliveryApp({
       prev.map((d) => (d.id === id ? { ...d, status: newStatus } : d)),
     );
     notify(`Status atualizado para ${newStatus}`);
+    const updates = { status: newStatus };
+    if (!isDeviceOnline()) {
+      enqueueOfflineAction("update_delivery", { deliveryId: id, updates });
+      setOfflinePendingCount(getOfflineQueue().length);
+      return;
+    }
     try {
-      await updateDeliveryRTDB(id, { status: newStatus });
+      await updateDeliveryRTDB(id, updates);
     } catch (e) {
-      console.warn("Erro ao atualizar status no RTDB:", e);
+      console.warn("Erro ao atualizar status no RTDB, enfileirando offline:", e);
+      enqueueOfflineAction("update_delivery", { deliveryId: id, updates });
+      setOfflinePendingCount(getOfflineQueue().length);
     }
   }
 
@@ -941,6 +1069,42 @@ function MobileDeliveryApp({
             </div>
           </div>
         </button>
+
+        {!isOnline && (
+          <div
+            style={{
+              background: "#f59e0b",
+              color: "#000",
+              fontWeight: 800,
+              fontSize: "11px",
+              padding: "4px 8px",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(245, 158, 11, 0.3)",
+            }}
+            onClick={() => {
+              void flushOfflineQueue().then((res) => {
+                setOfflinePendingCount(getOfflineQueue().length);
+                if (res.syncedCount > 0) {
+                  notify(`📶 Sincronizado: ${res.syncedCount} alteração(ões)!`);
+                } else {
+                  notify("Aparelho ainda sem internet. Dados protegidos no celular.");
+                }
+              });
+            }}
+            title="Sem 4G/Wi-Fi (Modo Offline). Toque para tentar sincronizar com a loja."
+          >
+            <span>🟡 Offline</span>
+            {offlinePendingCount > 0 && (
+              <span style={{ background: "#000", color: "#fff", borderRadius: "10px", padding: "1px 5px", fontSize: "10px" }}>
+                {offlinePendingCount}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Right: Quick Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
@@ -1871,6 +2035,18 @@ function MobileDeliveryCard({
       )}`
     : null;
 
+  const trackingOrigin =
+    typeof window !== "undefined" && window.location.origin
+      ? window.location.origin
+      : "https://houseburger-entregas.web.app";
+  const trackingUrl = `${trackingOrigin}/?rastreio=${delivery.id}`;
+
+  const whatsappTrackingUrl = validWhatsApp
+    ? `https://wa.me/${validWhatsApp}?text=${encodeURIComponent(
+        `Olá ${delivery.customer}! Seu House Burger (Pedido #${delivery.order}) está a caminho com nosso motoboy ${delivery.driver || "da casa"}. Acompanhe ao vivo pelo mapa aqui: ${trackingUrl}`,
+      )}`
+    : null;
+
   const handlePromptPhone = () => {
     const input = window.prompt(
       `Digite o WhatsApp do cliente ${delivery.customer} (com DDD, ex: 73999998888):`
@@ -2105,16 +2281,42 @@ function MobileDeliveryCard({
         )}
 
         {!isDelivered && validWhatsApp && (
-          <a
-            href={whatsappArrivedUrl!}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-arrived-whatsapp"
-            title="Avisar cliente no WhatsApp que já chegou no portão"
-          >
-            <MessageSquare size={16} />
-            <span>Cheguei no Portão (Avisar no WhatsApp)</span>
-          </a>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <a
+              href={whatsappTrackingUrl!}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
+                color: "#ffffff",
+                padding: "10px 14px",
+                borderRadius: "12px",
+                fontSize: "12.5px",
+                fontWeight: 800,
+                textDecoration: "none",
+                boxShadow: "0 2px 8px rgba(5, 150, 105, 0.25)",
+              }}
+              title="Enviar link de rastreamento do mapa em tempo real para o WhatsApp do cliente"
+            >
+              <Navigation size={15} />
+              <span>Enviar Rastreio com Mapa (WhatsApp)</span>
+            </a>
+
+            <a
+              href={whatsappArrivedUrl!}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-arrived-whatsapp"
+              title="Avisar cliente no WhatsApp que já chegou no portão"
+            >
+              <MessageSquare size={16} />
+              <span>Cheguei no Portão (Avisar no WhatsApp)</span>
+            </a>
+          </div>
         )}
 
         {!isDelivered && !validWhatsApp && (

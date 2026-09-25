@@ -110,6 +110,73 @@ export async function updateDeliveryRTDB(deliveryId: string, updates: Partial<De
   await update(itemRef, cleanForRTDB(updates));
 }
 
+export function subscribeToDeliveryByIdRTDB(
+  deliveryId: string,
+  onChange: (delivery: Delivery | null) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  // Tenta ler do cache local primeiro
+  try {
+    const cached = localStorage.getItem(DELIV_CACHE_KEY);
+    if (cached) {
+      const list: Delivery[] = JSON.parse(cached);
+      const found = list.find((d) => d.id === deliveryId);
+      if (found) onChange(found);
+    }
+  } catch {}
+
+  if (!rtdb) return () => undefined;
+  const itemRef = ref(rtdb, `rotacerta/deliveries/${deliveryId}`);
+  return onValue(
+    itemRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        onChange(snapshot.val() as Delivery);
+      } else {
+        onChange(null);
+      }
+    },
+    (err) => {
+      console.warn(`Erro ao carregar entrega ${deliveryId}:`, err);
+      onError?.(err);
+    },
+  );
+}
+
+export async function updateDriverGpsLocationRTDB(
+  deliveryId: string,
+  driverId: string,
+  coords: { latitude: number; longitude: number; heading?: number },
+): Promise<void> {
+  if (!rtdb) return;
+  const now = new Date().toISOString();
+  const updates: Record<string, unknown> = {};
+
+  if (deliveryId) {
+    updates[`rotacerta/deliveries/${deliveryId}/driverLocation`] = {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      heading: coords.heading ?? null,
+      updatedAt: now,
+    };
+  }
+
+  if (driverId) {
+    updates[`rotacerta/drivers/${driverId}/location`] = {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      heading: coords.heading ?? null,
+      updatedAt: now,
+    };
+  }
+
+  try {
+    await update(ref(rtdb), updates);
+  } catch (err) {
+    // Silencia erros de GPS em túneis/sem sinal
+  }
+}
+
 export async function deleteDeliveryRTDB(deliveryId: string): Promise<void> {
   try {
     const cached = localStorage.getItem(DELIV_CACHE_KEY);
