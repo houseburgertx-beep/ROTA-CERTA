@@ -1303,189 +1303,246 @@ main{min-height:100vh;margin-left:242px}header{height:78px;position:sticky;top:0
    Aumenta letras, endereços, localizadores e botões sem quebrar layout
    ======================================================== */
 
-/* Escala 1: GRANDE (+20%) */
-:root[data-text-scale="large"] .delivery-card {
-  gap: 13px;
-  padding: 18px;
+/* Escala Global */
+html[data-text-scale="large"],
+body.text-scale-large,
+.app-shell.text-scale-large {
+  zoom: 1.16;
 }
 
-:root[data-text-scale="large"] .order-num-badge {
-  font-size: 17px;
+html[data-text-scale="extra"],
+body.text-scale-extra,
+.app-shell.text-scale-extra {
+  zoom: 1.32;
 }
 
-:root[data-text-scale="large"] .platform-pill {
-  font-size: 11px;
-  padding: 3px 8px;
+/* Escala 1: GRANDE (+16% a +20%) */
+:root[data-text-scale="large"] .delivery-card,
+.text-scale-large .delivery-card {
+  gap: 13px !important;
+  padding: 18px !important;
 }
 
-:root[data-text-scale="large"] .fee-chip {
-  font-size: 13px;
-  padding: 4px 11px;
+:root[data-text-scale="large"] .order-num-badge,
+.text-scale-large .order-num-badge {
+  font-size: 18px !important;
 }
 
-:root[data-text-scale="large"] .delivery-meta-strip {
-  font-size: 13px;
-  padding: 8px 12px;
+:root[data-text-scale="large"] .platform-pill,
+.text-scale-large .platform-pill {
+  font-size: 11.5px !important;
+  padding: 3px 8px !important;
 }
 
-:root[data-text-scale="large"] .meta-chip {
-  font-size: 12.5px;
+:root[data-text-scale="large"] .fee-chip,
+.text-scale-large .fee-chip {
+  font-size: 13.5px !important;
+  padding: 4px 11px !important;
 }
 
-:root[data-text-scale="large"] .meta-chip.localizador {
-  font-size: 13.5px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
+:root[data-text-scale="large"] .delivery-meta-strip,
+.text-scale-large .delivery-meta-strip {
+  font-size: 13.5px !important;
+  padding: 8px 12px !important;
 }
 
-:root[data-text-scale="large"] .customer-block b {
-  font-size: 18px;
-  letter-spacing: -0.4px;
+:root[data-text-scale="large"] .meta-chip,
+.text-scale-large .meta-chip {
+  font-size: 13px !important;
 }
 
-:root[data-text-scale="large"] .customer-address-line {
-  font-size: 14.5px;
-  line-height: 1.45;
-  color: var(--ink);
-  font-weight: 500;
+:root[data-text-scale="large"] .meta-chip.localizador,
+.text-scale-large .meta-chip.localizador {
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.5px !important;
 }
 
-:root[data-text-scale="large"] .customer-notes-pill {
-  font-size: 13px;
-  padding: 7px 11px;
-  font-weight: 600;
+:root[data-text-scale="large"] .customer-block b,
+.text-scale-large .customer-block b {
+  font-size: 19px !important;
+  letter-spacing: -0.4px !important;
+  font-weight: 800 !important;
 }
 
-:root[data-text-scale="large"] .price-row {
-  padding: 11px 14px;
+:root[data-text-scale="large"] .customer-address-line,
+:root[data-text-scale="large"] .customer-address-line span,
+.text-scale-large .customer-address-line,
+.text-scale-large .customer-address-line span {
+  font-size: 15px !important;
+  line-height: 1.45 !important;
+  color: var(--ink) !important;
+  font-weight: 600 !important;
 }
 
-:root[data-text-scale="large"] .price-row-amount {
-  font-size: 16px;
-  font-weight: 900;
+:root[data-text-scale="large"] .customer-notes-pill,
+:root[data-text-scale="large"] .customer-notes-pill span,
+.text-scale-large .customer-notes-pill,
+.text-scale-large .customer-notes-pill span {
+  font-size: 13.5px !important;
+  padding: 7px 11px !important;
+  font-weight: 600 !important;
 }
 
-:root[data-text-scale="large"] .price-row-payment {
-  font-size: 13px;
-  font-weight: 600;
+:root[data-text-scale="large"] .price-row,
+.text-scale-large .price-row {
+  padding: 11px 14px !important;
 }
 
-:root[data-text-scale="large"] .btn-primary-deliver {
-  min-height: 48px;
-  height: auto;
-  font-size: 15px;
-  padding: 12px;
+:root[data-text-scale="large"] .price-row-amount,
+.text-scale-large .price-row-amount {
+  font-size: 17px !important;
+  font-weight: 900 !important;
 }
 
-:root[data-text-scale="large"] .btn-tool-action {
-  min-height: 42px;
-  height: auto;
-  font-size: 13px;
-  font-weight: 800;
+:root[data-text-scale="large"] .price-row-payment,
+.text-scale-large .price-row-payment {
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
 }
 
-:root[data-text-scale="large"] .btn-ifood-action-pill {
-  font-size: 12.5px;
-  padding: 8px 14px;
+:root[data-text-scale="large"] .btn-primary-deliver,
+.text-scale-large .btn-primary-deliver {
+  min-height: 50px !important;
+  height: auto !important;
+  font-size: 15.5px !important;
+  padding: 12px !important;
+  font-weight: 800 !important;
 }
 
-/* Escala 2: EXTRA GRANDE (+40% - MÁXIMA NITIDEZ SOB SOL/TREPIDAÇÃO) */
-:root[data-text-scale="extra"] .delivery-card {
-  gap: 15px;
-  padding: 20px;
+:root[data-text-scale="large"] .btn-tool-action,
+.text-scale-large .btn-tool-action {
+  min-height: 44px !important;
+  height: auto !important;
+  font-size: 13.5px !important;
+  font-weight: 800 !important;
 }
 
-:root[data-text-scale="extra"] .order-num-badge {
-  font-size: 20px;
+:root[data-text-scale="large"] .btn-ifood-action-pill,
+.text-scale-large .btn-ifood-action-pill {
+  font-size: 13px !important;
+  padding: 8px 14px !important;
 }
 
-:root[data-text-scale="extra"] .platform-pill {
-  font-size: 12.5px;
-  padding: 4px 10px;
+/* Escala 2: EXTRA GRANDE (+32% a +40% - MÁXIMA NITIDEZ SOB SOL/TREPIDAÇÃO) */
+:root[data-text-scale="extra"] .delivery-card,
+.text-scale-extra .delivery-card {
+  gap: 15px !important;
+  padding: 20px !important;
 }
 
-:root[data-text-scale="extra"] .fee-chip {
-  font-size: 14.5px;
-  padding: 5px 12px;
+:root[data-text-scale="extra"] .order-num-badge,
+.text-scale-extra .order-num-badge {
+  font-size: 22px !important;
 }
 
-:root[data-text-scale="extra"] .delivery-meta-strip {
-  font-size: 14.5px;
-  padding: 10px 14px;
+:root[data-text-scale="extra"] .platform-pill,
+.text-scale-extra .platform-pill {
+  font-size: 13.5px !important;
+  padding: 4px 10px !important;
 }
 
-:root[data-text-scale="extra"] .meta-chip {
-  font-size: 14px;
+:root[data-text-scale="extra"] .fee-chip,
+.text-scale-extra .fee-chip {
+  font-size: 15.5px !important;
+  padding: 5px 12px !important;
 }
 
-:root[data-text-scale="extra"] .meta-chip.localizador {
-  font-size: 15px;
-  font-weight: 900;
-  letter-spacing: 0.8px;
+:root[data-text-scale="extra"] .delivery-meta-strip,
+.text-scale-extra .delivery-meta-strip {
+  font-size: 15.5px !important;
+  padding: 10px 14px !important;
 }
 
-:root[data-text-scale="extra"] .customer-block b {
-  font-size: 21px;
-  font-weight: 900;
+:root[data-text-scale="extra"] .meta-chip,
+.text-scale-extra .meta-chip {
+  font-size: 15px !important;
 }
 
-:root[data-text-scale="extra"] .customer-address-line {
-  font-size: 17px;
-  line-height: 1.5;
-  color: var(--ink);
-  font-weight: 600;
+:root[data-text-scale="extra"] .meta-chip.localizador,
+.text-scale-extra .meta-chip.localizador {
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.8px !important;
 }
 
-:root[data-text-scale="extra"] .customer-notes-pill {
-  font-size: 15px;
-  padding: 8px 12px;
-  font-weight: 700;
+:root[data-text-scale="extra"] .customer-block b,
+.text-scale-extra .customer-block b {
+  font-size: 23px !important;
+  font-weight: 900 !important;
 }
 
-:root[data-text-scale="extra"] .price-row {
-  padding: 12px 15px;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
+:root[data-text-scale="extra"] .customer-address-line,
+:root[data-text-scale="extra"] .customer-address-line span,
+.text-scale-extra .customer-address-line,
+.text-scale-extra .customer-address-line span {
+  font-size: 18px !important;
+  line-height: 1.5 !important;
+  color: var(--ink) !important;
+  font-weight: 800 !important;
 }
 
-:root[data-text-scale="extra"] .price-row-amount {
-  font-size: 19px;
-  font-weight: 900;
+:root[data-text-scale="extra"] .customer-notes-pill,
+:root[data-text-scale="extra"] .customer-notes-pill span,
+.text-scale-extra .customer-notes-pill,
+.text-scale-extra .customer-notes-pill span {
+  font-size: 16px !important;
+  padding: 8px 12px !important;
+  font-weight: 700 !important;
 }
 
-:root[data-text-scale="extra"] .price-row-payment {
-  font-size: 14.5px;
-  font-weight: 700;
+:root[data-text-scale="extra"] .price-row,
+.text-scale-extra .price-row {
+  padding: 12px 15px !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 6px !important;
 }
 
-:root[data-text-scale="extra"] .btn-primary-deliver {
-  min-height: 54px;
-  height: auto;
-  font-size: 17px;
-  font-weight: 900;
-  padding: 14px;
+:root[data-text-scale="extra"] .price-row-amount,
+.text-scale-extra .price-row-amount {
+  font-size: 21px !important;
+  font-weight: 900 !important;
 }
 
-:root[data-text-scale="extra"] .delivery-tools-row {
-  gap: 8px;
+:root[data-text-scale="extra"] .price-row-payment,
+.text-scale-extra .price-row-payment {
+  font-size: 16px !important;
+  font-weight: 700 !important;
 }
 
-:root[data-text-scale="extra"] .btn-tool-action {
-  min-height: 48px;
-  height: auto;
-  font-size: 14.5px;
-  font-weight: 800;
+:root[data-text-scale="extra"] .btn-primary-deliver,
+.text-scale-extra .btn-primary-deliver {
+  min-height: 58px !important;
+  height: auto !important;
+  font-size: 18px !important;
+  font-weight: 900 !important;
+  padding: 14px !important;
 }
 
-:root[data-text-scale="extra"] .ifood-action-card {
-  padding: 12px 14px;
-  flex-wrap: wrap;
+:root[data-text-scale="extra"] .delivery-tools-row,
+.text-scale-extra .delivery-tools-row {
+  gap: 8px !important;
 }
 
-:root[data-text-scale="extra"] .btn-ifood-action-pill {
-  font-size: 14px;
-  padding: 9px 16px;
+:root[data-text-scale="extra"] .btn-tool-action,
+.text-scale-extra .btn-tool-action {
+  min-height: 50px !important;
+  height: auto !important;
+  font-size: 15.5px !important;
+  font-weight: 800 !important;
+}
+
+:root[data-text-scale="extra"] .ifood-action-card,
+.text-scale-extra .ifood-action-card {
+  padding: 12px 14px !important;
+  flex-wrap: wrap !important;
+}
+
+:root[data-text-scale="extra"] .btn-ifood-action-pill,
+.text-scale-extra .btn-ifood-action-pill {
+  font-size: 15px !important;
+  padding: 10px 18px !important;
 }
 
 

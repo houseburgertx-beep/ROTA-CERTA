@@ -513,6 +513,10 @@ function MobileDeliveryApp({
 
   useEffect(() => {
     document.documentElement.dataset.textScale = textScale;
+    document.documentElement.classList.remove("text-scale-normal", "text-scale-large", "text-scale-extra");
+    document.documentElement.classList.add(`text-scale-${textScale}`);
+    document.body.classList.remove("text-scale-normal", "text-scale-large", "text-scale-extra");
+    document.body.classList.add(`text-scale-${textScale}`);
     try {
       localStorage.setItem("rotacerta_text_scale", textScale);
     } catch {}
@@ -914,7 +918,7 @@ function MobileDeliveryApp({
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell text-scale-${textScale}`}>
       {/* Native Mobile App Header */}
       <header className="app-header-native">
         {/* Left: User Avatar & Live Status - Tapping opens Profile Sheet */}
@@ -980,35 +984,33 @@ function MobileDeliveryApp({
           {/* Acessibilidade: Tamanho de Letra para Motoboy (Normal, Grande, Extra) */}
           <button
             type="button"
-            className="icon-btn text-scale-toggle"
+            className={`icon-btn text-scale-toggle ${textScale !== "normal" ? "active" : ""}`}
             style={{
-              width: "36px",
               height: "34px",
+              padding: "0 8px",
               borderRadius: "11px",
-              border: textScale !== "normal" ? "1.5px solid var(--primary)" : "1px solid var(--line)",
+              border: textScale !== "normal" ? "2px solid var(--primary)" : "1px solid var(--line)",
               background: textScale !== "normal" ? "var(--primary-soft)" : "var(--surface)",
               color: textScale !== "normal" ? "var(--primary)" : "var(--ink)",
               fontWeight: 800,
+              fontSize: "12px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: "1px",
+              gap: "3px",
               cursor: "pointer",
             }}
             onClick={() => {
-              setTextScale((prev) => {
-                const next = prev === "normal" ? "large" : prev === "large" ? "extra" : "normal";
-                const label = next === "normal" ? "Normal (Padrão)" : next === "large" ? "Grande (+20%)" : "Extra Grande (+40%)";
-                notify(`👓 Letra: ${label}`);
-                return next;
-              });
+              const next = textScale === "normal" ? "large" : textScale === "large" ? "extra" : "normal";
+              const label = next === "normal" ? "Normal (Padrão)" : next === "large" ? "Grande (+20%)" : "Extra Grande (+35%)";
+              setTextScale(next);
+              notify(`👓 Letra: ${label}`);
             }}
-            title={`Tamanho da Letra: ${textScale === "normal" ? "Normal" : textScale === "large" ? "Grande (+20%)" : "Extra Grande (+40%)"} (Toque para alternar)`}
+            title={`Tamanho da Letra: ${textScale === "normal" ? "Normal" : textScale === "large" ? "Grande (+20%)" : "Extra Grande (+35%)"} (Toque para alternar)`}
             aria-label="Aumentar tamanho da letra"
           >
-            <span style={{ fontSize: "12px", fontWeight: 800 }}>A</span>
-            {textScale === "large" && <span style={{ fontSize: "11px", fontWeight: 900 }}>+</span>}
-            {textScale === "extra" && <span style={{ fontSize: "11px", fontWeight: 900 }}>++</span>}
+            <span>👓</span>
+            <span>{textScale === "normal" ? "A" : textScale === "large" ? "A+" : "A++"}</span>
           </button>
 
           <button
