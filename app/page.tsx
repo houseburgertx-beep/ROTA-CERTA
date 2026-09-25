@@ -287,6 +287,15 @@ function MobileDeliveryApp({
     typeof localStorage !== "undefined" && localStorage.getItem("rotacerta_theme") === "dark" ? "dark" : "light",
   );
 
+  type TextScale = "normal" | "large" | "extra";
+  const [textScale, setTextScale] = useState<TextScale>(() => {
+    if (typeof localStorage !== "undefined") {
+      const saved = localStorage.getItem("rotacerta_text_scale");
+      if (saved === "large" || saved === "extra") return saved;
+    }
+    return "normal";
+  });
+
   const [takeatCreds, setTakeatCreds] = useState<TakeatCredentials>(() => getTakeatCredentials());
   const [isTakeatConnected, setIsTakeatConnected] = useState(() => isTakeatConfigured());
   const [takeatSyncing, setTakeatSyncing] = useState(false);
@@ -501,6 +510,13 @@ function MobileDeliveryApp({
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("rotacerta_theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.dataset.textScale = textScale;
+    try {
+      localStorage.setItem("rotacerta_text_scale", textScale);
+    } catch {}
+  }, [textScale]);
 
   useEffect(() => {
     try {
@@ -960,6 +976,40 @@ function MobileDeliveryApp({
               </button>
             </div>
           )}
+
+          {/* Acessibilidade: Tamanho de Letra para Motoboy (Normal, Grande, Extra) */}
+          <button
+            type="button"
+            className="icon-btn text-scale-toggle"
+            style={{
+              width: "36px",
+              height: "34px",
+              borderRadius: "11px",
+              border: textScale !== "normal" ? "1.5px solid var(--primary)" : "1px solid var(--line)",
+              background: textScale !== "normal" ? "var(--primary-soft)" : "var(--surface)",
+              color: textScale !== "normal" ? "var(--primary)" : "var(--ink)",
+              fontWeight: 800,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "1px",
+              cursor: "pointer",
+            }}
+            onClick={() => {
+              setTextScale((prev) => {
+                const next = prev === "normal" ? "large" : prev === "large" ? "extra" : "normal";
+                const label = next === "normal" ? "Normal (Padrão)" : next === "large" ? "Grande (+20%)" : "Extra Grande (+40%)";
+                notify(`👓 Letra: ${label}`);
+                return next;
+              });
+            }}
+            title={`Tamanho da Letra: ${textScale === "normal" ? "Normal" : textScale === "large" ? "Grande (+20%)" : "Extra Grande (+40%)"} (Toque para alternar)`}
+            aria-label="Aumentar tamanho da letra"
+          >
+            <span style={{ fontSize: "12px", fontWeight: 800 }}>A</span>
+            {textScale === "large" && <span style={{ fontSize: "11px", fontWeight: 900 }}>+</span>}
+            {textScale === "extra" && <span style={{ fontSize: "11px", fontWeight: 900 }}>++</span>}
+          </button>
 
           <button
             type="button"
@@ -1673,6 +1723,37 @@ function MobileDeliveryApp({
                 >
                   {theme === "light" ? <><Moon size={13} /> Modo Escuro</> : <><Sun size={13} /> Modo Claro</>}
                 </button>
+              </div>
+
+              <div className="app-profile-row" style={{ marginTop: "12px" }}>
+                <span style={{ color: "var(--muted)", display: "flex", alignItems: "center", gap: "5px" }}>
+                  👓 Tamanho da Letra
+                </span>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  {(["normal", "large", "extra"] as const).map((scale) => (
+                    <button
+                      key={scale}
+                      type="button"
+                      onClick={() => {
+                        setTextScale(scale);
+                        const label = scale === "normal" ? "Normal" : scale === "large" ? "Grande (+20%)" : "Extra Grande (+40%)";
+                        notify(`👓 Letra: ${label}`);
+                      }}
+                      style={{
+                        border: textScale === scale ? "1.5px solid var(--primary)" : "1px solid var(--line)",
+                        background: textScale === scale ? "var(--primary-soft)" : "var(--surface)",
+                        color: textScale === scale ? "var(--primary)" : "var(--ink)",
+                        padding: "5px 9px",
+                        borderRadius: "8px",
+                        fontSize: "11px",
+                        fontWeight: textScale === scale ? "800" : "600",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {scale === "normal" ? "Normal" : scale === "large" ? "Grande" : "Extra"}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {currentUser.role === "admin" && (

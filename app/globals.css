@@ -1298,5 +1298,195 @@ main{min-height:100vh;margin-left:242px}header{height:78px;position:sticky;top:0
   border-color: rgba(239, 68, 68, 0.28);
 }
 
+/* ========================================================
+   MODO VISIBILIDADE / TAMANHO DE FONTE (ACESSIBILIDADE MOTOBOY)
+   Aumenta letras, endereços, localizadores e botões sem quebrar layout
+   ======================================================== */
+
+/* Escala 1: GRANDE (+20%) */
+:root[data-text-scale="large"] .delivery-card {
+  gap: 13px;
+  padding: 18px;
+}
+
+:root[data-text-scale="large"] .order-num-badge {
+  font-size: 17px;
+}
+
+:root[data-text-scale="large"] .platform-pill {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+:root[data-text-scale="large"] .fee-chip {
+  font-size: 13px;
+  padding: 4px 11px;
+}
+
+:root[data-text-scale="large"] .delivery-meta-strip {
+  font-size: 13px;
+  padding: 8px 12px;
+}
+
+:root[data-text-scale="large"] .meta-chip {
+  font-size: 12.5px;
+}
+
+:root[data-text-scale="large"] .meta-chip.localizador {
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+:root[data-text-scale="large"] .customer-block b {
+  font-size: 18px;
+  letter-spacing: -0.4px;
+}
+
+:root[data-text-scale="large"] .customer-address-line {
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+:root[data-text-scale="large"] .customer-notes-pill {
+  font-size: 13px;
+  padding: 7px 11px;
+  font-weight: 600;
+}
+
+:root[data-text-scale="large"] .price-row {
+  padding: 11px 14px;
+}
+
+:root[data-text-scale="large"] .price-row-amount {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+:root[data-text-scale="large"] .price-row-payment {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+:root[data-text-scale="large"] .btn-primary-deliver {
+  min-height: 48px;
+  height: auto;
+  font-size: 15px;
+  padding: 12px;
+}
+
+:root[data-text-scale="large"] .btn-tool-action {
+  min-height: 42px;
+  height: auto;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+:root[data-text-scale="large"] .btn-ifood-action-pill {
+  font-size: 12.5px;
+  padding: 8px 14px;
+}
+
+/* Escala 2: EXTRA GRANDE (+40% - MÁXIMA NITIDEZ SOB SOL/TREPIDAÇÃO) */
+:root[data-text-scale="extra"] .delivery-card {
+  gap: 15px;
+  padding: 20px;
+}
+
+:root[data-text-scale="extra"] .order-num-badge {
+  font-size: 20px;
+}
+
+:root[data-text-scale="extra"] .platform-pill {
+  font-size: 12.5px;
+  padding: 4px 10px;
+}
+
+:root[data-text-scale="extra"] .fee-chip {
+  font-size: 14.5px;
+  padding: 5px 12px;
+}
+
+:root[data-text-scale="extra"] .delivery-meta-strip {
+  font-size: 14.5px;
+  padding: 10px 14px;
+}
+
+:root[data-text-scale="extra"] .meta-chip {
+  font-size: 14px;
+}
+
+:root[data-text-scale="extra"] .meta-chip.localizador {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+}
+
+:root[data-text-scale="extra"] .customer-block b {
+  font-size: 21px;
+  font-weight: 900;
+}
+
+:root[data-text-scale="extra"] .customer-address-line {
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+:root[data-text-scale="extra"] .customer-notes-pill {
+  font-size: 15px;
+  padding: 8px 12px;
+  font-weight: 700;
+}
+
+:root[data-text-scale="extra"] .price-row {
+  padding: 12px 15px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+:root[data-text-scale="extra"] .price-row-amount {
+  font-size: 19px;
+  font-weight: 900;
+}
+
+:root[data-text-scale="extra"] .price-row-payment {
+  font-size: 14.5px;
+  font-weight: 700;
+}
+
+:root[data-text-scale="extra"] .btn-primary-deliver {
+  min-height: 54px;
+  height: auto;
+  font-size: 17px;
+  font-weight: 900;
+  padding: 14px;
+}
+
+:root[data-text-scale="extra"] .delivery-tools-row {
+  gap: 8px;
+}
+
+:root[data-text-scale="extra"] .btn-tool-action {
+  min-height: 48px;
+  height: auto;
+  font-size: 14.5px;
+  font-weight: 800;
+}
+
+:root[data-text-scale="extra"] .ifood-action-card {
+  padding: 12px 14px;
+  flex-wrap: wrap;
+}
+
+:root[data-text-scale="extra"] .btn-ifood-action-pill {
+  font-size: 14px;
+  padding: 9px 16px;
+}
+
 
 
