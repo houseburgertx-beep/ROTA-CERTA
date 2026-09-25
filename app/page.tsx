@@ -12,7 +12,6 @@ import {
   Compass,
   Copy,
   ExternalLink,
-  Glasses,
   LogOut,
   MapPin,
   MapPinned,
@@ -988,17 +987,18 @@ function MobileDeliveryApp({
             className={`icon-btn text-scale-toggle ${textScale === "large" ? "active" : ""}`}
             style={{
               height: "34px",
+              minWidth: "36px",
               padding: "0 8px",
               borderRadius: "11px",
               border: textScale === "large" ? "2px solid var(--primary)" : "1px solid var(--line)",
               background: textScale === "large" ? "var(--primary-soft)" : "var(--surface)",
               color: textScale === "large" ? "var(--primary)" : "var(--ink)",
-              fontWeight: 800,
-              fontSize: "12px",
+              fontWeight: 900,
+              fontSize: "13px",
+              letterSpacing: "-0.2px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: "4px",
               cursor: "pointer",
             }}
             onClick={() => {
@@ -1007,11 +1007,10 @@ function MobileDeliveryApp({
               setTextScale(next);
               notify(`Tamanho da Letra: ${label}`);
             }}
-            title={`Tamanho da Letra: ${textScale === "normal" ? "Normal" : "Grande (+20%)"} (Toque para alternar)`}
-            aria-label="Aumentar tamanho da letra"
+            title={`Tamanho da Letra: ${textScale === "normal" ? "Normal (Toque para ativar A+)" : "Grande (+20%) (Toque para voltar ao normal)"}`}
+            aria-label="Alternar tamanho da letra"
           >
-            <Glasses size={15} />
-            <span>{textScale === "normal" ? "A" : "A+"}</span>
+            <span>A+</span>
           </button>
 
           <button
@@ -1730,7 +1729,7 @@ function MobileDeliveryApp({
 
               <div className="app-profile-row" style={{ marginTop: "12px" }}>
                 <span style={{ color: "var(--muted)", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Glasses size={14} /> Tamanho da Letra
+                  <b style={{ color: "var(--primary)", fontWeight: 900, fontSize: "13px" }}>A+</b> Tamanho da Letra
                 </span>
                 <div style={{ display: "flex", gap: "6px" }}>
                   {(["normal", "large"] as const).map((scale) => (
