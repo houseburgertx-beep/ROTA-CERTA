@@ -12,6 +12,7 @@ import {
   Compass,
   Copy,
   ExternalLink,
+  Glasses,
   LogOut,
   MapPin,
   MapPinned,
@@ -997,19 +998,19 @@ function MobileDeliveryApp({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: "3px",
+              gap: "4px",
               cursor: "pointer",
             }}
             onClick={() => {
               const next = textScale === "normal" ? "large" : "normal";
               const label = next === "large" ? "Grande (+20%)" : "Normal (Padrão)";
               setTextScale(next);
-              notify(`👓 Letra: ${label}`);
+              notify(`Tamanho da Letra: ${label}`);
             }}
             title={`Tamanho da Letra: ${textScale === "normal" ? "Normal" : "Grande (+20%)"} (Toque para alternar)`}
             aria-label="Aumentar tamanho da letra"
           >
-            <span>👓</span>
+            <Glasses size={15} />
             <span>{textScale === "normal" ? "A" : "A+"}</span>
           </button>
 
@@ -1728,8 +1729,8 @@ function MobileDeliveryApp({
               </div>
 
               <div className="app-profile-row" style={{ marginTop: "12px" }}>
-                <span style={{ color: "var(--muted)", display: "flex", alignItems: "center", gap: "5px" }}>
-                  👓 Tamanho da Letra
+                <span style={{ color: "var(--muted)", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Glasses size={14} /> Tamanho da Letra
                 </span>
                 <div style={{ display: "flex", gap: "6px" }}>
                   {(["normal", "large"] as const).map((scale) => (
@@ -1739,7 +1740,7 @@ function MobileDeliveryApp({
                       onClick={() => {
                         setTextScale(scale);
                         const label = scale === "normal" ? "Normal (Padrão)" : "Grande (+20%)";
-                        notify(`👓 Letra: ${label}`);
+                        notify(`Tamanho da Letra: ${label}`);
                       }}
                       style={{
                         border: textScale === scale ? "2px solid var(--primary)" : "1px solid var(--line)",
