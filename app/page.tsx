@@ -1838,10 +1838,14 @@ function MobileDeliveryCard({
           )}
           <span className="order-num-badge">{delivery.order}</span>
           {delivery.platform === "ifood" && (
-            <span className="platform-pill ifood">iFood</span>
+            <span className="platform-pill ifood" title="Pedido via iFood">
+              iFood{delivery.platformOrderId && delivery.platformOrderId !== delivery.order && !delivery.order.includes(delivery.platformOrderId) ? ` #${delivery.platformOrderId.replace(/^#/, "")}` : ""}
+            </span>
           )}
           {delivery.platform === "takeat" && (
-            <span className="platform-pill takeat">Takeat</span>
+            <span className="platform-pill takeat" title="Pedido direto da Loja (Takeat)">
+              Loja
+            </span>
           )}
           <span className="order-time-text">{delivery.time}</span>
         </div>
