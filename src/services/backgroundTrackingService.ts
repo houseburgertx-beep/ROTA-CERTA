@@ -78,6 +78,17 @@ function createSilentWavBlob(): Blob {
   return new Blob([buffer], { type: "audio/wav" });
 }
 
+const BG_UNLOCKED_KEY = "rotacerta_background_unlocked";
+
+export function isBackgroundTrackingPermanentlyUnlocked(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return localStorage.getItem(BG_UNLOCKED_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
+
 function notifyHeartbeatStatus(playing: boolean) {
   isHeartbeatPlaying = playing;
   heartbeatListeners.forEach((fn) => fn(playing));
@@ -89,14 +100,15 @@ function notifyHeartbeatStatus(playing: boolean) {
 async function startSilentHeartbeat(driverName = "Motoboy"): Promise<boolean> {
   if (typeof window === "undefined") return false;
 
-  try {
-    if (!silentBlobUrl) {
-      const blob = createSilentWavBlob();
-      silentBlobUrl = URL.createObjectURL(blob);
-    }
+  // Se o áudio já está ativo e tocando, mantém ativo sem interrupção
+  if (silentAudioElement && !silentAudioElement.paused && silentAudioElement.currentTime > 0) {
+    notifyHeartbeatStatus(true);
+    return true;
+  }
 
+  try {
     if (!silentAudioElement) {
-      silentAudioElement = new Audio(silentBlobUrl);
+      silentAudioElement = new Audio("/silent.wav");
       silentAudioElement.loop = true;
       silentAudioElement.volume = 0.01;
       silentAudioElement.setAttribute("playsinline", "true");
@@ -121,6 +133,10 @@ async function startSilentHeartbeat(driverName = "Motoboy"): Promise<boolean> {
     }
 
     await silentAudioElement.play();
+
+    try {
+      localStorage.setItem(BG_UNLOCKED_KEY, "true");
+    } catch {}
 
     // Configura a tela de bloqueio nativa do Android / iOS
     if ("mediaSession" in navigator && window.MediaMetadata) {
@@ -151,7 +167,9 @@ async function startSilentHeartbeat(driverName = "Motoboy"): Promise<boolean> {
     return true;
   } catch (err) {
     console.warn("Silent audio aguardando interação do usuário:", err);
-    notifyHeartbeatStatus(false);
+    if (!isBackgroundTrackingPermanentlyUnlocked()) {
+      notifyHeartbeatStatus(false);
+    }
     return false;
   }
 }
@@ -394,12 +412,12 @@ export function isBackgroundTrackingActive(): boolean {
 }
 
 export function isAudioHeartbeatPlaying(): boolean {
-  return isHeartbeatPlaying;
+  return isHeartbeatPlaying || isBackgroundTrackingPermanentlyUnlocked();
 }
 
 export function addHeartbeatListener(listener: (playing: boolean) => void): () => void {
   heartbeatListeners.add(listener);
-  listener(isHeartbeatPlaying);
+  listener(isHeartbeatPlaying || isBackgroundTrackingPermanentlyUnlocked());
   return () => {
     heartbeatListeners.delete(listener);
   };

@@ -1,9 +1,11 @@
-const CACHE = "rota-certa-v3";
+const CACHE = "rota-certa-v4";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/favicon.svg"
+  "/favicon.svg",
+  "/silent.wav",
+  "/notification.wav"
 ];
 
 self.addEventListener("install", (event) => {

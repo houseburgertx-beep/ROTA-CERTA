@@ -769,6 +769,13 @@ function MobileDeliveryApp({
     }
   }, []);
 
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
+  const activeDriverRef = useRef(activeDriver);
+  activeDriverRef.current = activeDriver;
+  const appModeRef = useRef(appMode);
+  appModeRef.current = appMode;
+
   // Transmissão contínua de GPS com tela ligada ou desligada (Background GPS + Silent Heartbeat)
   useEffect(() => {
     if (!isTrackingActive) {
@@ -776,27 +783,16 @@ function MobileDeliveryApp({
       return;
     }
 
-    const isDriverRole = currentUser.role === "driver" || appMode === "motoboy";
+    const isDriverRole = currentUserRef.current.role === "driver" || appModeRef.current === "motoboy";
     if (!isDriverRole) return;
 
-    // Encontra entrega em rota atribuída a este motorista
-    const activeRouteDelivery = deliveries.find(
-      (d) =>
-        (d.status === "Em rota" || (d.status as string) === "em_rota") &&
-        (currentUser.role === "admin" ||
-          d.driverId === activeDriver?.id ||
-          (d.driver && activeDriver && d.driver.toLowerCase() === activeDriver.name.toLowerCase())),
-    );
-
-    const driverId = activeDriver?.id || currentUser.id;
-    const driverName = activeDriver?.name || currentUser.name;
+    const driverId = activeDriverRef.current?.id || currentUserRef.current.id;
+    const driverName = activeDriverRef.current?.name || currentUserRef.current.name;
 
     void startBackgroundTracking({
       driverId,
       driverName,
-      activeDeliveryId: activeRouteDelivery?.id,
-      activeOrderNumber: activeRouteDelivery?.order,
-      statusText: activeRouteDelivery ? `Em rota (Pedido #${activeRouteDelivery.order})` : "Livre na Loja",
+      statusText: "Livre na Loja",
       minIntervalMs: 4000,
     }).then((started) => {
       if (started) setIsHeartbeatActive(true);
@@ -815,7 +811,7 @@ function MobileDeliveryApp({
       unbindListener();
       unbindHeartbeat();
     };
-  }, [isTrackingActive, currentUser, appMode, activeDriver]);
+  }, [isTrackingActive]);
 
   // Desbloqueia o áudio de background automaticamente no primeiro toque na tela (Safari / Android)
   useEffect(() => {
@@ -1468,14 +1464,10 @@ function MobileDeliveryApp({
                     justifyContent: "space-between",
                     gap: "8px",
                     background: isTrackingActive
-                      ? (isHeartbeatActive
-                          ? "linear-gradient(90deg, rgba(16,185,129,0.12) 0%, rgba(124,58,237,0.08) 100%)"
-                          : "linear-gradient(90deg, rgba(234,179,8,0.15) 0%, rgba(245,158,11,0.08) 100%)")
+                      ? "linear-gradient(90deg, rgba(16,185,129,0.12) 0%, rgba(124,58,237,0.08) 100%)"
                       : "var(--surface)",
                     border: isTrackingActive
-                      ? (isHeartbeatActive
-                          ? "1px solid rgba(16,185,129,0.35)"
-                          : "1.5px solid #eab308")
+                      ? "1px solid rgba(16,185,129,0.35)"
                       : "1px solid var(--line)",
                     borderRadius: "14px",
                     padding: "8px 12px",
@@ -1502,9 +1494,7 @@ function MobileDeliveryApp({
                           width: "100%",
                           height: "100%",
                           borderRadius: "50%",
-                          background: isTrackingActive
-                            ? (isHeartbeatActive ? "#10b981" : "#eab308")
-                            : "#ef4444",
+                          background: isTrackingActive ? "#10b981" : "#ef4444",
                           opacity: isTrackingActive ? 0.4 : 0,
                           animation: isTrackingActive ? "pulse-dot 1.5s infinite" : "none",
                         }}
@@ -1514,9 +1504,7 @@ function MobileDeliveryApp({
                           width: "8px",
                           height: "8px",
                           borderRadius: "50%",
-                          background: isTrackingActive
-                            ? (isHeartbeatActive ? "#10b981" : "#eab308")
-                            : "#ef4444",
+                          background: isTrackingActive ? "#10b981" : "#ef4444",
                         }}
                       />
                     </span>
@@ -1531,8 +1519,8 @@ function MobileDeliveryApp({
                             style={{
                               fontSize: "10px",
                               fontWeight: 700,
-                              color: isHeartbeatActive ? "#10b981" : "#ca8a04",
-                              background: isHeartbeatActive ? "rgba(16,185,129,0.14)" : "rgba(234,179,8,0.14)",
+                              color: "#10b981",
+                              background: "rgba(16,185,129,0.14)",
                               padding: "1px 6px",
                               borderRadius: "6px",
                               whiteSpace: "nowrap",
@@ -1574,8 +1562,7 @@ function MobileDeliveryApp({
                       <span
                         style={{
                           fontSize: "9.5px",
-                          color: !isHeartbeatActive && isTrackingActive ? "#b45309" : "var(--muted)",
-                          fontWeight: !isHeartbeatActive && isTrackingActive ? 600 : 400,
+                          color: "var(--muted)",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
@@ -1584,7 +1571,7 @@ function MobileDeliveryApp({
                         {isTrackingActive
                           ? (isHeartbeatActive
                               ? "Sinal contínuo mesmo com tela desligada no bolso"
-                              : "⚠️ Toque aqui para liberar GPS com tela desligada")
+                              : "Sinal transmitindo para a loja")
                           : "Transmissão pausada"}
                       </span>
                     </div>
@@ -1604,8 +1591,8 @@ function MobileDeliveryApp({
                           height: "32px",
                           padding: "0 10px",
                           borderRadius: "10px",
-                          background: "#eab308",
-                          color: "#000",
+                          background: "#10b981",
+                          color: "#fff",
                           border: "none",
                           fontSize: "11px",
                           fontWeight: 800,
@@ -1613,7 +1600,7 @@ function MobileDeliveryApp({
                           alignItems: "center",
                           gap: "4px",
                           cursor: "pointer",
-                          boxShadow: "0 2px 8px rgba(234,179,8,0.3)",
+                          boxShadow: "0 2px 8px rgba(16,185,129,0.3)",
                         }}
                         title="Ativar rastreamento em segundo plano mesmo com tela desligada"
                       >
@@ -1930,6 +1917,9 @@ function MobileDeliveryApp({
               <MobileMapView
                 deliveries={scopedDeliveries}
                 drivers={drivers}
+                currentDriverGps={driverGps}
+                liveTelemetry={liveTelemetry}
+                currentDriverName={activeDriver?.name || currentUser.name}
                 selectedRouteIds={selectedForRouteIds}
                 onClearSelection={clearRouteSelection}
                 mapProvider={mapProvider}
@@ -2833,6 +2823,9 @@ function MobileDeliveryCard({
 function MobileMapView({
   deliveries,
   drivers = [],
+  currentDriverGps,
+  liveTelemetry,
+  currentDriverName,
   mapProvider,
   notify,
   onMarkDelivered,
@@ -2841,6 +2834,9 @@ function MobileMapView({
 }: {
   deliveries: Delivery[];
   drivers?: Driver[];
+  currentDriverGps?: GeoPoint | null;
+  liveTelemetry?: TrackingPosition | null;
+  currentDriverName?: string;
   mapProvider: MapTileProvider;
   notify: (s: string) => void;
   onMarkDelivered: (id: string) => void;
@@ -2906,17 +2902,34 @@ function MobileMapView({
     [targetDeliveries],
   );
 
-  // CÁLCULO AUTOMÁTICO DE ROTA OTIMIZADA (TSP)
+  // CÁLCULO AUTOMÁTICO DE ROTA OTIMIZADA (TSP) COM GPS AO VIVO DO MOTOBOY
   useEffect(() => {
     let cancelled = false;
     async function autoRoute() {
+      const effectiveStart = currentDriverGps || userPos;
+
+      // Se não há entregas pendentes: se estiver fora da loja, traça percurso de retorno à Base
       if (routableDeliveries.length === 0) {
+        if (effectiveStart) {
+          const distToStore = Math.hypot(
+            effectiveStart.latitude - STORE_POINT.latitude,
+            effectiveStart.longitude - STORE_POINT.longitude,
+          );
+          if (distToStore > 0.001) {
+            try {
+              const res = await calculateRoute([effectiveStart, STORE_POINT], false);
+              if (!cancelled) setRoute(res);
+              return;
+            } catch {}
+          }
+        }
         setRoute(null);
         return;
       }
+
       setLoading(true);
       try {
-        const startPoint = userPos || STORE_POINT;
+        const startPoint = effectiveStart || STORE_POINT;
         const points = [
           startPoint,
           ...routableDeliveries.map((d) => ({ latitude: d.latitude!, longitude: d.longitude! })),
@@ -2928,7 +2941,7 @@ function MobileMapView({
       } catch (e) {
         // Fallback viário
         const fallbackPoints = [
-          userPos || STORE_POINT,
+          effectiveStart || STORE_POINT,
           ...routableDeliveries.map((d) => ({ latitude: d.latitude!, longitude: d.longitude! })),
         ];
         if (!cancelled) {
@@ -2948,7 +2961,7 @@ function MobileMapView({
     return () => {
       cancelled = true;
     };
-  }, [routableDeliveries.length, userPos]);
+  }, [routableDeliveries.length, currentDriverGps?.latitude, currentDriverGps?.longitude, userPos]);
 
   // ORDENAÇÃO ESTRITA DAS PARADAS CONFORME A ROTA OTIMIZADA
   const orderedDeliveries = useMemo(() => {
@@ -2982,7 +2995,16 @@ function MobileMapView({
   }, [routableDeliveries, route]);
 
   function startGoogleMapsFullRoute() {
-    if (orderedDeliveries.length === 0) return;
+    if (orderedDeliveries.length === 0) {
+      if (route) {
+        window.open(
+          `https://www.google.com/maps/dir/?api=1&destination=${STORE_POINT.latitude},${STORE_POINT.longitude}&travelmode=driving`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      }
+      return;
+    }
     const dest = orderedDeliveries[orderedDeliveries.length - 1];
     const waypoints = orderedDeliveries
       .slice(0, -1)
@@ -3001,7 +3023,16 @@ function MobileMapView({
   }
 
   function startWazeFirstStop() {
-    if (orderedDeliveries.length === 0) return;
+    if (orderedDeliveries.length === 0) {
+      if (route) {
+        window.open(
+          `https://waze.com/ul?ll=${STORE_POINT.latitude},${STORE_POINT.longitude}&navigate=yes`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      }
+      return;
+    }
     const first = orderedDeliveries[0];
     const url = `https://waze.com/ul?ll=${first.latitude},${first.longitude}&navigate=yes`;
     window.open(url, "_blank", "noopener,noreferrer");
@@ -3059,11 +3090,19 @@ function MobileMapView({
         {/* Floating Top Route Summary */}
         <div className="map-floating-bar">
           <div>
-            <b>{orderedDeliveries.length} parada(s) na rota</b>
+            <b>
+              {orderedDeliveries.length > 0
+                ? `${orderedDeliveries.length} parada(s) no percurso`
+                : route
+                  ? "Retornando para a Loja 🏠"
+                  : "Aguardando pedidos na Loja 🛵"}
+            </b>
             <span>
               {route
                 ? `${(route.distanceMeters / 1000).toFixed(1)} km · ~${Math.round(route.durationSeconds / 60)} min de moto`
-                : "Traçando melhor rota viária…"}
+                : currentDriverGps
+                  ? "Sua moto está conectada e transmitindo ao vivo"
+                  : "Traçando melhor rota viária…"}
             </span>
           </div>
           <div style={{ display: "flex", gap: "6px" }}>
@@ -3071,7 +3110,7 @@ function MobileMapView({
               type="button"
               className="primary"
               style={{ padding: "8px 12px", fontSize: "11px", borderRadius: "10px" }}
-              disabled={loading || orderedDeliveries.length === 0}
+              disabled={loading || (!route && orderedDeliveries.length === 0)}
               onClick={startGoogleMapsFullRoute}
             >
               <Navigation size={14} /> Maps
@@ -3087,7 +3126,7 @@ function MobileMapView({
                 fontSize: "11px",
                 fontWeight: "700",
               }}
-              disabled={orderedDeliveries.length === 0}
+              disabled={!route && orderedDeliveries.length === 0}
               onClick={startWazeFirstStop}
             >
               Waze
@@ -3188,6 +3227,9 @@ function MobileMapView({
         <FreeMapInternal
           deliveries={orderedDeliveries}
           drivers={drivers}
+          currentDriverGps={currentDriverGps}
+          liveTelemetry={liveTelemetry}
+          currentDriverName={currentDriverName}
           mapProvider={mapProvider}
           route={route}
           onGpsFound={(pos) => setUserPos(pos)}
@@ -3343,6 +3385,9 @@ function MobileMapView({
 function FreeMapInternal({
   deliveries,
   drivers = [],
+  currentDriverGps,
+  liveTelemetry,
+  currentDriverName,
   mapProvider,
   route,
   onGpsFound,
@@ -3350,6 +3395,9 @@ function FreeMapInternal({
 }: {
   deliveries: Delivery[];
   drivers?: Driver[];
+  currentDriverGps?: GeoPoint | null;
+  liveTelemetry?: TrackingPosition | null;
+  currentDriverName?: string;
   mapProvider: MapTileProvider;
   route?: RouteResult | null;
   onGpsFound?: (pos: GeoPoint) => void;
@@ -3361,13 +3409,23 @@ function FreeMapInternal({
   const deliveriesLayerRef = useRef<any>(null);
   const routePolylineRef = useRef<any>(null);
   const driverMarkersLayerRef = useRef<any>(null);
+  const currentDriverLayerRef = useRef<any>(null);
+  const currentDriverMarkerRef = useRef<any>(null);
   const hasFittedBoundsRef = useRef(false);
   const [gpsStatus, setGpsStatus] = useState("");
+  const [followingMe, setFollowingMe] = useState(false);
 
   function populateDriverMarkers(layer: any, L: any, driverList: Driver[]) {
     layer.clearLayers();
     const now = Date.now();
     const activeGpsDrivers = (driverList || []).filter((d) => {
+      // Evita duplicar o motoboy atual que já possui marcador local em tempo real de alta precisão
+      if (
+        currentDriverName &&
+        (d.name.toLowerCase() === currentDriverName.toLowerCase() || d.id === currentDriverName)
+      ) {
+        return false;
+      }
       if (!d.location || typeof d.location.latitude !== "number" || typeof d.location.longitude !== "number") {
         return false;
       }
@@ -3458,13 +3516,21 @@ function FreeMapInternal({
 
       // Camadas de polilinha, entregas e motoboys
       routePolylineRef.current = L.polyline([], {
-        color: "#4f46e5",
+        color: "#ea1d2c",
         weight: 6,
-        opacity: 0.85,
+        opacity: 0.88,
+        lineCap: "round",
+        lineJoin: "round",
       }).addTo(instance);
 
       deliveriesLayerRef.current = L.layerGroup().addTo(instance);
       driverMarkersLayerRef.current = L.layerGroup().addTo(instance);
+      currentDriverLayerRef.current = L.layerGroup().addTo(instance);
+
+      // Desativa o auto-seguir se o usuário arrastar o mapa manualmente
+      instance.on("dragstart", () => {
+        setFollowingMe(false);
+      });
 
       // Render inicial de motoboys
       populateDriverMarkers(driverMarkersLayerRef.current, L, drivers);
@@ -3480,6 +3546,8 @@ function FreeMapInternal({
       tileLayerRef.current = null;
       deliveriesLayerRef.current = null;
       driverMarkersLayerRef.current = null;
+      currentDriverLayerRef.current = null;
+      currentDriverMarkerRef.current = null;
       routePolylineRef.current = null;
     };
   }, []);
@@ -3500,6 +3568,12 @@ function FreeMapInternal({
       layer.clearLayers();
 
       const bounds: Array<[number, number]> = [[STORE_POINT.latitude, STORE_POINT.longitude]];
+
+      const driverLat = liveTelemetry?.latitude ?? currentDriverGps?.latitude;
+      const driverLng = liveTelemetry?.longitude ?? currentDriverGps?.longitude;
+      if (typeof driverLat === "number" && typeof driverLng === "number") {
+        bounds.push([driverLat, driverLng]);
+      }
 
       deliveries.forEach((del, i) => {
         if (typeof del.latitude !== "number" || typeof del.longitude !== "number") return;
@@ -3535,16 +3609,16 @@ function FreeMapInternal({
       }
 
       // Enquadra a rota APENAS na primeira carga para não sacudir nem reiniciar a visualização do usuário
-      if (!hasFittedBoundsRef.current && (deliveries.length > 0 || (route && route.geometry.length > 0))) {
+      if (!hasFittedBoundsRef.current && (deliveries.length > 0 || (route && route.geometry.length > 0) || currentDriverGps)) {
         if (bounds.length > 1) {
           map.current?.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 16 });
         }
         hasFittedBoundsRef.current = true;
       }
     });
-  }, [deliveries, route]);
+  }, [deliveries, route, currentDriverGps, liveTelemetry]);
 
-  // 4. Atualização suave dos marcadores de motoboys em tempo real
+  // 4. Atualização suave dos marcadores de motoboys em tempo real (RTDB)
   useEffect(() => {
     if (!map.current || !driverMarkersLayerRef.current) return;
     void import("leaflet").then((L) => {
@@ -3552,12 +3626,107 @@ function FreeMapInternal({
         populateDriverMarkers(driverMarkersLayerRef.current, L, drivers);
       }
     });
-  }, [drivers]);
+  }, [drivers, currentDriverName]);
+
+  // 5. Marcador Local de Alta Precisão e Rastreamento em Tempo Real do Motoboy Atual (Estilo iFood)
+  useEffect(() => {
+    if (!map.current || !currentDriverLayerRef.current) return;
+    const lat = liveTelemetry?.latitude ?? currentDriverGps?.latitude;
+    const lng = liveTelemetry?.longitude ?? currentDriverGps?.longitude;
+    if (typeof lat !== "number" || typeof lng !== "number") return;
+
+    void import("leaflet").then((L) => {
+      const layer = currentDriverLayerRef.current;
+      if (!layer) return;
+
+      const heading =
+        liveTelemetry?.heading != null && !isNaN(liveTelemetry.heading)
+          ? Math.round(liveTelemetry.heading)
+          : null;
+      const speed =
+        liveTelemetry?.speed != null && !isNaN(liveTelemetry.speed)
+          ? Math.round(liveTelemetry.speed)
+          : null;
+      const accuracy =
+        liveTelemetry?.accuracy != null ? Math.round(liveTelemetry.accuracy) : null;
+
+      const driverIcon = L.divIcon({
+        className: "driver-marker-container",
+        html: `
+          <div style="position:relative; width:44px; height:44px; display:flex; align-items:center; justify-content:center;">
+            <div style="position:absolute; width:44px; height:44px; border-radius:50%; background:rgba(234,29,44,0.35); animation:driver-beacon-pulse 1.8s infinite cubic-bezier(0.215, 0.61, 0.355, 1); pointer-events:none;"></div>
+            ${
+              heading !== null
+                ? `
+              <div style="position:absolute; top:-9px; width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:13px solid #ea1d2c; transform:rotate(${heading}deg); transform-origin:50% 31px; filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35)); pointer-events:none;"></div>
+            `
+                : ""
+            }
+            <div style="position:relative; z-index:2; background:linear-gradient(135deg, #ea1d2c, #b91c1c); color:#fff; border-radius:50%; width:38px; height:38px; display:grid; place-items:center; font-size:18px; border:2.5px solid #fff; box-shadow:0 4px 14px rgba(234,29,44,0.5); transform:rotate(${heading !== null ? heading : 0}deg); transition:transform 0.3s ease-out;">
+              🛵
+            </div>
+            <div style="position:absolute; bottom:-18px; left:50%; transform:translateX(-50%); background:rgba(17,24,39,0.94); color:#fff; font-size:10px; font-weight:800; padding:2px 7px; border-radius:10px; white-space:nowrap; box-shadow:0 3px 8px rgba(0,0,0,0.35); pointer-events:none; border:1px solid rgba(255,255,255,0.25); display:flex; align-items:center; gap:4px; z-index:3;">
+              <span style="width:6px; height:6px; border-radius:50%; background:#10b981; display:inline-block; box-shadow:0 0 6px #10b981;"></span>
+              <span>${currentDriverName ? currentDriverName.split(" ")[0] : "Você"}</span>
+              ${speed !== null && speed > 2 ? `<span style="color:#6ee7b7; font-weight:900;">• ${speed} km/h</span>` : ""}
+            </div>
+          </div>
+        `,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
+      });
+
+      if (currentDriverMarkerRef.current) {
+        currentDriverMarkerRef.current.setLatLng([lat, lng]);
+        currentDriverMarkerRef.current.setIcon(driverIcon);
+      } else {
+        const marker = L.marker([lat, lng], {
+          icon: driverIcon,
+          zIndexOffset: 2000,
+        }).addTo(layer);
+
+        marker.bindPopup(`
+          <div style="font-family:Inter,sans-serif;font-size:12px;padding:6px;min-width:180px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <div style="background:#ea1d2c;color:#fff;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:18px">🛵</div>
+              <div>
+                <b style="font-size:13px;color:#111827;display:block">${currentDriverName || "Sua Posição"} (Você)</b>
+                <span style="font-size:10.5px;color:#10b981;font-weight:700">● Rastreamento em Tempo Real</span>
+              </div>
+            </div>
+            <div style="background:#f3f4f6;border-radius:8px;padding:8px;font-size:11px;margin-bottom:6px;line-height:1.5">
+              <div>⚡ <b>Velocidade:</b> ${speed !== null && speed > 2 ? `${speed} km/h` : "Parado / Em Espera"}</div>
+              ${heading !== null ? `<div>🧭 <b>Direção:</b> ${heading}°</div>` : ""}
+              ${accuracy !== null ? `<div>📍 <b>Precisão GPS:</b> ±${accuracy}m</div>` : ""}
+            </div>
+          </div>
+        `);
+        currentDriverMarkerRef.current = marker;
+      }
+
+      if (followingMe && map.current) {
+        map.current.panTo([lat, lng], { animate: true, duration: 0.6 });
+      }
+    });
+  }, [currentDriverGps, liveTelemetry, currentDriverName, followingMe]);
+
+  function focusOnDriver() {
+    const lat = liveTelemetry?.latitude ?? currentDriverGps?.latitude;
+    const lng = liveTelemetry?.longitude ?? currentDriverGps?.longitude;
+    if (typeof lat === "number" && typeof lng === "number" && map.current) {
+      map.current.flyTo([lat, lng], 17, { animate: true, duration: 0.8 });
+    }
+  }
 
   function recenterRoute() {
     if (!map.current) return;
     void import("leaflet").then((L) => {
       const bounds: Array<[number, number]> = [[STORE_POINT.latitude, STORE_POINT.longitude]];
+      const driverLat = liveTelemetry?.latitude ?? currentDriverGps?.latitude;
+      const driverLng = liveTelemetry?.longitude ?? currentDriverGps?.longitude;
+      if (typeof driverLat === "number" && typeof driverLng === "number") {
+        bounds.push([driverLat, driverLng]);
+      }
       deliveries.forEach((d) => {
         if (typeof d.latitude === "number" && typeof d.longitude === "number") {
           bounds.push([d.latitude, d.longitude]);
@@ -3602,11 +3771,43 @@ function FreeMapInternal({
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={element} className="live-map" style={{ width: "100%", height: "100%" }} />
-      <div className="map-live-controls" style={{ display: "flex", gap: "6px" }}>
-        <button type="button" onClick={recenterRoute} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+      <div className="map-live-controls" style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        <button
+          type="button"
+          onClick={recenterRoute}
+          style={{ display: "flex", alignItems: "center", gap: "5px" }}
+          title="Enquadrar rota completa"
+        >
           <Route size={13} /> Ver Toda Rota
         </button>
-        <button type="button" onClick={locateMe} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+        <button
+          type="button"
+          onClick={() => {
+            const nextFollow = !followingMe;
+            setFollowingMe(nextFollow);
+            if (nextFollow) {
+              focusOnDriver();
+            }
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
+            background: followingMe ? "#10b981" : undefined,
+            color: followingMe ? "#fff" : undefined,
+            borderColor: followingMe ? "#10b981" : undefined,
+            fontWeight: followingMe ? 700 : undefined,
+          }}
+          title={followingMe ? "Mapa acompanhando sua moto" : "Acompanhar sua moto em tempo real no mapa"}
+        >
+          <Compass size={13} /> {followingMe ? "Seguindo Você" : "Focar em Mim"}
+        </button>
+        <button
+          type="button"
+          onClick={locateMe}
+          style={{ display: "flex", alignItems: "center", gap: "5px" }}
+          title="Atualizar GPS"
+        >
           <Navigation size={13} /> Meu GPS
         </button>
         {gpsStatus && <span>{gpsStatus}</span>}
