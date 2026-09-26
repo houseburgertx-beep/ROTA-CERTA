@@ -35,6 +35,18 @@ export interface Driver {
   companyId?: string;
   createdAt?: string;
   takeatId?: number | string;
+  location?: {
+    latitude: number;
+    longitude: number;
+    speed?: number | null;
+    heading?: number | null;
+    accuracy?: number | null;
+    batteryLevel?: number | null;
+    updatedAt: string;
+    activeDeliveryId?: string;
+    activeOrderNumber?: string;
+    statusText?: string;
+  };
 }
 export interface OrderItem {
   id?: string | number;

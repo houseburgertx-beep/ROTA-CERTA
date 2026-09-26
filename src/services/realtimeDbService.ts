@@ -143,37 +143,55 @@ export function subscribeToDeliveryByIdRTDB(
   );
 }
 
+export interface DriverTelemetryUpdate {
+  latitude: number;
+  longitude: number;
+  speed?: number | null;
+  heading?: number | null;
+  accuracy?: number | null;
+  batteryLevel?: number | null;
+  activeDeliveryId?: string;
+  activeOrderNumber?: string;
+  statusText?: string;
+}
+
 export async function updateDriverGpsLocationRTDB(
-  deliveryId: string,
   driverId: string,
-  coords: { latitude: number; longitude: number; heading?: number },
+  telemetry: DriverTelemetryUpdate,
+  deliveryId?: string,
 ): Promise<void> {
   if (!rtdb) return;
   const now = new Date().toISOString();
   const updates: Record<string, unknown> = {};
 
-  if (deliveryId) {
-    updates[`rotacerta/deliveries/${deliveryId}/driverLocation`] = {
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-      heading: coords.heading ?? null,
+  if (driverId) {
+    updates[`rotacerta/drivers/${driverId}/location`] = cleanForRTDB({
+      latitude: telemetry.latitude,
+      longitude: telemetry.longitude,
+      speed: typeof telemetry.speed === "number" ? Math.round(telemetry.speed) : null,
+      heading: typeof telemetry.heading === "number" ? Math.round(telemetry.heading) : null,
+      accuracy: typeof telemetry.accuracy === "number" ? Math.round(telemetry.accuracy) : null,
+      batteryLevel: telemetry.batteryLevel ?? null,
+      activeDeliveryId: telemetry.activeDeliveryId ?? null,
+      activeOrderNumber: telemetry.activeOrderNumber ?? null,
+      statusText: telemetry.statusText ?? "Livre na Loja",
       updatedAt: now,
-    };
+    });
   }
 
-  if (driverId) {
-    updates[`rotacerta/drivers/${driverId}/location`] = {
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-      heading: coords.heading ?? null,
+  if (deliveryId) {
+    updates[`rotacerta/deliveries/${deliveryId}/driverLocation`] = cleanForRTDB({
+      latitude: telemetry.latitude,
+      longitude: telemetry.longitude,
+      heading: telemetry.heading ?? null,
       updatedAt: now,
-    };
+    });
   }
 
   try {
     await update(ref(rtdb), updates);
   } catch (err) {
-    // Silencia erros de GPS em túneis/sem sinal
+    // Silencia erros transitórios de rede/túnel
   }
 }
 

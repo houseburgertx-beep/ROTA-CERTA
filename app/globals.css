@@ -1419,5 +1419,17 @@ body.text-scale-large,
   padding: 8px 14px !important;
 }
 
-
-
+/* Driver GPS Live Markers */
+.driver-marker-container {
+  overflow: visible !important;
+}
+@keyframes driver-ring-anim {
+  0% {
+    transform: scale(0.9);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.65);
+    opacity: 0;
+  }
+}
