@@ -122,7 +122,11 @@ async function getBatteryPercentage(): Promise<number | null> {
   if (typeof navigator === "undefined" || !("getBattery" in navigator)) return null;
   try {
     const battery = await (navigator as any).getBattery();
-    return Math.round(battery.level * 100);
+    if (typeof battery?.level === "number") {
+      const val = battery.level <= 1 ? Math.round(battery.level * 100) : Math.round(battery.level);
+      return Math.min(100, Math.max(0, val));
+    }
+    return null;
   } catch {
     return null;
   }

@@ -20,8 +20,10 @@ import {
   Moon,
   Navigation,
   Package,
+  Pause,
   Pencil,
   Phone,
+  Play,
   Plus,
   Radio,
   RefreshCw,
@@ -1419,132 +1421,150 @@ function MobileDeliveryApp({
                 </div>
               )}
 
-              {/* Card de Transmissão GPS em Tempo Real & Modo Bolso */}
+              {/* Barra Minimalista de GPS ao Vivo (Tela Ligada/Desligada) */}
               {(currentUser.role === "driver" || appMode === "motoboy") && (
                 <div
                   style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "8px",
                     background: isTrackingActive
-                      ? "linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(124,58,237,0.08) 100%)"
+                      ? "linear-gradient(90deg, rgba(16,185,129,0.12) 0%, rgba(124,58,237,0.08) 100%)"
                       : "var(--surface)",
                     border: isTrackingActive
-                      ? "1px solid rgba(16,185,129,0.3)"
+                      ? "1px solid rgba(16,185,129,0.35)"
                       : "1px solid var(--line)",
-                    borderRadius: "16px",
-                    padding: "12px 14px",
-                    marginBottom: "12px",
+                    borderRadius: "14px",
+                    padding: "8px 12px",
+                    marginBottom: "10px",
                     boxShadow: "var(--shadow-sm)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <span
-                        style={{
-                          width: "10px",
-                          height: "10px",
-                          borderRadius: "50%",
-                          background: isTrackingActive ? "#10b981" : "#ef4444",
-                          boxShadow: isTrackingActive ? "0 0 0 3px rgba(16,185,129,0.25)" : "none",
-                          animation: isTrackingActive ? "pulse-dot 2s infinite" : "none",
-                        }}
-                      />
-                      <div>
-                        <b style={{ fontSize: "12.5px", color: "var(--ink)", display: "flex", alignItems: "center", gap: "5px" }}>
-                          <Radio size={14} style={{ color: isTrackingActive ? "#10b981" : "#ef4444" }} />
-                          {isTrackingActive ? "GPS Ao Vivo (Tela Ligada/Desligada)" : "GPS Pausado"}
-                        </b>
-                        <span style={{ fontSize: "10px", color: "var(--muted)" }}>
-                          {isTrackingActive
-                            ? "Transmitindo localização contínua para a loja"
-                            : "Localização não está sendo transmitida"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setIsTrackingActive(!isTrackingActive)}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                    <span
                       style={{
-                        padding: "5px 10px",
-                        fontSize: "11px",
-                        fontWeight: 700,
-                        borderRadius: "8px",
-                        border: "1px solid var(--line)",
-                        background: isTrackingActive ? "rgba(239,68,68,0.1)" : "rgba(16,185,129,0.1)",
-                        color: isTrackingActive ? "#ef4444" : "#10b981",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {isTrackingActive ? "Pausar" : "Ativar GPS"}
-                    </button>
-                  </div>
-
-                  {/* Telemetria rápida */}
-                  {isTrackingActive && (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(3, 1fr)",
-                        gap: "6px",
-                        background: "var(--surface-2)",
-                        padding: "8px",
-                        borderRadius: "10px",
-                        fontSize: "10.5px",
-                        textAlign: "center",
-                      }}
-                    >
-                      <div>
-                        <span style={{ color: "var(--muted)", display: "block" }}>Velocidade</span>
-                        <b style={{ fontSize: "12px", color: "var(--ink)" }}>
-                          {liveTelemetry?.speed ? `${Math.round(liveTelemetry.speed)} km/h` : "Parado"}
-                        </b>
-                      </div>
-                      <div>
-                        <span style={{ color: "var(--muted)", display: "block" }}>Bateria</span>
-                        <b style={{ fontSize: "12px", color: "var(--ink)" }}>
-                          {liveTelemetry?.batteryLevel != null
-                            ? `${Math.round(liveTelemetry.batteryLevel * 100)}%`
-                            : "OK"}
-                        </b>
-                      </div>
-                      <div>
-                        <span style={{ color: "var(--muted)", display: "block" }}>Precisão</span>
-                        <b style={{ fontSize: "12px", color: "#10b981" }}>
-                          {liveTelemetry?.accuracy ? `±${Math.round(liveTelemetry.accuracy)}m` : "Alta"}
-                        </b>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Botão Modo Bolso & Instruções */}
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <button
-                      type="button"
-                      onClick={() => setPocketMode(true)}
-                      style={{
-                        flex: 1,
-                        height: "38px",
+                        position: "relative",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        gap: "6px",
-                        background: "#0f172a",
-                        color: "#f8fafc",
-                        border: "1px solid #334155",
+                        width: "12px",
+                        height: "12px",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          width: "100%",
+                          height: "100%",
+                          borderRadius: "50%",
+                          background: isTrackingActive ? "#10b981" : "#ef4444",
+                          opacity: isTrackingActive ? 0.4 : 0,
+                          animation: isTrackingActive ? "pulse-dot 1.5s infinite" : "none",
+                        }}
+                      />
+                      <span
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          background: isTrackingActive ? "#10b981" : "#ef4444",
+                        }}
+                      />
+                    </span>
+
+                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                        <b style={{ fontSize: "12px", color: "var(--ink)", whiteSpace: "nowrap" }}>
+                          {isTrackingActive ? "GPS Ao Vivo" : "GPS Pausado"}
+                        </b>
+                        {isTrackingActive && (
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              color: "#10b981",
+                              background: "rgba(16,185,129,0.14)",
+                              padding: "1px 6px",
+                              borderRadius: "6px",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {liveTelemetry?.speed && liveTelemetry.speed > 3
+                              ? `${Math.round(liveTelemetry.speed)} km/h`
+                              : "Parado"}
+                          </span>
+                        )}
+                        {isTrackingActive && liveTelemetry?.batteryLevel != null && (
+                          <span
+                            style={{
+                              fontSize: "10px",
+                              color: "var(--muted)",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            🔋 {formatBattery(liveTelemetry.batteryLevel)}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "9.5px",
+                          color: "var(--muted)",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
+                        {isTrackingActive
+                          ? "Sinal contínuo para a loja (mesmo no bolso)"
+                          : "Transmissão pausada"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => setPocketMode(true)}
+                      title="Economizar bateria e evitar toques no bolso"
+                      style={{
+                        height: "32px",
+                        padding: "0 10px",
                         borderRadius: "10px",
-                        fontSize: "12px",
+                        background: "#09090b",
+                        color: "#f8fafc",
+                        border: "1px solid #27272a",
+                        fontSize: "11px",
                         fontWeight: 700,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
                         cursor: "pointer",
                       }}
                     >
-                      <EyeOff size={14} /> Ativar Modo Bolso (Economia OLED)
+                      <EyeOff size={13} /> Bolso
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsTrackingActive(!isTrackingActive)}
+                      title={isTrackingActive ? "Pausar GPS" : "Iniciar GPS"}
+                      style={{
+                        height: "32px",
+                        width: "32px",
+                        borderRadius: "10px",
+                        border: "1px solid var(--line)",
+                        background: isTrackingActive ? "rgba(239,68,68,0.1)" : "rgba(16,185,129,0.1)",
+                        color: isTrackingActive ? "#ef4444" : "#10b981",
+                        display: "grid",
+                        placeItems: "center",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {isTrackingActive ? <Pause size={13} /> : <Play size={13} />}
                     </button>
                   </div>
-                  <span style={{ fontSize: "9.5px", color: "var(--muted)", lineHeight: 1.3 }}>
-                    💡 <b>Dica:</b> Você pode desligar a tela no botão físico ou colocar no bolso. O áudio silencioso mantém o GPS transmitindo sem parar.
-                  </span>
                 </div>
               )}
 
@@ -2223,9 +2243,7 @@ function MobileDeliveryApp({
             <div>
               <span style={{ fontSize: "10px", color: "#71717a", display: "block", marginBottom: "4px" }}>Bateria</span>
               <b style={{ fontSize: "18px", color: "#f4f4f5" }}>
-                {liveTelemetry?.batteryLevel != null
-                  ? `${Math.round(liveTelemetry.batteryLevel * 100)}%`
-                  : "--"}
+                {formatBattery(liveTelemetry?.batteryLevel)}
               </b>
             </div>
           </div>
@@ -3218,7 +3236,11 @@ function FreeMapInternal({
 }) {
   const element = useRef<HTMLDivElement | null>(null);
   const map = useRef<any>(null);
+  const tileLayerRef = useRef<any>(null);
+  const deliveriesLayerRef = useRef<any>(null);
+  const routePolylineRef = useRef<any>(null);
   const driverMarkersLayerRef = useRef<any>(null);
+  const hasFittedBoundsRef = useRef(false);
   const [gpsStatus, setGpsStatus] = useState("");
 
   function populateDriverMarkers(layer: any, L: any, driverList: Driver[]) {
@@ -3242,18 +3264,17 @@ function FreeMapInternal({
       const driverIcon = L.divIcon({
         className: "driver-marker-container",
         html: `
-          <div style="position:relative; width:44px; height:44px; display:flex; align-items:center; justify-content:center;">
-            <div style="position:absolute; inset:-4px; border-radius:50%; border:2px solid ${markerColor}; animation: driver-ring-anim 2s infinite ease-out; pointer-events:none;"></div>
-            <div style="background:${markerColor}; color:#fff; border-radius:50%; width:36px; height:36px; display:grid; place-items:center; font-size:18px; border:2.5px solid #fff; box-shadow:0 4px 12px rgba(0,0,0,0.35);">
+          <div style="position:relative; width:34px; height:34px; display:flex; align-items:center; justify-content:center;">
+            <div style="background:${markerColor}; color:#fff; border-radius:50%; width:34px; height:34px; display:grid; place-items:center; font-size:16px; border:2.5px solid #fff; box-shadow:0 3px 10px rgba(0,0,0,0.3); animation: driver-ring-anim 2s infinite ease-in-out;">
               🛵
             </div>
-            <div style="position:absolute; bottom:-16px; left:50%; transform:translateX(-50%); background:rgba(17,24,39,0.92); color:#fff; font-size:10.5px; font-weight:800; padding:1px 6px; border-radius:6px; white-space:nowrap; box-shadow:0 2px 6px rgba(0,0,0,0.3); pointer-events:none; border:1px solid rgba(255,255,255,0.25);">
+            <div style="position:absolute; bottom:-16px; left:50%; transform:translateX(-50%); background:rgba(17,24,39,0.92); color:#fff; font-size:10px; font-weight:800; padding:1px 6px; border-radius:6px; white-space:nowrap; box-shadow:0 2px 5px rgba(0,0,0,0.3); pointer-events:none; border:1px solid rgba(255,255,255,0.25);">
               ${firstName} ${speed && speed > 3 ? `(${Math.round(speed)}km/h)` : ""}
             </div>
           </div>
         `,
-        iconSize: [44, 44],
-        iconAnchor: [22, 22],
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
       });
 
       const waCleanPhone = (drv.phone || "").replace(/\D/g, "");
@@ -3273,7 +3294,7 @@ function FreeMapInternal({
             </div>
             <div style="background:#f3f4f6;border-radius:8px;padding:8px;font-size:11px;margin-bottom:8px;line-height:1.5">
               <div>⚡ <b>Velocidade:</b> ${speed && speed > 3 ? `${Math.round(speed)} km/h` : "Parado"}</div>
-              ${batteryLevel != null ? `<div>🔋 <b>Bateria:</b> ${Math.round(batteryLevel * 100)}%</div>` : ""}
+              ${batteryLevel != null ? `<div>🔋 <b>Bateria:</b> ${formatBattery(batteryLevel)}</div>` : ""}
               <div>🕒 <b>Último sinal:</b> ${timeText}</div>
             </div>
             ${
@@ -3287,31 +3308,75 @@ function FreeMapInternal({
     });
   }
 
+  // 1. Inicializa o mapa Leaflet UMA ÚNICA VEZ
   useEffect(() => {
     let active = true;
     void import("leaflet").then((L) => {
       if (!active || !element.current) return;
-      map.current?.remove();
+      if (map.current) return;
 
-      const instance = L.map(element.current, { zoomControl: false, attributionControl: false }).setView(
-        [STORE_POINT.latitude, STORE_POINT.longitude],
-        14,
-      );
+      const instance = L.map(element.current, {
+        zoomControl: false,
+        attributionControl: false,
+      }).setView([STORE_POINT.latitude, STORE_POINT.longitude], 14);
       map.current = instance;
 
       const tile = MAP_TILE_PROVIDERS[mapProvider] || MAP_TILE_PROVIDERS.osm;
-      L.tileLayer(tile.url, { maxZoom: tile.maxZoom }).addTo(instance);
+      tileLayerRef.current = L.tileLayer(tile.url, { maxZoom: tile.maxZoom }).addTo(instance);
 
-      // Store Point (Start)
+      // Ponto Fixo da Loja
       L.circleMarker([STORE_POINT.latitude, STORE_POINT.longitude], {
-        radius: 9,
+        radius: 8,
         color: "#fff",
-        weight: 3,
+        weight: 2.5,
         fillColor: "#111827",
         fillOpacity: 1,
       })
         .bindTooltip(`🏠 ${STORE_POINT.name}`, { direction: "top", permanent: false })
         .addTo(instance);
+
+      // Camadas de polilinha, entregas e motoboys
+      routePolylineRef.current = L.polyline([], {
+        color: "#4f46e5",
+        weight: 6,
+        opacity: 0.85,
+      }).addTo(instance);
+
+      deliveriesLayerRef.current = L.layerGroup().addTo(instance);
+      driverMarkersLayerRef.current = L.layerGroup().addTo(instance);
+
+      // Render inicial de motoboys
+      populateDriverMarkers(driverMarkersLayerRef.current, L, drivers);
+      onMapReady?.(instance);
+
+      setTimeout(() => instance.invalidateSize(), 80);
+    });
+
+    return () => {
+      active = false;
+      map.current?.remove();
+      map.current = null;
+      tileLayerRef.current = null;
+      deliveriesLayerRef.current = null;
+      driverMarkersLayerRef.current = null;
+      routePolylineRef.current = null;
+    };
+  }, []);
+
+  // 2. Atualiza Provedor de Mapa (se mudar)
+  useEffect(() => {
+    if (!map.current || !tileLayerRef.current) return;
+    const tile = MAP_TILE_PROVIDERS[mapProvider] || MAP_TILE_PROVIDERS.osm;
+    tileLayerRef.current.setUrl(tile.url);
+  }, [mapProvider]);
+
+  // 3. Atualiza Paradas e Rota sem destruir o mapa e sem fitBounds repetitivo
+  useEffect(() => {
+    if (!map.current || !deliveriesLayerRef.current) return;
+    void import("leaflet").then((L) => {
+      const layer = deliveriesLayerRef.current;
+      if (!layer) return;
+      layer.clearLayers();
 
       const bounds: Array<[number, number]> = [[STORE_POINT.latitude, STORE_POINT.longitude]];
 
@@ -3320,9 +3385,9 @@ function FreeMapInternal({
         const color = del.status === "Entregue" ? "#10b981" : del.status === "Em rota" ? "#3b82f6" : "#7557f6";
         const icon = L.divIcon({
           className: "delivery-marker-shell",
-          html: `<span style="--marker-color:${color}; background:${color}; color:#fff; font-weight:800; border-radius:50%; width:32px; height:32px; display:grid; place-items:center; border:2px solid #fff; box-shadow:0 4px 10px rgba(0,0,0,.3)">${i + 1}</span>`,
-          iconSize: [32, 32],
-          iconAnchor: [16, 16],
+          html: `<span style="--marker-color:${color}; background:${color}; color:#fff; font-weight:800; border-radius:50%; width:30px; height:30px; display:grid; place-items:center; border:2px solid #fff; box-shadow:0 3px 8px rgba(0,0,0,.25); font-size:12px">${i + 1}</span>`,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
         });
 
         L.marker([del.latitude, del.longitude], { icon })
@@ -3333,41 +3398,32 @@ function FreeMapInternal({
               <b style="color:#10b981">Taxa: ${money(del.deliveryFee)}</b>
             </div>`,
           )
-          .addTo(instance);
+          .addTo(layer);
 
         bounds.push([del.latitude, del.longitude]);
       });
 
-      // Camada para marcadores de motoboys em tempo real
-      const driverLayer = L.layerGroup().addTo(instance);
-      driverMarkersLayerRef.current = driverLayer;
-      populateDriverMarkers(driverLayer, L, drivers);
-      onMapReady?.(instance);
-
-      // Draw high-visibility route
-      if (route?.geometry.length) {
-        const poly = route.geometry.map((p) => [p.latitude, p.longitude] as [number, number]);
-        // Outer glow
-        L.polyline(poly, { color: "#4f46e5", weight: 7, opacity: 0.85 }).addTo(instance);
-        bounds.push(...poly);
+      if (routePolylineRef.current) {
+        if (route?.geometry.length) {
+          const poly = route.geometry.map((p) => [p.latitude, p.longitude] as [number, number]);
+          routePolylineRef.current.setLatLngs(poly);
+          bounds.push(...poly);
+        } else {
+          routePolylineRef.current.setLatLngs([]);
+        }
       }
 
-      if (bounds.length > 1) {
-        instance.fitBounds(L.latLngBounds(bounds), { padding: [45, 45], maxZoom: 16 });
+      // Enquadra a rota APENAS na primeira carga para não sacudir nem reiniciar a visualização do usuário
+      if (!hasFittedBoundsRef.current && (deliveries.length > 0 || (route && route.geometry.length > 0))) {
+        if (bounds.length > 1) {
+          map.current?.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 16 });
+        }
+        hasFittedBoundsRef.current = true;
       }
-
-      setTimeout(() => instance.invalidateSize(), 60);
     });
+  }, [deliveries, route]);
 
-    return () => {
-      active = false;
-      driverMarkersLayerRef.current = null;
-      map.current?.remove();
-      map.current = null;
-    };
-  }, [deliveries, mapProvider, route]);
-
-  // Atualização contínua dos marcadores de motoboy sem recriar o mapa Leaflet
+  // 4. Atualização suave dos marcadores de motoboys em tempo real
   useEffect(() => {
     if (!map.current || !driverMarkersLayerRef.current) return;
     void import("leaflet").then((L) => {
@@ -3377,6 +3433,24 @@ function FreeMapInternal({
     });
   }, [drivers]);
 
+  function recenterRoute() {
+    if (!map.current) return;
+    void import("leaflet").then((L) => {
+      const bounds: Array<[number, number]> = [[STORE_POINT.latitude, STORE_POINT.longitude]];
+      deliveries.forEach((d) => {
+        if (typeof d.latitude === "number" && typeof d.longitude === "number") {
+          bounds.push([d.latitude, d.longitude]);
+        }
+      });
+      if (route?.geometry.length) {
+        route.geometry.forEach((p) => bounds.push([p.latitude, p.longitude]));
+      }
+      if (bounds.length > 1) {
+        map.current.fitBounds(L.latLngBounds(bounds), { padding: [40, 40], maxZoom: 16 });
+      }
+    });
+  }
+
   async function locateMe() {
     setGpsStatus("Localizando…");
     try {
@@ -3384,11 +3458,11 @@ function FreeMapInternal({
       onGpsFound?.(pos);
       const L = await import("leaflet");
       if (map.current) {
-        map.current.setView([pos.latitude, pos.longitude], 16);
+        map.current.flyTo([pos.latitude, pos.longitude], 16, { animate: true });
         L.circleMarker([pos.latitude, pos.longitude], {
-          radius: 10,
+          radius: 9,
           color: "#fff",
-          weight: 3,
+          weight: 2.5,
           fillColor: "#2563eb",
           fillOpacity: 1,
         })
@@ -3407,9 +3481,12 @@ function FreeMapInternal({
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={element} className="live-map" style={{ width: "100%", height: "100%" }} />
-      <div className="map-live-controls">
-        <button type="button" onClick={locateMe} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <Navigation size={14} /> Minha Localização
+      <div className="map-live-controls" style={{ display: "flex", gap: "6px" }}>
+        <button type="button" onClick={recenterRoute} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+          <Route size={13} /> Ver Toda Rota
+        </button>
+        <button type="button" onClick={locateMe} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+          <Navigation size={13} /> Meu GPS
         </button>
         {gpsStatus && <span>{gpsStatus}</span>}
       </div>
@@ -4796,3 +4873,9 @@ function StatusBadge({ status }: { status: Status }) {
 
 const money = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v || 0);
+
+const formatBattery = (val?: number | null): string => {
+  if (val == null) return "--";
+  const num = val <= 1 ? Math.round(val * 100) : Math.round(val);
+  return `${Math.min(100, Math.max(0, num))}%`;
+};

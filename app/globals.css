@@ -1424,12 +1424,11 @@ body.text-scale-large,
   overflow: visible !important;
 }
 @keyframes driver-ring-anim {
-  0% {
-    transform: scale(0.9);
-    opacity: 1;
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6), 0 3px 10px rgba(0, 0, 0, 0.3);
   }
-  100% {
-    transform: scale(1.65);
-    opacity: 0;
+  50% {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0), 0 3px 10px rgba(0, 0, 0, 0.3);
   }
 }
+

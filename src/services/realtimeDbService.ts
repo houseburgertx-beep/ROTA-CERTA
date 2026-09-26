@@ -155,13 +155,16 @@ export interface DriverTelemetryUpdate {
   statusText?: string;
 }
 
+const lastDeliveryGpsSent: Record<string, { time: number; lat: number; lng: number }> = {};
+
 export async function updateDriverGpsLocationRTDB(
   driverId: string,
   telemetry: DriverTelemetryUpdate,
   deliveryId?: string,
 ): Promise<void> {
   if (!rtdb) return;
-  const now = new Date().toISOString();
+  const nowStr = new Date().toISOString();
+  const nowMs = Date.now();
   const updates: Record<string, unknown> = {};
 
   if (driverId) {
@@ -175,17 +178,31 @@ export async function updateDriverGpsLocationRTDB(
       activeDeliveryId: telemetry.activeDeliveryId ?? null,
       activeOrderNumber: telemetry.activeOrderNumber ?? null,
       statusText: telemetry.statusText ?? "Livre na Loja",
-      updatedAt: now,
+      updatedAt: nowStr,
     });
   }
 
+  // Atualiza a entrega do cliente apenas se houver deslocamento significativo (> 15m) ou a cada 10s
   if (deliveryId) {
-    updates[`rotacerta/deliveries/${deliveryId}/driverLocation`] = cleanForRTDB({
-      latitude: telemetry.latitude,
-      longitude: telemetry.longitude,
-      heading: telemetry.heading ?? null,
-      updatedAt: now,
-    });
+    const prev = lastDeliveryGpsSent[deliveryId];
+    const shouldSend =
+      !prev ||
+      nowMs - prev.time >= 10000 ||
+      Math.hypot(telemetry.latitude - prev.lat, telemetry.longitude - prev.lng) > 0.00015;
+
+    if (shouldSend) {
+      lastDeliveryGpsSent[deliveryId] = {
+        time: nowMs,
+        lat: telemetry.latitude,
+        lng: telemetry.longitude,
+      };
+      updates[`rotacerta/deliveries/${deliveryId}/driverLocation`] = cleanForRTDB({
+        latitude: telemetry.latitude,
+        longitude: telemetry.longitude,
+        heading: telemetry.heading ?? null,
+        updatedAt: nowStr,
+      });
+    }
   }
 
   try {
