@@ -1432,3 +1432,19 @@ body.text-scale-large,
   }
 }
 
+@keyframes driver-beacon-pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  70% {
+    transform: scale(2.3);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+

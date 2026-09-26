@@ -100,6 +100,9 @@ import {
   stopBackgroundTracking,
   updateBackgroundTrackingConfig,
   isBackgroundTrackingActive,
+  unlockAndStartBackgroundTracking,
+  isAudioHeartbeatPlaying,
+  addHeartbeatListener,
   addTrackingListener,
   type TrackingPosition,
 } from "../src/services/backgroundTrackingService";
@@ -340,6 +343,7 @@ function MobileDeliveryApp({
   const [isTrackingActive, setIsTrackingActive] = useState<boolean>(true);
   const [pocketMode, setPocketMode] = useState<boolean>(false);
   const [liveTelemetry, setLiveTelemetry] = useState<TrackingPosition | null>(null);
+  const [isHeartbeatActive, setIsHeartbeatActive] = useState<boolean>(() => isAudioHeartbeatPlaying());
 
   useEffect(() => {
     const unbind = onConnectionChange((online) => {
@@ -794,6 +798,8 @@ function MobileDeliveryApp({
       activeOrderNumber: activeRouteDelivery?.order,
       statusText: activeRouteDelivery ? `Em rota (Pedido #${activeRouteDelivery.order})` : "Livre na Loja",
       minIntervalMs: 4000,
+    }).then((started) => {
+      if (started) setIsHeartbeatActive(true);
     });
 
     const unbindListener = addTrackingListener((pos) => {
@@ -801,10 +807,35 @@ function MobileDeliveryApp({
       setDriverGps({ latitude: pos.latitude, longitude: pos.longitude });
     });
 
+    const unbindHeartbeat = addHeartbeatListener((playing) => {
+      setIsHeartbeatActive(playing);
+    });
+
     return () => {
       unbindListener();
+      unbindHeartbeat();
     };
   }, [isTrackingActive, currentUser, appMode, activeDriver]);
+
+  // Desbloqueia o áudio de background automaticamente no primeiro toque na tela (Safari / Android)
+  useEffect(() => {
+    const isDriverRole = currentUser.role === "driver" || appMode === "motoboy";
+    if (!isDriverRole) return;
+
+    const autoUnlock = () => {
+      const driverName = activeDriver?.name || currentUser.name;
+      void unlockAndStartBackgroundTracking(driverName).then((ok) => {
+        if (ok) setIsHeartbeatActive(true);
+      });
+    };
+
+    window.addEventListener("click", autoUnlock, { once: true, passive: true });
+    window.addEventListener("touchstart", autoUnlock, { once: true, passive: true });
+    return () => {
+      window.removeEventListener("click", autoUnlock);
+      window.removeEventListener("touchstart", autoUnlock);
+    };
+  }, [currentUser, appMode, activeDriver]);
 
   // Atualiza metadados da entrega em rota dinamicamente quando a lista de pedidos muda
   useEffect(() => {
@@ -1424,21 +1455,33 @@ function MobileDeliveryApp({
               {/* Barra Minimalista de GPS ao Vivo (Tela Ligada/Desligada) */}
               {(currentUser.role === "driver" || appMode === "motoboy") && (
                 <div
+                  onClick={async () => {
+                    if (isTrackingActive && !isHeartbeatActive) {
+                      const driverName = activeDriver?.name || currentUser.name;
+                      const ok = await unlockAndStartBackgroundTracking(driverName);
+                      if (ok) setIsHeartbeatActive(true);
+                    }
+                  }}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
                     gap: "8px",
                     background: isTrackingActive
-                      ? "linear-gradient(90deg, rgba(16,185,129,0.12) 0%, rgba(124,58,237,0.08) 100%)"
+                      ? (isHeartbeatActive
+                          ? "linear-gradient(90deg, rgba(16,185,129,0.12) 0%, rgba(124,58,237,0.08) 100%)"
+                          : "linear-gradient(90deg, rgba(234,179,8,0.15) 0%, rgba(245,158,11,0.08) 100%)")
                       : "var(--surface)",
                     border: isTrackingActive
-                      ? "1px solid rgba(16,185,129,0.35)"
+                      ? (isHeartbeatActive
+                          ? "1px solid rgba(16,185,129,0.35)"
+                          : "1.5px solid #eab308")
                       : "1px solid var(--line)",
                     borderRadius: "14px",
                     padding: "8px 12px",
                     marginBottom: "10px",
                     boxShadow: "var(--shadow-sm)",
+                    cursor: isTrackingActive && !isHeartbeatActive ? "pointer" : "default",
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
@@ -1459,7 +1502,9 @@ function MobileDeliveryApp({
                           width: "100%",
                           height: "100%",
                           borderRadius: "50%",
-                          background: isTrackingActive ? "#10b981" : "#ef4444",
+                          background: isTrackingActive
+                            ? (isHeartbeatActive ? "#10b981" : "#eab308")
+                            : "#ef4444",
                           opacity: isTrackingActive ? 0.4 : 0,
                           animation: isTrackingActive ? "pulse-dot 1.5s infinite" : "none",
                         }}
@@ -1469,7 +1514,9 @@ function MobileDeliveryApp({
                           width: "8px",
                           height: "8px",
                           borderRadius: "50%",
-                          background: isTrackingActive ? "#10b981" : "#ef4444",
+                          background: isTrackingActive
+                            ? (isHeartbeatActive ? "#10b981" : "#eab308")
+                            : "#ef4444",
                         }}
                       />
                     </span>
@@ -1484,8 +1531,8 @@ function MobileDeliveryApp({
                             style={{
                               fontSize: "10px",
                               fontWeight: 700,
-                              color: "#10b981",
-                              background: "rgba(16,185,129,0.14)",
+                              color: isHeartbeatActive ? "#10b981" : "#ca8a04",
+                              background: isHeartbeatActive ? "rgba(16,185,129,0.14)" : "rgba(234,179,8,0.14)",
                               padding: "1px 6px",
                               borderRadius: "6px",
                               whiteSpace: "nowrap",
@@ -1494,6 +1541,22 @@ function MobileDeliveryApp({
                             {liveTelemetry?.speed && liveTelemetry.speed > 3
                               ? `${Math.round(liveTelemetry.speed)} km/h`
                               : "Parado"}
+                          </span>
+                        )}
+                        {isTrackingActive && isHeartbeatActive && (
+                          <span
+                            style={{
+                              fontSize: "9.5px",
+                              fontWeight: 700,
+                              color: "#10b981",
+                              background: "rgba(16,185,129,0.12)",
+                              border: "1px solid rgba(16,185,129,0.25)",
+                              padding: "1px 5px",
+                              borderRadius: "5px",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            2º Plano ON
                           </span>
                         )}
                         {isTrackingActive && liveTelemetry?.batteryLevel != null && (
@@ -1511,23 +1574,61 @@ function MobileDeliveryApp({
                       <span
                         style={{
                           fontSize: "9.5px",
-                          color: "var(--muted)",
+                          color: !isHeartbeatActive && isTrackingActive ? "#b45309" : "var(--muted)",
+                          fontWeight: !isHeartbeatActive && isTrackingActive ? 600 : 400,
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                         }}
                       >
                         {isTrackingActive
-                          ? "Sinal contínuo para a loja (mesmo no bolso)"
+                          ? (isHeartbeatActive
+                              ? "Sinal contínuo mesmo com tela desligada no bolso"
+                              : "⚠️ Toque aqui para liberar GPS com tela desligada")
                           : "Transmissão pausada"}
                       </span>
                     </div>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                    {isTrackingActive && !isHeartbeatActive && (
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const driverName = activeDriver?.name || currentUser.name;
+                          const ok = await unlockAndStartBackgroundTracking(driverName);
+                          if (ok) setIsHeartbeatActive(true);
+                        }}
+                        style={{
+                          height: "32px",
+                          padding: "0 10px",
+                          borderRadius: "10px",
+                          background: "#eab308",
+                          color: "#000",
+                          border: "none",
+                          fontSize: "11px",
+                          fontWeight: 800,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          cursor: "pointer",
+                          boxShadow: "0 2px 8px rgba(234,179,8,0.3)",
+                        }}
+                        title="Ativar rastreamento em segundo plano mesmo com tela desligada"
+                      >
+                        ⚡ 2º Plano
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => setPocketMode(true)}
+                      onClick={async () => {
+                        const driverName = activeDriver?.name || currentUser.name;
+                        void unlockAndStartBackgroundTracking(driverName).then((ok) => {
+                          if (ok) setIsHeartbeatActive(true);
+                        });
+                        setPocketMode(true);
+                      }}
                       title="Economizar bateria e evitar toques no bolso"
                       style={{
                         height: "32px",
@@ -1548,7 +1649,15 @@ function MobileDeliveryApp({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setIsTrackingActive(!isTrackingActive)}
+                      onClick={() => {
+                        if (!isTrackingActive) {
+                          const driverName = activeDriver?.name || currentUser.name;
+                          void unlockAndStartBackgroundTracking(driverName).then((ok) => {
+                            if (ok) setIsHeartbeatActive(true);
+                          });
+                        }
+                        setIsTrackingActive(!isTrackingActive);
+                      }}
                       title={isTrackingActive ? "Pausar GPS" : "Iniciar GPS"}
                       style={{
                         height: "32px",
@@ -2199,23 +2308,35 @@ function MobileDeliveryApp({
               style={{
                 display: "inline-block",
                 fontSize: "10.5px",
-                letterSpacing: "2px",
+                letterSpacing: "1.5px",
                 fontWeight: 900,
-                color: "#10b981",
+                color: isHeartbeatActive ? "#10b981" : "#eab308",
                 textTransform: "uppercase",
-                background: "rgba(16,185,129,0.12)",
-                padding: "4px 12px",
+                background: isHeartbeatActive ? "rgba(16,185,129,0.12)" : "rgba(234,179,8,0.15)",
+                padding: "5px 14px",
                 borderRadius: "99px",
-                border: "1px solid rgba(16,185,129,0.3)",
+                border: isHeartbeatActive ? "1px solid rgba(16,185,129,0.3)" : "1px solid #eab308",
+                cursor: !isHeartbeatActive ? "pointer" : "default",
+              }}
+              onClick={async () => {
+                if (!isHeartbeatActive) {
+                  const driverName = activeDriver?.name || currentUser.name;
+                  const ok = await unlockAndStartBackgroundTracking(driverName);
+                  if (ok) setIsHeartbeatActive(true);
+                }
               }}
             >
-              MODO BOLSO ATIVO • GPS ON
+              {isHeartbeatActive
+                ? "MODO BOLSO ATIVO • 2º PLANO 100% ON"
+                : "⚡ TOQUE AQUI P/ ATIVAR ÁUDIO 2º PLANO"}
             </span>
             <h2 style={{ fontSize: "19px", margin: "14px 0 6px", color: "#f8fafc" }}>
               {activeDriver?.name || currentUser.name}
             </h2>
             <p style={{ fontSize: "12px", color: "#64748b", margin: 0, maxWidth: "270px", lineHeight: 1.4 }}>
-              Tela apagada para economizar bateria e evitar toques no bolso. O GPS continua transmitindo para a loja.
+              {isHeartbeatActive
+                ? "Sinal de GPS transmitindo continuamente em 2º plano mesmo com a tela bloqueada no bolso."
+                : "Tela apagada para economizar bateria e evitar toques no bolso. O GPS continua transmitindo para a loja."}
             </p>
           </div>
 
