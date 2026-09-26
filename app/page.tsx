@@ -793,14 +793,23 @@ function MobileDeliveryApp({
       driverId,
       driverName,
       statusText: "Livre na Loja",
-      minIntervalMs: 4000,
     }).then((started) => {
       if (started) setIsHeartbeatActive(true);
     });
 
+    // Throttle: atualiza a UI do mapa no máximo a cada 2s para economizar bateria (menos re-renders)
+    let lastUIUpdateTime = 0;
+    let pendingRAF: number | null = null;
     const unbindListener = addTrackingListener((pos) => {
-      setLiveTelemetry(pos);
-      setDriverGps({ latitude: pos.latitude, longitude: pos.longitude });
+      const now = Date.now();
+      if (now - lastUIUpdateTime < 2000) return; // Descarta atualizações intermediárias
+      lastUIUpdateTime = now;
+      if (pendingRAF) cancelAnimationFrame(pendingRAF);
+      pendingRAF = requestAnimationFrame(() => {
+        setLiveTelemetry(pos);
+        setDriverGps({ latitude: pos.latitude, longitude: pos.longitude });
+        pendingRAF = null;
+      });
     });
 
     const unbindHeartbeat = addHeartbeatListener((playing) => {
@@ -810,6 +819,7 @@ function MobileDeliveryApp({
     return () => {
       unbindListener();
       unbindHeartbeat();
+      if (pendingRAF) cancelAnimationFrame(pendingRAF);
     };
   }, [isTrackingActive]);
 
