@@ -2697,41 +2697,26 @@ function MobileDeliveryCard({
             </div>
           ) : null}
 
-          {/* Botão Ligar iFood 0800 — minimalista com localizador */}
+          {/* Ligar iFood 0800 + localizador — minimalista */}
           <a
-            href="tel:08007217000"
+            href={`tel:08007217000${delivery.ifoodLocalizer ? `;${delivery.ifoodLocalizer}` : ""}`}
             style={{
-              display: "flex",
+              display: "inline-flex",
               alignItems: "center",
-              gap: "8px",
-              padding: "8px 12px",
+              gap: "5px",
+              padding: "5px 10px",
               marginTop: "6px",
-              borderRadius: "10px",
-              background: "linear-gradient(135deg, #ea1d2c 0%, #c41422 100%)",
+              borderRadius: "8px",
+              background: "#ea1d2c",
               color: "#fff",
               textDecoration: "none",
-              fontSize: "12px",
+              fontSize: "11px",
               fontWeight: 700,
             }}
-            title="Ligar para o suporte iFood (0800 721 7000)"
+            title="Ligar iFood 0800 721 7000"
           >
-            <PhoneCall size={14} />
-            <span style={{ flex: 1 }}>
-              Ligar iFood
-              <span style={{ opacity: 0.75, fontWeight: 500, marginLeft: "4px" }}>0800 721 7000</span>
-            </span>
-            {delivery.ifoodLocalizer && (
-              <span style={{
-                background: "rgba(255,255,255,0.2)",
-                padding: "2px 7px",
-                borderRadius: "6px",
-                fontSize: "11px",
-                fontWeight: 800,
-                letterSpacing: "0.5px",
-              }}>
-                #{delivery.ifoodLocalizer}
-              </span>
-            )}
+            <PhoneCall size={12} />
+            0800 721 7000{delivery.ifoodLocalizer ? ` ; ${delivery.ifoodLocalizer}` : ""}
           </a>
         </div>
       )}
