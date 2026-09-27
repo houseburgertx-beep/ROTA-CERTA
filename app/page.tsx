@@ -5,10 +5,13 @@ import {
   Bell,
   BellOff,
   Bike,
+  Calendar,
   Camera,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   CircleDollarSign,
   Compass,
   Copy,
@@ -1994,7 +1997,13 @@ function MobileDeliveryApp({
           {/* TAB 4: FINANCEIRO (NOITE E MÊS) */}
           {activeTab === "financeiro" && (
             <FinancialTab
-              deliveries={currentUser.role === "driver" ? filteredDeliveries : deliveries}
+              deliveries={
+                currentUser.role === "driver"
+                  ? deliveries.filter(isDeliveryForThisDriver)
+                  : appMode === "motoboy" && activeDriver
+                  ? deliveries.filter((d) => d.driverId === activeDriver.id || d.driver === activeDriver.name)
+                  : deliveries
+              }
               drivers={drivers}
               activeDriver={activeDriver}
               appMode={appMode}
@@ -4530,15 +4539,128 @@ function FinancialTab({
   appMode: "motoboy" | "adm";
   stats: { nightTotal: number; nightCount: number; monthTotal: number; monthCount: number; avgFee: number };
 }) {
+  const [statementViewMode, setStatementViewMode] = useState<"detailed" | "summary">("detailed");
+  const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
+
+  const toggleDayExpanded = (key: string) => {
+    setExpandedDays((prev) => ({
+      ...prev,
+      [key]: prev[key] === undefined ? false : !prev[key],
+    }));
+  };
+
   const completedList = useMemo(() => {
     return deliveries.filter((d) => {
-      if (d.status !== "Entregue") return false;
+      const s = (d.status || "").toLowerCase().trim();
+      const isDone = s === "entregue" || s === "delivered" || s === "concluída";
+      if (!isDone) return false;
       if (appMode === "motoboy" && activeDriver) {
-        if (d.driverId !== activeDriver.id && d.driver !== activeDriver.name) return false;
+        const dName = (d.driver || "").toLowerCase().trim();
+        const activeName = (activeDriver.name || "").toLowerCase().trim();
+        if (d.driverId && activeDriver.id && d.driverId !== activeDriver.id && dName !== activeName) {
+          return false;
+        }
       }
       return true;
     });
   }, [deliveries, appMode, activeDriver]);
+
+  interface DayGroup {
+    dateKey: string;
+    dateLabel: string;
+    dayOfWeek: string;
+    formattedDate: string;
+    totalFee: number;
+    totalOrders: number;
+    totalAmount: number;
+    avgFee: number;
+    items: Delivery[];
+  }
+
+  const groupedByDay = useMemo<DayGroup[]>(() => {
+    const map = new Map<string, DayGroup>();
+
+    const now = new Date();
+    // Turno operacional: entregas até às 05:59 pertencem à noite anterior
+    const getShiftDate = (d: Date) => {
+      const shift = new Date(d);
+      if (shift.getHours() < 6) {
+        shift.setDate(shift.getDate() - 1);
+      }
+      return shift;
+    };
+
+    const nowShift = getShiftDate(now);
+    const todayKey = `${nowShift.getFullYear()}-${String(nowShift.getMonth() + 1).padStart(2, "0")}-${String(nowShift.getDate()).padStart(2, "0")}`;
+
+    const yesterdayShift = new Date(nowShift);
+    yesterdayShift.setDate(yesterdayShift.getDate() - 1);
+    const yesterdayKey = `${yesterdayShift.getFullYear()}-${String(yesterdayShift.getMonth() + 1).padStart(2, "0")}-${String(yesterdayShift.getDate()).padStart(2, "0")}`;
+
+    const weekDays = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+
+    for (const d of completedList) {
+      let parsedDate: Date | null = null;
+      const raw = d.deliveredAt || d.createdAt;
+      if (raw) {
+        const dt = new Date(raw);
+        if (!isNaN(dt.getTime())) parsedDate = dt;
+      }
+      if (!parsedDate) parsedDate = new Date();
+
+      const shiftDate = getShiftDate(parsedDate);
+      const y = shiftDate.getFullYear();
+      const m = String(shiftDate.getMonth() + 1).padStart(2, "0");
+      const day = String(shiftDate.getDate()).padStart(2, "0");
+      const dateKey = `${y}-${m}-${day}`;
+
+      const dayOfWeek = weekDays[shiftDate.getDay()];
+      let dateLabel = "";
+      if (dateKey === todayKey) {
+        dateLabel = `Hoje • ${day}/${m}`;
+      } else if (dateKey === yesterdayKey) {
+        dateLabel = `Ontem • ${day}/${m}`;
+      } else {
+        dateLabel = `${dayOfWeek} • ${day}/${m}`;
+      }
+
+      const fee = Number(d.deliveryFee) || (activeDriver?.defaultFee ? Number(activeDriver.defaultFee) : 7.0);
+      const amount = Number(d.amount) || 0;
+
+      if (!map.has(dateKey)) {
+        map.set(dateKey, {
+          dateKey,
+          dateLabel,
+          dayOfWeek,
+          formattedDate: `${day}/${m}`,
+          totalFee: 0,
+          totalOrders: 0,
+          totalAmount: 0,
+          avgFee: 0,
+          items: [],
+        });
+      }
+
+      const grp = map.get(dateKey)!;
+      grp.totalFee += fee;
+      grp.totalOrders += 1;
+      grp.totalAmount += amount;
+      grp.items.push(d);
+    }
+
+    const groups = Array.from(map.values()).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+
+    for (const g of groups) {
+      g.avgFee = g.totalOrders > 0 ? g.totalFee / g.totalOrders : 0;
+      g.items.sort((a, b) => {
+        const ta = new Date(a.deliveredAt || a.createdAt || 0).getTime();
+        const tb = new Date(b.deliveredAt || b.createdAt || 0).getTime();
+        return tb - ta;
+      });
+    }
+
+    return groups;
+  }, [completedList, activeDriver]);
 
   return (
     <div className="finance-screen-container">
@@ -4579,11 +4701,55 @@ function FinancialTab({
         </div>
       </div>
 
-      {/* Extrato / Histórico Recente */}
+      {/* Extrato / Histórico Separado por Dia */}
       <div className="finance-statement-section">
         <div className="finance-statement-header">
-          <b>Extrato das Corridas</b>
-          <span>{completedList.length} registro(s)</span>
+          <div>
+            <b>Extrato das Corridas</b>
+            <span style={{ display: "block", fontSize: "11px", color: "var(--muted)", fontWeight: 500, marginTop: "2px" }}>
+              {completedList.length} corrida(s) • {groupedByDay.length} dia(s)
+            </span>
+          </div>
+
+          {/* Toggle Minimalista: Por Corridas vs Totais por Dia */}
+          {groupedByDay.length > 0 && (
+            <div style={{ display: "flex", background: "var(--surface-2)", padding: "3px", borderRadius: "10px", border: "1px solid var(--line)", gap: "2px" }}>
+              <button
+                type="button"
+                onClick={() => setStatementViewMode("detailed")}
+                style={{
+                  border: "none",
+                  padding: "4px 8px",
+                  borderRadius: "7px",
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  background: statementViewMode === "detailed" ? "var(--surface)" : "transparent",
+                  color: statementViewMode === "detailed" ? "var(--primary)" : "var(--muted)",
+                  boxShadow: statementViewMode === "detailed" ? "0 1px 4px rgba(0,0,0,.08)" : "none",
+                }}
+              >
+                Corridas
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatementViewMode("summary")}
+                style={{
+                  border: "none",
+                  padding: "4px 8px",
+                  borderRadius: "7px",
+                  fontSize: "10.5px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  background: statementViewMode === "summary" ? "var(--surface)" : "transparent",
+                  color: statementViewMode === "summary" ? "var(--primary)" : "var(--muted)",
+                  boxShadow: statementViewMode === "summary" ? "0 1px 4px rgba(0,0,0,.08)" : "none",
+                }}
+              >
+                Por Dia
+              </button>
+            </div>
+          )}
         </div>
 
         {completedList.length === 0 ? (
@@ -4591,28 +4757,172 @@ function FinancialTab({
             <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "var(--surface-2)", color: "var(--muted)", display: "grid", placeItems: "center", margin: "0 auto 10px" }}>
               <CircleDollarSign size={24} />
             </div>
-            <b style={{ color: "var(--ink)", display: "block", marginBottom: "4px" }}>Nenhum ganho registrado hoje</b>
-            <span>Ao concluir pedidos na aba Entregas, o valor da taxa entra automaticamente neste extrato.</span>
+            <b style={{ color: "var(--ink)", display: "block", marginBottom: "4px" }}>Nenhuma corrida concluída encontrada</b>
+            <span>Ao concluir pedidos na aba Entregas, o valor da taxa entra automaticamente neste extrato separado por dia.</span>
           </div>
-        ) : (
-          <div className="finance-statement-list">
-            {completedList.map((d) => (
-              <div key={d.id} className="finance-statement-item">
-                <div className="statement-item-left">
-                  <div className="statement-item-icon">
-                    <Check size={18} strokeWidth={3} />
+        ) : statementViewMode === "summary" ? (
+          /* Visão Lista Minimalista com os Totais por Dia */
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {groupedByDay.map((group) => (
+              <div
+                key={group.dateKey}
+                onClick={() => {
+                  setStatementViewMode("detailed");
+                  setExpandedDays({ [group.dateKey]: true });
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "12px 14px",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--line)",
+                  borderRadius: "14px",
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "10px",
+                      background: "rgba(124, 58, 237, 0.1)",
+                      color: "#7c3aed",
+                      display: "grid",
+                      placeItems: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Calendar size={16} />
                   </div>
-                  <div className="statement-item-info">
-                    <b>{d.order} • {d.customer}</b>
-                    <span>{d.district ? `${d.district} · ` : ""}{d.time}</span>
+                  <div>
+                    <b style={{ fontSize: "13px", color: "var(--ink)", display: "block" }}>{group.dateLabel}</b>
+                    <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                      {group.totalOrders} corrida(s) • Média {money(group.avgFee)}
+                    </span>
                   </div>
                 </div>
-                <div className="statement-item-right">
-                  <span className="statement-item-amount">+{money(d.deliveryFee)}</span>
-                  <span className="statement-item-payment">{d.payment}</span>
+                <div style={{ textAlign: "right" }}>
+                  <b style={{ fontSize: "15px", fontWeight: 800, color: "#059669", display: "block" }}>
+                    +{money(group.totalFee)}
+                  </b>
+                  <span style={{ fontSize: "10px", color: "var(--muted)" }}>Ver corridas →</span>
                 </div>
               </div>
             ))}
+          </div>
+        ) : (
+          /* Visão Detalhada: Separado por Dia com Lista Minimalista de Corridas */
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {groupedByDay.map((group) => {
+              const isExpanded = expandedDays[group.dateKey] !== false; // true por padrão
+              return (
+                <div
+                  key={group.dateKey}
+                  style={{
+                    background: "var(--surface-2)",
+                    border: "1px solid var(--line)",
+                    borderRadius: "16px",
+                    overflow: "hidden",
+                  }}
+                >
+                  {/* Cabeçalho do Dia (Total do dia em destaque) */}
+                  <div
+                    onClick={() => toggleDayExpanded(group.dateKey)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "11px 14px",
+                      cursor: "pointer",
+                      userSelect: "none",
+                      background: "rgba(0, 0, 0, 0.02)",
+                    }}
+                    title="Toque para expandir/recolher as corridas deste dia"
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <Calendar size={14} style={{ color: "var(--primary)" }} />
+                      <span style={{ fontSize: "13px", fontWeight: 800, color: "var(--ink)" }}>{group.dateLabel}</span>
+                      <span style={{ fontSize: "11px", color: "var(--muted)", fontWeight: 600 }}>• {group.totalOrders} corrida(s)</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "14px", fontWeight: 800, color: "#059669" }}>
+                        +{money(group.totalFee)}
+                      </span>
+                      <div style={{ color: "var(--muted)", display: "grid", placeItems: "center" }}>
+                        {isExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lista Minimalista de Corridas do Dia */}
+                  {isExpanded && (
+                    <div style={{ padding: "4px 10px 10px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {group.items.map((d) => (
+                        <div
+                          key={d.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "9px 12px",
+                            background: "var(--surface)",
+                            border: "1px solid var(--line)",
+                            borderRadius: "12px",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: "11px",
+                                fontWeight: 800,
+                                background: d.platform === "ifood" ? "rgba(234, 29, 44, 0.1)" : "rgba(124, 58, 237, 0.1)",
+                                color: d.platform === "ifood" ? "#ea1d2c" : "#7c3aed",
+                                padding: "2px 7px",
+                                borderRadius: "6px",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {d.order}
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                              <span
+                                style={{
+                                  fontSize: "12px",
+                                  fontWeight: 700,
+                                  color: "var(--ink)",
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
+                              >
+                                {d.customer || "Cliente"}
+                              </span>
+                              <span style={{ fontSize: "10.5px", color: "var(--muted)" }}>
+                                {d.district ? `${d.district} • ` : ""}
+                                {d.time || (d.deliveredAt ? new Date(d.deliveredAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "")}
+                                {d.platform === "ifood" ? " • iFood" : d.platform === "takeat" ? " • Takeat" : ""}
+                              </span>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right", flexShrink: 0 }}>
+                            <span style={{ fontSize: "13.5px", fontWeight: 800, color: "#059669", display: "block" }}>
+                              +{money(d.deliveryFee)}
+                            </span>
+                            {d.payment && (
+                              <span style={{ fontSize: "9.5px", color: "var(--muted)", display: "block" }}>
+                                {d.payment}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
