@@ -613,7 +613,7 @@ export async function syncTakeatMotoboysToRTDB(apiKey?: string): Promise<Driver[
       const driverRecord: Driver = {
         id: idx >= 0 ? updatedDrivers[idx].id : `drv-takeat-${mb.id}`,
         name: displayName,
-        email: idx >= 0 && updatedDrivers[idx].email ? updatedDrivers[idx].email : email,
+        email: email,
         phone: phone || (idx >= 0 ? updatedDrivers[idx].phone : ""),
         vehicle: "Moto",
         defaultFee: idx >= 0 && updatedDrivers[idx].defaultFee ? updatedDrivers[idx].defaultFee : 7.0,

@@ -9,9 +9,9 @@ import {
   Mail,
   Route,
 } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { friendlyAuthError, signIn, signOut } from "../services/authService";
-import type { User } from "../types";
+import type { User, Driver } from "../types";
 
 type LoginViewProps = {
   profileError?: string;
@@ -40,6 +40,26 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [availableDrivers, setAvailableDrivers] = useState<Driver[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = localStorage.getItem("rotacerta_drivers");
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    void import("../services/realtimeDbService").then(({ getDriversRTDB }) => {
+      void getDriversRTDB().then((list) => {
+        if (list && list.length > 0) {
+          setAvailableDrivers(list);
+        }
+      });
+    });
+  }, []);
+
   const handleRoleChange = (role: "driver" | "admin") => {
     setSelectedRole(role);
     setError("");
@@ -50,13 +70,31 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
     }
   };
 
+  async function handleQuickDriverLogin(drv: Driver) {
+    setLoading(true);
+    setError("");
+    const username = drv.name.trim();
+    setEmail(username);
+    setPassword("123456");
+    try {
+      const user = await signIn(username, "123456", "driver");
+      onLoginSuccess?.(user);
+    } catch (reason) {
+      setError(friendlyAuthError(reason));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError("");
 
+    const passToUse = password.trim() || (selectedRole === "driver" ? "123456" : "");
+
     try {
-      const user = await signIn(email, password, selectedRole);
+      const user = await signIn(email, passToUse, selectedRole);
       onLoginSuccess?.(user);
     } catch (reason) {
       setError(friendlyAuthError(reason));
@@ -252,6 +290,45 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
           </p>
         </div>
 
+        {/* Quick Driver Selection */}
+        {isDriver && availableDrivers.length > 0 && (
+          <div style={{ marginBottom: "16px" }}>
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--muted)", display: "block", marginBottom: "8px" }}>
+              👉 Toque no seu nome para entrar direto:
+            </span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+              {availableDrivers
+                .filter((d) => d.active !== false)
+                .map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => void handleQuickDriverLogin(d)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      background: "var(--surface)",
+                      border: "1px solid rgba(124,58,237,.35)",
+                      borderRadius: "20px",
+                      padding: "6px 12px",
+                      fontSize: "12px",
+                      fontWeight: 700,
+                      color: "var(--text)",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 5px rgba(0,0,0,.05)",
+                      transition: "all .15s ease",
+                    }}
+                  >
+                    <span>🛵</span>
+                    <span>{d.name}</span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
+
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           <div>
@@ -275,7 +352,7 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={isDriver ? "Digite seu usuário ou e-mail" : "Digite o e-mail da loja"}
+                placeholder={isDriver ? "Digite seu nome (ex: Amorim, Rocha)" : "Digite o e-mail da loja"}
                 autoCapitalize="none"
                 autoCorrect="off"
                 style={{
@@ -308,10 +385,10 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
               <LockKeyhole size={16} color="var(--muted)" />
               <input
                 type={showPassword ? "text" : "password"}
-                required
+                required={!isDriver}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••"
+                placeholder={isDriver ? "123456 (senha padrão)" : "••••••"}
                 style={{
                   border: "none",
                   background: "transparent",
@@ -337,6 +414,11 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+            {isDriver && (
+              <span style={{ display: "block", fontSize: "10.5px", color: "var(--muted)", marginTop: "4px" }}>
+                💡 Senha padrão: <strong>123456</strong> (se deixar vazio, preenche automático)
+              </span>
+            )}
           </div>
 
           {error && (

@@ -31,13 +31,18 @@ export function setStoredUser(user: User | null) {
 }
 
 export function normalizeAuthEmail(input: string, role?: "admin" | "driver"): string {
-  const clean = input.trim().toLowerCase();
+  const clean = input
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
   if (clean.includes("@")) return clean;
   if (role === "admin") {
     if (clean.includes("house") || clean.includes("burger")) return `${clean}@gmail.com`;
     return `${clean}@houseburger.com`;
   }
-  return `${clean}@motoboy.com`;
+  const safeSlug = clean.replace(/[^a-z0-9]/g, "");
+  return `${safeSlug}@motoboy.com`;
 }
 
 export async function signIn(
@@ -46,7 +51,8 @@ export async function signIn(
   expectedRole?: "admin" | "driver",
 ): Promise<User> {
   const cleanEmail = normalizeAuthEmail(email, expectedRole);
-  const cleanPass = pass.trim();
+  // Para motoboy, se a senha veio vazia, assume a senha padrão da loja "123456"
+  const cleanPass = pass.trim() || (expectedRole === "driver" ? "123456" : "");
 
   if (!cleanEmail || !cleanPass) {
     throw new Error("Informe o e-mail ou nome de usuário e a senha.");
@@ -56,7 +62,51 @@ export async function signIn(
   if (firebaseConfigured && auth) {
     try {
       await setPersistence(auth, browserLocalPersistence);
-      const credential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
+
+      let credential;
+      try {
+        credential = await signInWithEmailAndPassword(auth, cleanEmail, cleanPass);
+      } catch (signInErr: unknown) {
+        const code =
+          typeof signInErr === "object" && signInErr && "code" in signInErr
+            ? String((signInErr as { code: string }).code)
+            : "";
+
+        // Se for motoboy e a conta não existir ou falhar com credenciais inválidas:
+        if (
+          expectedRole === "driver" &&
+          (code === "auth/user-not-found" ||
+            code === "auth/invalid-credential" ||
+            code === "auth/wrong-password")
+        ) {
+          try {
+            // Cria a conta automaticamente no Firebase Auth com a senha informada (ou padrão 123456)
+            credential = await createUserWithEmailAndPassword(auth, cleanEmail, cleanPass);
+          } catch (createErr: unknown) {
+            const createCode =
+              typeof createErr === "object" && createErr && "code" in createErr
+                ? String((createErr as { code: string }).code)
+                : "";
+            if (createCode === "auth/email-already-in-use") {
+              // Se a conta já existe, tenta autenticar com a senha padrão 123456
+              if (cleanPass !== "123456") {
+                try {
+                  credential = await signInWithEmailAndPassword(auth, cleanEmail, "123456");
+                } catch {
+                  throw signInErr;
+                }
+              } else {
+                throw signInErr;
+              }
+            } else {
+              throw createErr;
+            }
+          }
+        } else {
+          throw signInErr;
+        }
+      }
+
       const uid = credential.user.uid;
 
       // Busca ou cria o perfil
@@ -70,20 +120,80 @@ export async function signIn(
         cleanEmail.includes("loja");
       const targetRole = expectedRole || (isOwnerAdmin ? "admin" : "driver");
 
+      const rawUsername = cleanEmail.split("@")[0];
+      const rawNormalized = rawUsername
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+
+      let driverName = rawUsername.charAt(0).toUpperCase() + rawUsername.slice(1);
+      let driverPhone = "";
+      let takeatId: number | string | undefined;
+
+      if (targetRole === "driver") {
+        try {
+          const { getDriversRTDB, saveDriverRTDB } = await import("./realtimeDbService");
+          const existingDrivers = await getDriversRTDB();
+          const matched = existingDrivers.find((d) => {
+            const dEmail = (d.email || "").toLowerCase().trim();
+            const dName = (d.name || "")
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .trim();
+            return (
+              dEmail === cleanEmail ||
+              dEmail.split("@")[0] === rawNormalized ||
+              dName === rawNormalized ||
+              dName.includes(rawNormalized) ||
+              rawNormalized.includes(dName)
+            );
+          });
+
+          if (matched) {
+            driverName = matched.name;
+            driverPhone = matched.phone || "";
+            takeatId = matched.takeatId;
+            if (matched.email?.toLowerCase() !== cleanEmail) {
+              await saveDriverRTDB({
+                ...matched,
+                email: cleanEmail,
+              });
+            }
+          } else {
+            await saveDriverRTDB({
+              id: `drv-${uid}`,
+              name: driverName,
+              email: cleanEmail,
+              phone: "",
+              vehicle: "Moto",
+              defaultFee: 7.0,
+              active: true,
+              companyId: "house-burger-190",
+              createdAt: new Date().toISOString(),
+            });
+          }
+        } catch (err) {
+          console.warn("Aviso ao vincular motorista no RTDB:", err);
+        }
+      }
+
       if (!profile) {
         profile = {
           id: uid,
-          name: cleanEmail.split("@")[0].toUpperCase(),
+          name: driverName,
           email: cleanEmail,
-          phone: "",
+          phone: driverPhone,
           role: targetRole,
           companyId: "house-burger-190",
+          takeatId,
           active: true,
         };
         await saveUserProfileRTDB(uid, profile);
-      } else if (expectedRole && profile.role !== expectedRole) {
-        // Atualiza a role se o usuário selecionou explicitamente a aba correspondente
-        profile.role = expectedRole;
+      } else {
+        profile.name = driverName;
+        profile.role = targetRole;
+        if (takeatId) profile.takeatId = takeatId;
         await saveUserProfileRTDB(uid, profile);
       }
 
