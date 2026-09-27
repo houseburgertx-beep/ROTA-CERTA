@@ -75,7 +75,7 @@ export function calculateFinancialStats(
 
   for (const item of deliveredOnly) {
     const fee = Number(item.deliveryFee) || 0;
-    const dateRef = item.deliveredAt || item.createdAt;
+    const dateRef = item.createdAt || item.deliveredAt;
 
     if (isSameShiftOrToday(dateRef)) {
       nightTotal += fee;

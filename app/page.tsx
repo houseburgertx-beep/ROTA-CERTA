@@ -206,9 +206,22 @@ function fromRecord(item: DeliveryRecord, driversList: Driver[]): Delivery {
     notes: item.notes,
     items: item.items,
     itemsSummary: item.itemsSummary,
-    source: item.source,
-    createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
-    deliveredAt: typeof item.deliveredAt === "string" ? item.deliveredAt : undefined,
+    createdAt:
+      typeof item.createdAt === "string"
+        ? item.createdAt
+        : item.createdAt && typeof (item.createdAt as any).toDate === "function"
+        ? (item.createdAt as any).toDate().toISOString()
+        : item.createdAt && typeof (item.createdAt as any).seconds === "number"
+        ? new Date((item.createdAt as any).seconds * 1000).toISOString()
+        : new Date().toISOString(),
+    deliveredAt:
+      typeof item.deliveredAt === "string"
+        ? item.deliveredAt
+        : item.deliveredAt && typeof (item.deliveredAt as any).toDate === "function"
+        ? (item.deliveredAt as any).toDate().toISOString()
+        : item.deliveredAt && typeof (item.deliveredAt as any).seconds === "number"
+        ? new Date((item.deliveredAt as any).seconds * 1000).toISOString()
+        : undefined,
     latitude: item.latitude,
     longitude: item.longitude,
   };
@@ -4330,9 +4343,10 @@ function FinancialTab({
 
     for (const d of completedList) {
       let parsedDate: Date | null = null;
-      const raw = d.deliveredAt || d.createdAt;
+      const raw = d.createdAt || d.deliveredAt;
       if (raw) {
-        const dt = new Date(raw);
+        const normalized = typeof raw === "string" ? raw.trim().replace(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/, "$1T$2") : raw;
+        const dt = new Date(normalized);
         if (!isNaN(dt.getTime())) parsedDate = dt;
       }
       if (!parsedDate) parsedDate = new Date();
@@ -4382,8 +4396,8 @@ function FinancialTab({
     for (const g of groups) {
       g.avgFee = g.totalOrders > 0 ? g.totalFee / g.totalOrders : 0;
       g.items.sort((a, b) => {
-        const ta = new Date(a.deliveredAt || a.createdAt || 0).getTime();
-        const tb = new Date(b.deliveredAt || b.createdAt || 0).getTime();
+        const ta = new Date(a.createdAt || a.deliveredAt || 0).getTime();
+        const tb = new Date(b.createdAt || b.deliveredAt || 0).getTime();
         return tb - ta;
       });
     }
@@ -4630,7 +4644,7 @@ function FinancialTab({
                               </span>
                               <span style={{ fontSize: "10.5px", color: "var(--muted)" }}>
                                 {d.district ? `${d.district} • ` : ""}
-                                {d.time || (d.deliveredAt ? new Date(d.deliveredAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "")}
+                                {d.time || (d.createdAt ? new Date(d.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : (d.deliveredAt ? new Date(d.deliveredAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""))}
                                 {d.platform === "ifood" ? " • iFood" : d.platform === "takeat" ? " • Takeat" : ""}
                               </span>
                             </div>

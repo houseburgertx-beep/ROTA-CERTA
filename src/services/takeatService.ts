@@ -1265,6 +1265,12 @@ export function mapTakeatSessionToDelivery(
   if (notes) delivery.notes = notes;
   if (session.status_timings?.delivered_at) {
     delivery.deliveredAt = session.status_timings.delivered_at;
+  } else if (session.completed_at) {
+    delivery.deliveredAt = session.completed_at;
+  } else if (session.end_time) {
+    delivery.deliveredAt = session.end_time;
+  } else if (status === "Entregue") {
+    delivery.deliveredAt = session.start_time || new Date().toISOString();
   }
 
   return delivery;
@@ -1355,7 +1361,7 @@ export async function syncTakeatDeliveries(
         if (current.status !== mapped.status && (mapped.status === "Entregue" || mapped.status === "Problema")) {
           current.status = mapped.status;
           if (mapped.status === "Entregue") {
-            current.deliveredAt = mapped.deliveredAt || new Date().toISOString();
+            current.deliveredAt = mapped.deliveredAt || current.deliveredAt || current.createdAt || mapped.createdAt || new Date().toISOString();
           }
           changed = true;
         }
