@@ -1683,7 +1683,8 @@ function MobileDeliveryApp({
             <div>
               <MobileMapView
                 deliveries={scopedDeliveries}
-                drivers={drivers}
+                drivers={currentUser.role === "admin" && appMode === "adm" ? drivers : []}
+                showAllDrivers={currentUser.role === "admin" && appMode === "adm"}
                 currentDriverGps={driverGps}
                 liveTelemetry={liveTelemetry}
                 currentDriverName={activeDriver?.name || currentUser.name}
@@ -2618,6 +2619,7 @@ function MobileDeliveryCard({
 function MobileMapView({
   deliveries,
   drivers = [],
+  showAllDrivers = false,
   currentDriverGps,
   liveTelemetry,
   currentDriverName,
@@ -2629,6 +2631,7 @@ function MobileMapView({
 }: {
   deliveries: Delivery[];
   drivers?: Driver[];
+  showAllDrivers?: boolean;
   currentDriverGps?: GeoPoint | null;
   liveTelemetry?: TrackingPosition | null;
   currentDriverName?: string;
@@ -2644,7 +2647,7 @@ function MobileMapView({
   const mapInstanceRef = useRef<any>(null);
 
   const activeGpsDrivers = useMemo(() => {
-    if (!drivers || drivers.length === 0) return [];
+    if (!showAllDrivers || !drivers || drivers.length === 0) return [];
     const now = Date.now();
     return drivers.filter((d) => {
       if (!d.location || typeof d.location.latitude !== "number" || typeof d.location.longitude !== "number") {
@@ -2653,7 +2656,7 @@ function MobileMapView({
       const time = new Date(d.location.updatedAt).getTime();
       return now - time < 2 * 60 * 60 * 1000;
     });
-  }, [drivers]);
+  }, [drivers, showAllDrivers]);
 
   const isGroupedRoute = Boolean(selectedRouteIds && selectedRouteIds.length > 0);
 
@@ -2929,8 +2932,8 @@ function MobileMapView({
           </div>
         </div>
 
-        {/* Floating Radar de Motoboys */}
-        {activeGpsDrivers.length > 0 && (
+        {/* Floating Radar de Motoboys (Apenas para Loja / ADM) */}
+        {showAllDrivers && activeGpsDrivers.length > 0 && (
           <div
             style={{
               position: "absolute",
@@ -3021,7 +3024,7 @@ function MobileMapView({
         {/* Map component com paradas na ordem correta da rota */}
         <FreeMapInternal
           deliveries={orderedDeliveries}
-          drivers={drivers}
+          drivers={showAllDrivers ? drivers : []}
           currentDriverGps={currentDriverGps}
           liveTelemetry={liveTelemetry}
           currentDriverName={currentDriverName}
