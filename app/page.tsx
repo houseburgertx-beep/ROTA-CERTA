@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell,
+  BellOff,
   Bike,
   Camera,
   Check,
@@ -23,6 +24,7 @@ import {
   Pause,
   Pencil,
   Phone,
+  PhoneCall,
   Play,
   Plus,
   Radio,
@@ -473,8 +475,18 @@ function MobileDeliveryApp({
     unlockAudioOnFirstGesture();
   }, []);
 
+  // Estado de silenciar notificações (persiste no localStorage)
+  const [isMuted, setIsMuted] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem("rotacerta_muted") === "true"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("rotacerta_muted", String(isMuted)); } catch {}
+  }, [isMuted]);
+
   // Alerta Sonoro Autêntico estilo iFood com HTML5 Audio, WAV e vibração tátil
   const playIfoodSoundAlert = () => {
+    if (isMuted) return; // Silenciado pelo usuário
     void playIfoodNotificationSound();
   };
 
@@ -1176,18 +1188,34 @@ function MobileDeliveryApp({
 
         {/* Right: Quick Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {/* Botão de Testar Som iFood */}
+          {/* Botão Silenciar / Ativar Notificações */}
           <button
             type="button"
             onClick={() => {
-              playIfoodSoundAlert();
-              notify("🔔 Som de novo pedido iFood tocado!");
+              const next = !isMuted;
+              setIsMuted(next);
+              if (!next) {
+                // Ao reativar, toca o som para confirmar
+                void playIfoodNotificationSound();
+                notify("🔔 Notificações reativadas!");
+              } else {
+                notify("🔕 Notificações silenciadas");
+              }
             }}
             className="icon-btn"
-            style={{ width: "34px", height: "34px", borderRadius: "11px", border: "1px solid var(--line)" }}
-            title="Testar toque de novo pedido (som iFood)"
+            style={{
+              width: "34px",
+              height: "34px",
+              borderRadius: "11px",
+              border: isMuted ? "1.5px solid #ef4444" : "1px solid var(--line)",
+              background: isMuted ? "rgba(239,68,68,0.08)" : undefined,
+            }}
+            title={isMuted ? "Reativar som de notificações" : "Silenciar notificações"}
           >
-            <Bell size={15} style={{ color: "var(--primary)" }} />
+            {isMuted
+              ? <BellOff size={15} style={{ color: "#ef4444" }} />
+              : <Bell size={15} style={{ color: "var(--primary)" }} />
+            }
           </button>
 
           {currentUser.role === "admin" && (
@@ -2668,6 +2696,43 @@ function MobileDeliveryCard({
               </button>
             </div>
           ) : null}
+
+          {/* Botão Ligar iFood 0800 — minimalista com localizador */}
+          <a
+            href="tel:08007217000"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 12px",
+              marginTop: "6px",
+              borderRadius: "10px",
+              background: "linear-gradient(135deg, #ea1d2c 0%, #c41422 100%)",
+              color: "#fff",
+              textDecoration: "none",
+              fontSize: "12px",
+              fontWeight: 700,
+            }}
+            title="Ligar para o suporte iFood (0800 721 7000)"
+          >
+            <PhoneCall size={14} />
+            <span style={{ flex: 1 }}>
+              Ligar iFood
+              <span style={{ opacity: 0.75, fontWeight: 500, marginLeft: "4px" }}>0800 721 7000</span>
+            </span>
+            {delivery.ifoodLocalizer && (
+              <span style={{
+                background: "rgba(255,255,255,0.2)",
+                padding: "2px 7px",
+                borderRadius: "6px",
+                fontSize: "11px",
+                fontWeight: 800,
+                letterSpacing: "0.5px",
+              }}>
+                #{delivery.ifoodLocalizer}
+              </span>
+            )}
+          </a>
         </div>
       )}
 
