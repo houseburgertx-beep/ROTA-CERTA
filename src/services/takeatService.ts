@@ -1330,6 +1330,8 @@ export async function syncTakeatDeliveries(
   deliveries: Delivery[];
   addedCount: number;
   updatedCount: number;
+  /** IDs das entregas cujo motoboy foi atribuído/trocado nesta rodada */
+  dispatchedDeliveryIds: string[];
 }> {
   // Busca em paralelo sessões da API pública e os motoboys atribuídos da API PDV / Gestor
   const [sessionsRes, basketsRes, motoboySessionsRes] = await Promise.allSettled([
@@ -1365,7 +1367,7 @@ export async function syncTakeatDeliveries(
   }
 
   if (sessions.length === 0 && assignedMotoboyMap.size === 0 && basketsOrders.length === 0) {
-    return { deliveries: existingDeliveries, addedCount: 0, updatedCount: 0 };
+    return { deliveries: existingDeliveries, addedCount: 0, updatedCount: 0, dispatchedDeliveryIds: [] };
   }
 
   const isReliablePlatformId = (id?: string) =>
@@ -1381,6 +1383,7 @@ export async function syncTakeatDeliveries(
 
   let addedCount = 0;
   let updatedCount = 0;
+  const dispatchedDeliveryIds: string[] = [];
   const result: Delivery[] = [...existingDeliveries];
 
   // 1. Processa sessões do histórico / API pública
@@ -1424,9 +1427,22 @@ export async function syncTakeatDeliveries(
             current.driver.toLowerCase().includes("aguardando") ||
             current.driver.toLowerCase() === "merchant")
         ) {
+          // Detecta se um motoboy acabou de ser despachado (driver era genérico, agora tem nome real)
+          const wasWaiting =
+            !current.driver ||
+            current.driver.toLowerCase().includes("aguardando") ||
+            current.driver.toLowerCase().includes("sem motoboy") ||
+            current.driver.toLowerCase() === "merchant";
+          if (wasWaiting) {
+            dispatchedDeliveryIds.push(current.id);
+          }
           current.driver = mapped.driver;
           current.driverId = mapped.driverId;
           if (mapped.driverPhone) current.driverPhone = mapped.driverPhone;
+          // Ao despachar, promove status para "Em rota" se ainda estiver aguardando
+          if (wasWaiting && (current.status === "Aguardando" || current.status === "Pronta para sair")) {
+            current.status = "Em rota";
+          }
           changed = true;
         }
 
@@ -1537,9 +1553,18 @@ export async function syncTakeatDeliveries(
             current.driver.toLowerCase().includes("aguardando") ||
             current.driver.toLowerCase() === "merchant")
         ) {
+          const wasWaiting =
+            !current.driver ||
+            current.driver.toLowerCase().includes("aguardando") ||
+            current.driver.toLowerCase().includes("sem motoboy") ||
+            current.driver.toLowerCase() === "merchant";
+          if (wasWaiting) dispatchedDeliveryIds.push(current.id);
           current.driver = mapped.driver;
           current.driverId = mapped.driverId;
           if (mapped.driverPhone) current.driverPhone = mapped.driverPhone;
+          if (wasWaiting && (current.status === "Aguardando" || current.status === "Pronta para sair")) {
+            current.status = "Em rota";
+          }
           changed = true;
         }
         if (mapped.deliveryFee > 0 && Math.abs((current.deliveryFee || 0) - mapped.deliveryFee) > 0.01) {
@@ -1596,9 +1621,21 @@ export async function syncTakeatDeliveries(
           current.driver.toLowerCase().includes("aguardando") ||
           current.driver.toLowerCase() === "merchant"
         ) {
+          const wasWaiting =
+            !current.driver ||
+            current.driver.toLowerCase().includes("aguardando") ||
+            current.driver.toLowerCase().includes("sem motoboy") ||
+            current.driver.toLowerCase() === "merchant";
+          if (wasWaiting && !dispatchedDeliveryIds.includes(current.id)) {
+            dispatchedDeliveryIds.push(current.id);
+          }
           current.driver = matched.driverName;
           current.driverId = matched.driverId;
           if (matched.phone) current.driverPhone = matched.phone;
+          // Promove status para "Em rota" ao ser despachado
+          if (wasWaiting && (current.status === "Aguardando" || current.status === "Pronta para sair")) {
+            current.status = "Em rota";
+          }
           changed = true;
         }
       }
@@ -1689,7 +1726,7 @@ export async function syncTakeatDeliveries(
     } catch {}
   }
 
-  return { deliveries: result, addedCount, updatedCount };
+  return { deliveries: result, addedCount, updatedCount, dispatchedDeliveryIds };
 }
 
 /**

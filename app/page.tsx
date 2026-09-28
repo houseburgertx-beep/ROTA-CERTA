@@ -514,21 +514,38 @@ function MobileDeliveryApp({
 
   const playNewOrderAlert = playIfoodSoundAlert;
 
-  // Polling automático da Takeat a cada 15 segundos quando configurado
+  // Polling automático da Takeat a cada 8 segundos quando configurado
   useEffect(() => {
     if (!takeatAutoSync || !isTakeatConfigured()) return;
 
     const runSync = async () => {
       try {
         const res = await syncTakeatDeliveries(deliveriesRef.current, driversRef.current);
-        if (res.addedCount > 0) {
+        const hasChanges = res.addedCount > 0 || res.updatedCount > 0;
+
+        if (hasChanges) {
           setDeliveries(res.deliveries);
+          // Para pedidos recém-despachados a um motoboy: salva individualmente no RTDB
+          // IMEDIATAMENTE para acionar o listener em tempo real no celular do motoboy
+          if (res.dispatchedDeliveryIds.length > 0) {
+            const dispatched = res.deliveries.filter((d) => res.dispatchedDeliveryIds.includes(d.id));
+            for (const d of dispatched) {
+              void updateDeliveryRTDB(d.id, {
+                driver: d.driver,
+                driverId: d.driverId,
+                driverPhone: d.driverPhone,
+                status: d.status,
+                deliveryFee: d.deliveryFee,
+                amount: d.amount,
+              });
+            }
+          }
           void batchSaveDeliveriesRTDB(res.deliveries);
+        }
+
+        if (res.addedCount > 0) {
           playNewOrderAlert();
           notify(`🔥 ${res.addedCount} novo(s) pedido(s) Takeat recebido(s)!`);
-        } else if (res.updatedCount > 0) {
-          setDeliveries(res.deliveries);
-          void batchSaveDeliveriesRTDB(res.deliveries);
         }
       } catch (err: unknown) {
         console.warn("Erro no auto-sync Takeat:", err);
@@ -552,6 +569,19 @@ function MobileDeliveryApp({
           .then((res) => {
             if (res.addedCount > 0 || res.updatedCount > 0) {
               setDeliveries(res.deliveries);
+              if (res.dispatchedDeliveryIds.length > 0) {
+                const dispatched = res.deliveries.filter((d) => res.dispatchedDeliveryIds.includes(d.id));
+                for (const d of dispatched) {
+                  void updateDeliveryRTDB(d.id, {
+                    driver: d.driver,
+                    driverId: d.driverId,
+                    driverPhone: d.driverPhone,
+                    status: d.status,
+                    deliveryFee: d.deliveryFee,
+                    amount: d.amount,
+                  });
+                }
+              }
               void batchSaveDeliveriesRTDB(res.deliveries);
               if (res.addedCount > 0) playNewOrderAlert();
             }
@@ -582,13 +612,27 @@ function MobileDeliveryApp({
     try {
       const res = await syncTakeatDeliveries(deliveriesRef.current, driversRef.current);
       setDeliveries(res.deliveries);
+      // Atualiza RTDB individualmente para pedidos despachados
+      if (res.dispatchedDeliveryIds.length > 0) {
+        const dispatched = res.deliveries.filter((d) => res.dispatchedDeliveryIds.includes(d.id));
+        for (const d of dispatched) {
+          void updateDeliveryRTDB(d.id, {
+            driver: d.driver,
+            driverId: d.driverId,
+            driverPhone: d.driverPhone,
+            status: d.status,
+            deliveryFee: d.deliveryFee,
+            amount: d.amount,
+          });
+        }
+      }
       void batchSaveDeliveriesRTDB(res.deliveries);
       setIsTakeatConnected(true);
       if (res.addedCount > 0) {
         playNewOrderAlert();
         notify(`✅ ${res.addedCount} novo(s) pedido(s) Takeat importado(s)!`);
       } else if (res.updatedCount > 0) {
-        notify(`✅ ${res.updatedCount} pedido(s) Takeat atualizado(s)!`);
+        notify(`✅ ${res.updatedCount} pedido(s) Takeat atualizado(s) (incluindo motoboys despachados)!`);
       } else {
         notify("Tudo em dia! Nenhum novo pedido Takeat no momento.");
       }
