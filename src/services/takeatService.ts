@@ -86,6 +86,14 @@ export interface TakeatAssignedDriver {
   id: number;
   name: string;
   phone?: string | null;
+  deliveryFee?: number;
+  status?: string;
+  totalPrice?: number;
+  deliveredAt?: string;
+  createdAt?: string;
+  buyerName?: string;
+  buyerPhone?: string;
+  neighborhood?: string;
 }
 
 export interface TakeatBill {
@@ -488,7 +496,7 @@ export async function fetchTakeatDeliverySessions(options?: {
   const now = new Date();
   const start = options?.startDate
     ? new Date(options.startDate)
-    : new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    : new Date(now.getTime() - 72 * 60 * 60 * 1000);
   const end = options?.endDate
     ? new Date(options.endDate)
     : new Date(now.getTime() + 60 * 60 * 1000);
@@ -666,10 +674,15 @@ export async function fetchTakeatBaskets(apiKey?: string): Promise<{
       const sId = Number(o.session_id || o.table_session_id || (o.basket as Record<string, unknown> | undefined)?.table_session_id);
       const motoboy = o.motoboy as { id?: number | string; name?: string; phone?: string } | undefined;
       if (sId && motoboy && typeof motoboy === "object" && motoboy.name) {
+        const deliveryTax = o.delivery_tax_price != null ? parseFloat(String(o.delivery_tax_price)) : undefined;
+        const totalPrice = o.total_price != null ? parseFloat(String(o.total_price)) : undefined;
         map.set(sId, {
           id: Number(motoboy.id),
           name: String(motoboy.name).trim(),
           phone: motoboy.phone ? String(motoboy.phone).trim() : null,
+          deliveryFee: deliveryTax && !isNaN(deliveryTax) ? deliveryTax : undefined,
+          status: o.status || o.delivery_status ? String(o.status || o.delivery_status) : undefined,
+          totalPrice: totalPrice && !isNaN(totalPrice) ? totalPrice : undefined,
         });
       }
     }
@@ -692,7 +705,7 @@ export async function fetchTakeatMotoboySessions(
   try {
     const token = await authenticateTakeat(apiKey);
     const now = new Date();
-    const start = startDate || new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const start = startDate || new Date(now.getTime() - 72 * 60 * 60 * 1000).toISOString().split("T")[0];
     const end = endDate || new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
     const endpoint = `${getAuthEndpoint("/restaurants/motoboys/sessions")}?start=${start}&end=${end}`;
@@ -714,10 +727,20 @@ export async function fetchTakeatMotoboySessions(
           for (const s of m.sessions) {
             const sId = Number(s.id);
             if (sId) {
+              const deliveryTax = s.delivery_tax_price != null ? parseFloat(String(s.delivery_tax_price)) : undefined;
+              const totalPrice = s.total_price != null ? parseFloat(String(s.total_price)) : undefined;
               map.set(sId, {
                 id: Number(m.id),
                 name: String(m.name).trim(),
                 phone: m.phone ? String(m.phone).trim() : null,
+                deliveryFee: deliveryTax && !isNaN(deliveryTax) ? deliveryTax : undefined,
+                status: s.status ? String(s.status) : undefined,
+                totalPrice: totalPrice && !isNaN(totalPrice) ? totalPrice : undefined,
+                deliveredAt: s.delivered_at ? String(s.delivered_at) : undefined,
+                createdAt: s.created_at ? String(s.created_at) : undefined,
+                buyerName: s.buyer_name ? String(s.buyer_name).trim() : undefined,
+                buyerPhone: s.buyer_phone ? String(s.buyer_phone).trim() : undefined,
+                neighborhood: s.neighborhood ? String(s.neighborhood).trim() : undefined,
               });
             }
           }
@@ -945,6 +968,72 @@ export function findDriverInTakeatSession(
 }
 
 /**
+ * Realiza o match de um motoboy atribuído no Takeat com a lista de motoristas cadastrados no Rota Certa.
+ */
+export function matchTakeatDriver(
+  assignedMotoboy: TakeatAssignedDriver,
+  driversList: Driver[] = []
+): { driverName: string; driverId: string; phone?: string } {
+  const rawName = assignedMotoboy.name.trim();
+  const candLower = rawName.toLowerCase();
+
+  // 1. Procura match na lista de motoristas cadastrados (por takeatId, nome ou email)
+  let match = driversList.find((d) => {
+    if (d.active === false) return false;
+    if (d.takeatId && Number(d.takeatId) === Number(assignedMotoboy.id)) return true;
+    const dLower = (d.name || "").toLowerCase().trim();
+    return (
+      dLower === candLower ||
+      dLower.includes(candLower) ||
+      candLower.includes(dLower) ||
+      (d.email && d.email.toLowerCase().includes(candLower))
+    );
+  });
+
+  // 1.1 Match por telefone se o nome não bater exatamente
+  if (!match && assignedMotoboy.phone) {
+    const cleanAssignedPhone = assignedMotoboy.phone.replace(/\D/g, "");
+    if (cleanAssignedPhone.length >= 8) {
+      match = driversList.find((d) => {
+        if (!d.phone) return false;
+        const cleanDPhone = d.phone.replace(/\D/g, "");
+        return cleanDPhone.includes(cleanAssignedPhone) || cleanAssignedPhone.includes(cleanDPhone);
+      });
+    }
+  }
+
+  // 2. Se for Guilherme (motoboy configurado pelo usuário para testes e entregas)
+  if (!match && candLower.includes("guilherme")) {
+    match = {
+      id: "drv-TOIXT7FvH1Mxymob9bP6U5Bv85M2",
+      name: "Guilherme",
+      email: "guilherme@motoboy.com",
+      phone: assignedMotoboy.phone || "(73) 99964-3417",
+      vehicle: "Moto",
+      defaultFee: 7.0,
+      active: true,
+      companyId: "house-burger-190",
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  if (match) {
+    return {
+      driverName: match.name,
+      driverId: match.id,
+      phone: match.phone || assignedMotoboy.phone || undefined,
+    };
+  } else {
+    const formatted = rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
+    return {
+      driverName: formatted,
+      driverId: `takeat-${assignedMotoboy.id}`,
+      phone: assignedMotoboy.phone || undefined,
+    };
+  }
+}
+
+/**
  * Converte uma sessão de comanda Takeat em um objeto Delivery do Rota Certa.
  */
 export function mapTakeatSessionToDelivery(
@@ -1075,6 +1164,7 @@ export function mapTakeatSessionToDelivery(
 
   // Preço e taxa: VALOR TOTAL DEVE INCLUIR A TAXA DE ENTREGA (total_delivery_price na Takeat)
   const rawDeliveryTax = parseFloat(
+    (assignedMotoboy?.deliveryFee != null ? String(assignedMotoboy.deliveryFee) : "") ||
     session.delivery_tax_price ||
     (rawBasket?.delivery_tax_price as string) ||
     "0"
@@ -1148,57 +1238,9 @@ export function mapTakeatSessionToDelivery(
   let driverId = "";
 
   if (assignedMotoboy?.name) {
-    const rawName = assignedMotoboy.name.trim();
-    const candLower = rawName.toLowerCase();
-
-    // 1. Procura match na lista de motoristas cadastrados (por takeatId, nome ou email)
-    let match = driversList.find((d) => {
-      if (d.active === false) return false;
-      if (d.takeatId && Number(d.takeatId) === Number(assignedMotoboy.id)) return true;
-      const dLower = d.name.toLowerCase().trim();
-      return (
-        dLower === candLower ||
-        dLower.includes(candLower) ||
-        candLower.includes(dLower) ||
-        (d.email && d.email.toLowerCase().includes(candLower))
-      );
-    });
-
-    // 1.1 Match por telefone se o nome não bater exatamente
-    if (!match && assignedMotoboy.phone) {
-      const cleanAssignedPhone = assignedMotoboy.phone.replace(/\D/g, "");
-      if (cleanAssignedPhone.length >= 8) {
-        match = driversList.find((d) => {
-          if (!d.phone) return false;
-          const cleanDPhone = d.phone.replace(/\D/g, "");
-          return cleanDPhone.includes(cleanAssignedPhone) || cleanAssignedPhone.includes(cleanDPhone);
-        });
-      }
-    }
-
-    // 2. Se for Guilherme (motoboy configurado pelo usuário para testes e entregas)
-    if (!match && candLower.includes("guilherme")) {
-      match = {
-        id: "drv-TOIXT7FvH1Mxymob9bP6U5Bv85M2",
-        name: "Guilherme",
-        email: "guilherme@motoboy.com",
-        phone: assignedMotoboy.phone || "(73) 99964-3417",
-        vehicle: "Moto",
-        defaultFee: 7.0,
-        active: true,
-        companyId: "house-burger-190",
-        createdAt: new Date().toISOString(),
-      };
-    }
-
-    if (match) {
-      driverName = match.name;
-      driverId = match.id;
-    } else {
-      const formatted = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-      driverName = formatted;
-      driverId = `takeat-${assignedMotoboy.id}`;
-    }
+    const matched = matchTakeatDriver(assignedMotoboy, driversList);
+    driverName = matched.driverName;
+    driverId = matched.driverId;
   } else {
     // Fallback: tenta extrair das propriedades do JSON da sessão pública
     const recognizedDriver = findDriverInTakeatSession(session, driversList);
@@ -1370,18 +1412,20 @@ export async function syncTakeatDeliveries(
           changed = true;
         }
 
-        // Atualiza motoboy
+        // Atualiza motoboy se mudou no Takeat
         if (
           mapped.driver &&
           !mapped.driver.toLowerCase().includes("aguardando") &&
           !mapped.driver.toLowerCase().includes("sem motoboy") &&
           (mapped.driver !== current.driver ||
+            mapped.driverId !== current.driverId ||
             current.driver.toLowerCase().includes("sem motoboy") ||
             current.driver.toLowerCase().includes("aguardando") ||
             current.driver.toLowerCase() === "merchant")
         ) {
           current.driver = mapped.driver;
           current.driverId = mapped.driverId;
+          if (mapped.driverPhone) current.driverPhone = mapped.driverPhone;
           changed = true;
         }
 
@@ -1477,10 +1521,150 @@ export async function syncTakeatDeliveries(
       existingMap.get(takeatId) ||
       (isReliablePlatformId(mapped.platformOrderId) ? existingMap.get(mapped.platformOrderId!) : undefined);
 
-    if (!existing) {
+    if (existing) {
+      let changed = false;
+      const idx = result.findIndex((d) => d.id === existing.id);
+      if (idx !== -1) {
+        const current = result[idx];
+        if (
+          mapped.driver &&
+          !mapped.driver.toLowerCase().includes("aguardando") &&
+          !mapped.driver.toLowerCase().includes("sem motoboy") &&
+          (mapped.driver !== current.driver ||
+            mapped.driverId !== current.driverId ||
+            current.driver.toLowerCase().includes("sem motoboy") ||
+            current.driver.toLowerCase().includes("aguardando") ||
+            current.driver.toLowerCase() === "merchant")
+        ) {
+          current.driver = mapped.driver;
+          current.driverId = mapped.driverId;
+          if (mapped.driverPhone) current.driverPhone = mapped.driverPhone;
+          changed = true;
+        }
+        if (mapped.deliveryFee > 0 && Math.abs((current.deliveryFee || 0) - mapped.deliveryFee) > 0.01) {
+          current.deliveryFee = mapped.deliveryFee;
+          changed = true;
+        }
+        if (mapped.amount > 0 && Math.abs((current.amount || 0) - mapped.amount) > 0.01) {
+          current.amount = mapped.amount;
+          changed = true;
+        }
+        if (changed) {
+          result[idx] = { ...current };
+          updatedCount++;
+        }
+      }
+    } else {
       result.unshift(mapped);
       existingMap.set(takeatId, mapped);
       if (mapped.platformOrderId) existingMap.set(mapped.platformOrderId, mapped);
+      addedCount++;
+    }
+  }
+
+  // 3. Reconciliação direta de todos os pedidos existentes com o mapa oficial de motoboys do Takeat
+  for (let idx = 0; idx < result.length; idx++) {
+    const current = result[idx];
+    let sessionId: number | undefined;
+
+    if (current.id.startsWith("takeat-")) {
+      const parsed = Number(current.id.replace("takeat-", ""));
+      if (!isNaN(parsed) && parsed > 0) sessionId = parsed;
+    }
+
+    if (!sessionId && current.source === "takeat" && current.platformOrderId) {
+      const parsed = Number(current.platformOrderId.replace(/\D/g, ""));
+      if (!isNaN(parsed) && parsed > 0) sessionId = parsed;
+    }
+
+    if (sessionId && assignedMotoboyMap.has(sessionId)) {
+      const assigned = assignedMotoboyMap.get(sessionId)!;
+      const matched = matchTakeatDriver(assigned, driversList);
+      let changed = false;
+
+      // Se o motoboy no Takeat foi alterado ou corrigido
+      if (
+        matched.driverName &&
+        !matched.driverName.toLowerCase().includes("aguardando") &&
+        !matched.driverName.toLowerCase().includes("sem motoboy")
+      ) {
+        if (
+          current.driver !== matched.driverName ||
+          current.driverId !== matched.driverId ||
+          current.driver.toLowerCase().includes("sem motoboy") ||
+          current.driver.toLowerCase().includes("aguardando") ||
+          current.driver.toLowerCase() === "merchant"
+        ) {
+          current.driver = matched.driverName;
+          current.driverId = matched.driverId;
+          if (matched.phone) current.driverPhone = matched.phone;
+          changed = true;
+        }
+      }
+
+      // Se a taxa de entrega no Takeat mudou
+      if (assigned.deliveryFee && assigned.deliveryFee > 0 && Math.abs((current.deliveryFee || 0) - assigned.deliveryFee) > 0.01) {
+        current.deliveryFee = assigned.deliveryFee;
+        changed = true;
+      }
+
+      // Se o status no Takeat foi concluído/entregue
+      if (
+        (assigned.status === "finished" || assigned.status === "completed") &&
+        current.status !== "Entregue"
+      ) {
+        current.status = "Entregue";
+        if (assigned.deliveredAt) current.deliveredAt = assigned.deliveredAt;
+        changed = true;
+      } else if (
+        assigned.deliveredAt &&
+        current.status === "Entregue" &&
+        !current.deliveredAt
+      ) {
+        current.deliveredAt = assigned.deliveredAt;
+        changed = true;
+      }
+
+      if (changed) {
+        result[idx] = { ...current };
+        updatedCount++;
+      }
+    }
+  }
+
+  // 4. Se houver alguma sessão de motoboy da Takeat que ainda não esteja em result, adiciona como entrega
+  for (const [sId, assigned] of assignedMotoboyMap.entries()) {
+    const takeatId = `takeat-${sId}`;
+    if (!existingMap.has(takeatId)) {
+      const matched = matchTakeatDriver(assigned, driversList);
+      const isFinished = assigned.status === "finished" || assigned.status === "completed";
+      const synthDelivery: Delivery = {
+        id: takeatId,
+        order: `#TK-${sId}`,
+        customer: assigned.buyerName || "Cliente Takeat",
+        phone: assigned.buyerPhone || "",
+        address: assigned.neighborhood ? `Bairro ${assigned.neighborhood}` : "Endereço Takeat",
+        district: assigned.neighborhood || "Centro",
+        city: "Teixeira de Freitas",
+        state: "BA",
+        amount: assigned.totalPrice || (assigned.deliveryFee || 7.0),
+        deliveryFee: assigned.deliveryFee || 7.0,
+        payment: "Takeat Delivery",
+        platform: "takeat",
+        priority: "Normal",
+        status: isFinished ? "Entregue" : "Em rota",
+        driver: matched.driverName,
+        driverId: matched.driverId,
+        driverPhone: matched.phone,
+        deliveredAt: assigned.deliveredAt,
+        time: assigned.createdAt
+          ? new Date(assigned.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+          : new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+        source: "takeat",
+        createdAt: assigned.createdAt || new Date().toISOString(),
+      };
+      result.unshift(synthDelivery);
+      existingMap.set(takeatId, synthDelivery);
       addedCount++;
     }
   }

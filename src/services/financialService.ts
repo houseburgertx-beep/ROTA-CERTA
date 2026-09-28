@@ -10,6 +10,7 @@ export interface DeliveryItemForFinance {
   amount: number;
   status: string;
   driver?: string;
+  driverId?: string;
   time?: string;
   createdAt?: string;
   deliveredAt?: string;
@@ -58,9 +59,23 @@ export function isCurrentMonth(dateStr?: string): boolean {
 export function calculateFinancialStats(
   deliveries: DeliveryItemForFinance[],
   driverNameFilter?: string,
+  driverIdFilter?: string,
 ): FinancialStats {
-  const filtered = driverNameFilter
-    ? deliveries.filter((d) => d.driver === driverNameFilter)
+  const filterNorm = driverNameFilter ? driverNameFilter.toLowerCase().trim() : undefined;
+  const idNorm = driverIdFilter ? driverIdFilter.toLowerCase().trim() : undefined;
+
+  const filtered = (filterNorm || idNorm)
+    ? deliveries.filter((d) => {
+        if (idNorm && d.driverId) {
+          const dId = d.driverId.toLowerCase().trim();
+          if (dId === idNorm || dId === `drv-${idNorm}` || `drv-${dId}` === idNorm) {
+            return true;
+          }
+        }
+        if (!filterNorm || !d.driver) return false;
+        const dNorm = d.driver.toLowerCase().trim();
+        return dNorm === filterNorm || dNorm.includes(filterNorm) || filterNorm.includes(dNorm);
+      })
     : deliveries;
 
   // Apenas entregas concluídas contam como faturado
@@ -107,7 +122,7 @@ export function getDriversEarningsSummary(
   deliveries: DeliveryItemForFinance[],
 ): DriverEarningsSummary[] {
   return drivers.map((driver) => {
-    const stats = calculateFinancialStats(deliveries, driver.name);
+    const stats = calculateFinancialStats(deliveries, driver.name, driver.id);
     return {
       driverId: driver.id,
       driverName: driver.name,
