@@ -22,7 +22,12 @@ export interface DeliveryItemForFinance {
  */
 export function isSameShiftOrToday(dateStr?: string): boolean {
   if (!dateStr) return false;
-  const date = new Date(dateStr);
+  const clean = dateStr.trim();
+  // Se for apenas formato de hora "HH:MM" ou "HH:MM:SS", é do dia/turno de hoje
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(clean)) return true;
+
+  const normalized = clean.replace(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/, "$1T$2");
+  const date = new Date(normalized);
   if (isNaN(date.getTime())) return false;
 
   const now = new Date();

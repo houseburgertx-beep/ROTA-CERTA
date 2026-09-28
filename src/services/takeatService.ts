@@ -290,9 +290,8 @@ export function clearTakeatApiKey(): void {
 export function isTakeatSyncEnabled(): boolean {
   try {
     const val = localStorage.getItem(getTakeatSyncStorage());
-    // Padrão ativado se já tiver credenciais configuradas
-    if (val === null) return isTakeatConfigured();
-    return val === "true";
+    if (val === "false") return false;
+    return true;
   } catch {
     return true;
   }
@@ -1330,6 +1329,7 @@ export async function syncTakeatDeliveries(
   deliveries: Delivery[];
   addedCount: number;
   updatedCount: number;
+  newDeliveries: Delivery[];
   /** IDs das entregas cujo motoboy foi atribuído/trocado nesta rodada */
   dispatchedDeliveryIds: string[];
 }> {
@@ -1367,7 +1367,7 @@ export async function syncTakeatDeliveries(
   }
 
   if (sessions.length === 0 && assignedMotoboyMap.size === 0 && basketsOrders.length === 0) {
-    return { deliveries: existingDeliveries, addedCount: 0, updatedCount: 0, dispatchedDeliveryIds: [] };
+    return { deliveries: existingDeliveries, addedCount: 0, updatedCount: 0, newDeliveries: [], dispatchedDeliveryIds: [] };
   }
 
   const isReliablePlatformId = (id?: string) =>
@@ -1384,6 +1384,7 @@ export async function syncTakeatDeliveries(
   let addedCount = 0;
   let updatedCount = 0;
   const dispatchedDeliveryIds: string[] = [];
+  const newDeliveries: Delivery[] = [];
   const result: Delivery[] = [...existingDeliveries];
 
   // 1. Processa sessões do histórico / API pública
@@ -1505,6 +1506,7 @@ export async function syncTakeatDeliveries(
       existingMap.set(takeatId, mapped);
       if (mapped.platformOrderId) existingMap.set(mapped.platformOrderId, mapped);
       addedCount++;
+      newDeliveries.push(mapped);
     }
   }
 
@@ -1585,6 +1587,7 @@ export async function syncTakeatDeliveries(
       existingMap.set(takeatId, mapped);
       if (mapped.platformOrderId) existingMap.set(mapped.platformOrderId, mapped);
       addedCount++;
+      newDeliveries.push(mapped);
     }
   }
 
@@ -1704,6 +1707,7 @@ export async function syncTakeatDeliveries(
       result.unshift(synthDelivery);
       existingMap.set(takeatId, synthDelivery);
       addedCount++;
+      newDeliveries.push(synthDelivery);
     }
   }
 
@@ -1726,7 +1730,7 @@ export async function syncTakeatDeliveries(
     } catch {}
   }
 
-  return { deliveries: result, addedCount, updatedCount, dispatchedDeliveryIds };
+  return { deliveries: result, addedCount, updatedCount, newDeliveries, dispatchedDeliveryIds };
 }
 
 /**

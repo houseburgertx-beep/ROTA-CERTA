@@ -322,7 +322,8 @@ function MobileDeliveryApp({
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("Todas");
-  const [deliveryTabMode, setDeliveryTabMode] = useState<"active" | "completed">("active");
+  const [deliveryTabMode, setDeliveryTabMode] = useState<"active" | "all_today" | "completed">("active");
+  const [showAllHistory, setShowAllHistory] = useState<boolean>(false);
   const [selectedForRouteIds, setSelectedForRouteIds] = useState<string[]>([]);
   const [modal, setModal] = useState<"new" | "ocr" | "driver" | "profile" | null>(null);
   const [ocrData, setOcrData] = useState<Record<string, string> | null>(null);
@@ -466,6 +467,7 @@ function MobileDeliveryApp({
         setTakeatCredentials(cfg);
         setTakeatCreds(cfg);
         setIsTakeatConnected(true);
+        setTakeatAutoSync(isTakeatSyncEnabled());
       }
     });
     return () => {
@@ -525,6 +527,14 @@ function MobileDeliveryApp({
 
         if (hasChanges) {
           setDeliveries(res.deliveries);
+
+          // Salva IMEDIATAMENTE cada nova entrega no RTDB
+          if (res.newDeliveries && res.newDeliveries.length > 0) {
+            for (const d of res.newDeliveries) {
+              void saveDeliveryRTDB(d);
+            }
+          }
+
           // Para pedidos recém-despachados a um motoboy: salva individualmente no RTDB
           // IMEDIATAMENTE para acionar o listener em tempo real no celular do motoboy
           if (res.dispatchedDeliveryIds.length > 0) {
@@ -569,6 +579,11 @@ function MobileDeliveryApp({
           .then((res) => {
             if (res.addedCount > 0 || res.updatedCount > 0) {
               setDeliveries(res.deliveries);
+              if (res.newDeliveries && res.newDeliveries.length > 0) {
+                for (const d of res.newDeliveries) {
+                  void saveDeliveryRTDB(d);
+                }
+              }
               if (res.dispatchedDeliveryIds.length > 0) {
                 const dispatched = res.deliveries.filter((d) => res.dispatchedDeliveryIds.includes(d.id));
                 for (const d of dispatched) {
@@ -612,6 +627,11 @@ function MobileDeliveryApp({
     try {
       const res = await syncTakeatDeliveries(deliveriesRef.current, driversRef.current);
       setDeliveries(res.deliveries);
+      if (res.newDeliveries && res.newDeliveries.length > 0) {
+        for (const d of res.newDeliveries) {
+          void saveDeliveryRTDB(d);
+        }
+      }
       // Atualiza RTDB individualmente para pedidos despachados
       if (res.dispatchedDeliveryIds.length > 0) {
         const dispatched = res.deliveries.filter((d) => res.dispatchedDeliveryIds.includes(d.id));
@@ -838,8 +858,18 @@ function MobileDeliveryApp({
     );
   }, [scopedDeliveries]);
 
-  const completedDeliveries = useMemo(() => {
+  const completedDeliveriesTonight = useMemo(() => {
+    return scopedDeliveries.filter(
+      (d) => isDeliveryDone(d.status) && isSameShiftOrToday(d.deliveredAt || d.createdAt || d.time)
+    );
+  }, [scopedDeliveries]);
+
+  const allCompletedDeliveries = useMemo(() => {
     return scopedDeliveries.filter((d) => isDeliveryDone(d.status));
+  }, [scopedDeliveries]);
+
+  const tonightDeliveries = useMemo(() => {
+    return scopedDeliveries.filter((d) => isSameShiftOrToday(d.createdAt || d.deliveredAt || d.time));
   }, [scopedDeliveries]);
 
   // Sequenciamento Inteligente de Entregas & Próxima Parada (Função 7)
@@ -892,17 +922,55 @@ function MobileDeliveryApp({
     return optimizedActiveDeliveries.length > 0 ? optimizedActiveDeliveries[0] : null;
   }, [optimizedActiveDeliveries]);
 
-  // Lista filtrada para exibição (separa Atribuídos Agora vs Já Entregues)
+  // Lista filtrada para exibição (separa Em Aberto vs Todas Desta Noite vs Entregues)
   const filteredDeliveries = useMemo(() => {
-    const base = deliveryTabMode === "active" ? optimizedActiveDeliveries : completedDeliveries;
+    let base: Delivery[] = [];
+    if (deliveryTabMode === "active") {
+      base = optimizedActiveDeliveries;
+    } else if (deliveryTabMode === "all_today") {
+      base = tonightDeliveries;
+    } else {
+      base = showAllHistory
+        ? allCompletedDeliveries
+        : completedDeliveriesTonight.length > 0
+        ? completedDeliveriesTonight
+        : allCompletedDeliveries;
+    }
+
     return base.filter((d) => {
-      if (statusFilter !== "Todas" && d.status !== statusFilter) return false;
+      if (statusFilter !== "Todas") {
+        const s = (d.status || "").toLowerCase().trim();
+        if (statusFilter === "Aguardando") {
+          const isAwaiting =
+            s === "aguardando" ||
+            s === "pronta para sair" ||
+            s === "pronta" ||
+            (d.driver || "").toLowerCase().includes("aguardando") ||
+            (d.driver || "").toLowerCase().includes("sem motoboy");
+          if (!isAwaiting) return false;
+        } else if (statusFilter === "Em rota") {
+          if (s !== "em rota" && s !== "em_rota") return false;
+        } else if (statusFilter === "Entregue") {
+          if (s !== "entregue" && s !== "delivered" && s !== "concluída") return false;
+        } else if (d.status !== statusFilter) {
+          return false;
+        }
+      }
       if (!query.trim()) return true;
-      return (d.customer + d.order + d.address + d.district + d.phone)
+      return (d.customer + d.order + d.address + d.district + (d.phone || "") + (d.driver || ""))
         .toLowerCase()
         .includes(query.toLowerCase());
     });
-  }, [deliveryTabMode, optimizedActiveDeliveries, completedDeliveries, statusFilter, query]);
+  }, [
+    deliveryTabMode,
+    optimizedActiveDeliveries,
+    tonightDeliveries,
+    completedDeliveriesTonight,
+    allCompletedDeliveries,
+    showAllHistory,
+    statusFilter,
+    query,
+  ]);
 
   const toggleDeliverySelection = (id: string) => {
     setSelectedForRouteIds((prev) =>
@@ -1233,6 +1301,27 @@ function MobileDeliveryApp({
             }
           </button>
 
+          {/* Botão Sincronizar Takeat */}
+          <button
+            type="button"
+            onClick={handleManualSyncTakeat}
+            disabled={takeatSyncing}
+            className="icon-btn"
+            style={{
+              width: "34px",
+              height: "34px",
+              borderRadius: "11px",
+              border: "1px solid var(--line)",
+              background: "var(--surface)",
+              display: "grid",
+              placeItems: "center",
+              cursor: "pointer",
+            }}
+            title="Sincronizar Takeat agora"
+          >
+            <RefreshCw size={14} className={takeatSyncing ? "spin-animation" : ""} style={{ color: "var(--primary)" }} />
+          </button>
+
           {currentUser.role === "admin" && (
             <div className="mode-toggle" style={{ padding: "2px" }}>
               <button
@@ -1435,22 +1524,65 @@ function MobileDeliveryApp({
                 <button
                   type="button"
                   className={`native-segment-btn ${deliveryTabMode === "active" ? "active" : ""}`}
-                  onClick={() => setDeliveryTabMode("active")}
+                  onClick={() => {
+                    setDeliveryTabMode("active");
+                    setStatusFilter("Todas");
+                  }}
                 >
                   <Bike size={15} />
-                  <span>Atribuídos Agora</span>
+                  <span>Em Aberto</span>
                   <span className="native-segment-badge highlight">{activeDeliveries.length}</span>
                 </button>
                 <button
                   type="button"
+                  className={`native-segment-btn ${deliveryTabMode === "all_today" ? "active" : ""}`}
+                  onClick={() => {
+                    setDeliveryTabMode("all_today");
+                    setStatusFilter("Todas");
+                  }}
+                >
+                  <Package size={15} />
+                  <span>Todas Hoje</span>
+                  <span className="native-segment-badge" style={{ background: "rgba(59,130,246,.15)", color: "#3b82f6" }}>
+                    {tonightDeliveries.length}
+                  </span>
+                </button>
+                <button
+                  type="button"
                   className={`native-segment-btn ${deliveryTabMode === "completed" ? "active" : ""}`}
-                  onClick={() => setDeliveryTabMode("completed")}
+                  onClick={() => {
+                    setDeliveryTabMode("completed");
+                    setStatusFilter("Todas");
+                  }}
                 >
                   <CheckCircle2 size={15} />
-                  <span>Concluídos</span>
-                  <span className="native-segment-badge">{completedDeliveries.length}</span>
+                  <span>Entregues</span>
+                  <span className="native-segment-badge">{completedDeliveriesTonight.length}</span>
                 </button>
               </div>
+
+              {/* History Toggle when on Entregues tab */}
+              {deliveryTabMode === "completed" && allCompletedDeliveries.length > completedDeliveriesTonight.length && (
+                <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "6px", fontSize: "11px", padding: "0 4px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowAllHistory((prev) => !prev)}
+                    style={{
+                      border: 0,
+                      background: "transparent",
+                      color: "var(--primary)",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      fontSize: "11px",
+                      textDecoration: "underline",
+                    }}
+                  >
+                    {showAllHistory
+                      ? `← Ver apenas concluídos de hoje (${completedDeliveriesTonight.length})`
+                      : `Ver histórico completo (${allCompletedDeliveries.length} corridas) →`}
+                  </button>
+                </div>
+              )}
 
               {/* Quick Select All bar when multiple active deliveries */}
               {deliveryTabMode === "active" && activeDeliveries.length > 1 && (
@@ -1472,7 +1604,13 @@ function MobileDeliveryApp({
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder={deliveryTabMode === "active" ? "Buscar por cliente ou rua..." : "Buscar entregas concluídas..."}
+                  placeholder={
+                    deliveryTabMode === "active"
+                      ? "Buscar pedidos em aberto..."
+                      : deliveryTabMode === "all_today"
+                      ? "Buscar em todas as entregas de hoje..."
+                      : "Buscar entregas concluídas..."
+                  }
                 />
                 {query && (
                   <button
@@ -1486,16 +1624,21 @@ function MobileDeliveryApp({
               </div>
 
               {/* Status Filter Scroll Chips */}
-              {deliveryTabMode === "active" && (
+              {(deliveryTabMode === "active" || deliveryTabMode === "all_today") && (
                 <div className="native-filter-scroll">
-                  {["Todas", "Aguardando", "Em rota"].map((st) => (
+                  {(deliveryTabMode === "all_today"
+                    ? ["Todas", "Aguardando", "Em rota", "Entregue"]
+                    : ["Todas", "Aguardando", "Em rota"]
+                  ).map((st) => (
                     <button
                       key={st}
                       type="button"
                       className={`native-filter-pill ${statusFilter === st ? "active" : ""}`}
                       onClick={() => setStatusFilter(st)}
                     >
-                      {st === "Todas" ? `Todas (${activeDeliveries.length})` : st}
+                      {st === "Todas"
+                        ? `Todas (${deliveryTabMode === "all_today" ? tonightDeliveries.length : activeDeliveries.length})`
+                        : st}
                     </button>
                   ))}
                 </div>
@@ -1520,9 +1663,9 @@ function MobileDeliveryApp({
                       >
                         <CheckCircle2 size={30} />
                       </div>
-                      <b style={{ display: "block", fontSize: "16px", color: "var(--text)" }}>Nenhuma entrega finalizada ainda</b>
+                      <b style={{ display: "block", fontSize: "16px", color: "var(--text)" }}>Nenhuma entrega finalizada nesta noite</b>
                       <p style={{ color: "var(--muted)", fontSize: "12px", margin: "6px auto 16px", maxWidth: "280px", lineHeight: "1.4" }}>
-                        Quando você concluir pedidos na aba "Atribuídos Agora", o histórico e o resumo de taxas aparecerão aqui.
+                        Conforme os motoboys concluírem as corridas, elas serão registradas aqui.
                       </p>
                       <button
                         type="button"
@@ -1530,7 +1673,37 @@ function MobileDeliveryApp({
                         style={{ height: "40px", padding: "0 18px", borderRadius: "10px", fontSize: "12px", fontWeight: "700" }}
                         onClick={() => setDeliveryTabMode("active")}
                       >
-                        Ver Atribuídos Agora ({activeDeliveries.length})
+                        Ver Pedidos em Aberto ({activeDeliveries.length})
+                      </button>
+                    </div>
+                  ) : deliveryTabMode === "all_today" ? (
+                    <div style={{ padding: "44px 20px", textAlign: "center", background: "var(--surface)", borderRadius: "20px", border: "1px solid var(--line)" }}>
+                      <div
+                        style={{
+                          width: "60px",
+                          height: "60px",
+                          borderRadius: "50%",
+                          background: "rgba(59,130,246,.12)",
+                          color: "#3b82f6",
+                          display: "grid",
+                          placeItems: "center",
+                          margin: "0 auto 14px",
+                        }}
+                      >
+                        <Package size={30} />
+                      </div>
+                      <b style={{ display: "block", fontSize: "16px", color: "var(--text)" }}>Nenhuma entrega registrada nesta noite</b>
+                      <p style={{ color: "var(--muted)", fontSize: "12px", margin: "6px auto 16px", maxWidth: "280px", lineHeight: "1.4" }}>
+                        Os pedidos do Takeat/iFood aparecerão aqui assim que forem recebidos.
+                      </p>
+                      <button
+                        type="button"
+                        className="primary"
+                        style={{ height: "40px", padding: "0 18px", borderRadius: "10px", fontSize: "12px", fontWeight: "700" }}
+                        onClick={handleManualSyncTakeat}
+                        disabled={takeatSyncing}
+                      >
+                        {takeatSyncing ? "Sincronizando..." : "Sincronizar Takeat"}
                       </button>
                     </div>
                   ) : currentUser.role === "driver" ? (
@@ -1631,7 +1804,7 @@ function MobileDeliveryApp({
                         onRemove={() => removeDelivery(d.id)}
                         isAdm={appMode === "adm"}
                         drivers={drivers}
-                        showSelectCheckbox={deliveryTabMode === "active"}
+                        showSelectCheckbox={deliveryTabMode === "active" || (deliveryTabMode === "all_today" && !isDeliveryDone(d.status))}
                         selected={selectedForRouteIds.includes(d.id)}
                         onToggleSelect={() => toggleDeliverySelection(d.id)}
                         onOpenIfoodConfirm={() => setIfoodConfirmDelivery(d)}
