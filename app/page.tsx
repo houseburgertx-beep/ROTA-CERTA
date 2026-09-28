@@ -135,37 +135,43 @@ import {
   authenticateTakeat,
   type TakeatCredentials,
 } from "../src/services/takeatService";
+import { getActiveStore, getStoreCacheKey, type StoreConfig } from "../src/services/storeService";
 import type { DeliveryRecord, DeliveryRecordStatus } from "../src/types/delivery";
 import { LoginView } from "../src/components/LoginView";
 import { playIfoodNotificationSound, unlockAudioOnFirstGesture } from "../src/services/soundService";
 
 type Status = DeliveryStatus;
 
-const STORE_KEY = "rotacerta_store";
-const DELIV_KEY = "rotacerta_deliveries";
+const getStoreStorageKey = () => getStoreCacheKey("rotacerta_store");
+const getDelivStorageKey = () => getStoreCacheKey("rotacerta_deliveries");
+
 type StoreCfg = { name: string; phone: string; address: string; latitude: number; longitude: number };
-const DEFAULT_STORE: StoreCfg = {
-  name: "House Burger 190 Hamburgueria",
-  phone: "(73) 99800-1122",
-  address: "Centro, Teixeira de Freitas - BA",
-  latitude: -17.5399,
-  longitude: -39.7414,
-};
+
+function getDefaultStore(): StoreCfg {
+  const active = getActiveStore();
+  return {
+    name: active.name,
+    phone: active.phone,
+    address: active.address,
+    latitude: active.latitude,
+    longitude: active.longitude,
+  };
+}
 
 function loadStore(): StoreCfg {
   try {
-    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(STORE_KEY) : null;
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(getStoreStorageKey()) : null;
     const s = raw ? JSON.parse(raw) : null;
     if (s && typeof s.latitude === "number") return s;
   } catch {}
-  return DEFAULT_STORE;
+  return getDefaultStore();
 }
 
 let STORE_POINT: StoreCfg = loadStore();
 function saveStore(cfg: StoreCfg) {
   STORE_POINT = cfg;
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(cfg));
+    localStorage.setItem(getStoreStorageKey(), JSON.stringify(cfg));
   } catch {}
 }
 
@@ -306,7 +312,7 @@ function MobileDeliveryApp({
 
   const [deliveries, setDeliveries] = useState<Delivery[]>(() => {
     try {
-      const raw = typeof localStorage !== "undefined" ? localStorage.getItem(DELIV_KEY) : null;
+      const raw = typeof localStorage !== "undefined" ? localStorage.getItem(getDelivStorageKey()) : null;
       const s = raw ? JSON.parse(raw) : null;
       return Array.isArray(s) ? s : initialDeliveries;
     } catch {
@@ -620,9 +626,17 @@ function MobileDeliveryApp({
 
   useEffect(() => {
     try {
-      localStorage.setItem(DELIV_KEY, JSON.stringify(deliveries));
+      localStorage.setItem(getDelivStorageKey(), JSON.stringify(deliveries));
     } catch {}
   }, [deliveries]);
+
+  const activeStoreConfig = useMemo(() => getActiveStore(), []);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.title = `${activeStoreConfig.name} — Rota Certa`;
+    }
+  }, [activeStoreConfig]);
 
   const activeDriver = useMemo(() => {
     if (currentUser.role === "driver") {
@@ -642,12 +656,12 @@ function MobileDeliveryApp({
         vehicle: "Moto",
         defaultFee: 7.0,
         active: true,
-        companyId: currentUser.companyId || "house-burger-190",
+        companyId: currentUser.companyId || activeStoreConfig.companyId,
         createdAt: new Date().toISOString(),
       } as Driver;
     }
     return drivers.find((d) => d.id === selectedDriverId) || drivers[0];
-  }, [drivers, selectedDriverId, currentUser]);
+  }, [drivers, selectedDriverId, currentUser, activeStoreConfig]);
 
   // Função ESTRITA: O pedido pertence a este motoboy?
   const isDeliveryForThisDriver = (d: Delivery): boolean => {
@@ -1085,6 +1099,27 @@ function MobileDeliveryApp({
             </div>
           </div>
         </button>
+
+        {/* Badge da Unidade / Loja */}
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            padding: "4px 8px",
+            borderRadius: "8px",
+            fontSize: "11px",
+            fontWeight: 800,
+            background: activeStoreConfig.id === "foodpark" ? "rgba(16, 185, 129, 0.14)" : "rgba(117, 87, 246, 0.14)",
+            color: activeStoreConfig.id === "foodpark" ? "#10b981" : "#7557f6",
+            border: activeStoreConfig.id === "foodpark" ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(117, 87, 246, 0.3)",
+            whiteSpace: "nowrap",
+          }}
+          title={`Loja conectada: ${activeStoreConfig.name}`}
+        >
+          <span>🏪</span>
+          <span>{activeStoreConfig.shortName}</span>
+        </div>
 
         {!isOnline && (
           <div
@@ -2028,9 +2063,10 @@ function MobileDeliveryCard({
       : "https://houseburger-entregas.web.app";
   const trackingUrl = `${trackingOrigin}/?rastreio=${delivery.id}`;
 
+  const storeGreeting = STORE_POINT.name ? STORE_POINT.name.replace(" Hamburgueria", "") : "House Burger";
   const whatsappTrackingUrl = validWhatsApp
     ? `https://wa.me/${validWhatsApp}?text=${encodeURIComponent(
-        `Olá ${delivery.customer}! Seu House Burger (Pedido #${delivery.order}) está a caminho com nosso motoboy ${delivery.driver || "da casa"}. Acompanhe ao vivo pelo mapa aqui: ${trackingUrl}`,
+        `Olá ${delivery.customer}! Seu pedido do ${storeGreeting} (Pedido #${delivery.order}) está a caminho com nosso motoboy ${delivery.driver || "da casa"}. Acompanhe ao vivo pelo mapa aqui: ${trackingUrl}`,
       )}`
     : null;
 

@@ -12,6 +12,7 @@ import {
 import { useState, type FormEvent } from "react";
 import { friendlyAuthError, signIn, signOut } from "../services/authService";
 import type { User } from "../types";
+import { getActiveStore } from "../services/storeService";
 
 type LoginViewProps = {
   profileError?: string;
@@ -127,7 +128,7 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 {isDriver ? "Área do Motoboy" : "Área da Loja"}
               </strong>
               <span style={{ fontSize: "11px", color: "var(--muted)", display: "block", marginTop: "2px" }}>
-                {isDriver ? "Rota Certa • Suas Corridas" : "Rota Certa • Painel de Controle"}
+                {getActiveStore().name} • {isDriver ? "Suas Corridas" : "Painel"}
               </span>
             </div>
           </div>

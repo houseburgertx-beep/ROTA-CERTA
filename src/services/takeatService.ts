@@ -1,6 +1,7 @@
 import type { Delivery, Driver, OrderItem } from "../types";
 import { saveTakeatConfigRTDB, saveDriverRTDB, getDriversRTDB } from "./realtimeDbService";
 import { geocodeDeliveryAddress } from "./geocodingService";
+import { getStoreCacheKey, getActiveStore } from "./storeService";
 
 export interface TakeatBuyerAddress {
   country?: string;
@@ -159,10 +160,10 @@ export interface TakeatCredentials {
   apiKey?: string;
 }
 
-const TAKEAT_KEY_STORAGE = "rotacerta_takeat_key";
-const TAKEAT_CREDS_STORAGE = "rotacerta_takeat_creds";
-const TAKEAT_SYNC_STORAGE = "rotacerta_takeat_sync_active";
-const TAKEAT_TOKEN_STORAGE = "rotacerta_takeat_cached_token";
+const getTakeatKeyStorage = () => getStoreCacheKey("rotacerta_takeat_key");
+const getTakeatCredsStorage = () => getStoreCacheKey("rotacerta_takeat_creds");
+const getTakeatSyncStorage = () => getStoreCacheKey("rotacerta_takeat_sync_active");
+const getTakeatTokenStorage = () => getStoreCacheKey("rotacerta_takeat_cached_token");
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 let activeTakeatCreds: TakeatCredentials | null = null;
@@ -174,9 +175,9 @@ export function setTakeatCredentials(creds: TakeatCredentials | null): void {
   activeTakeatCreds = creds;
   if (creds) {
     try {
-      localStorage.setItem(TAKEAT_CREDS_STORAGE, JSON.stringify(creds));
+      localStorage.setItem(getTakeatCredsStorage(), JSON.stringify(creds));
       if (creds.apiKey) {
-        localStorage.setItem(TAKEAT_KEY_STORAGE, creds.apiKey.trim());
+        localStorage.setItem(getTakeatKeyStorage(), creds.apiKey.trim());
       }
     } catch {}
   }
@@ -191,7 +192,7 @@ export function getTakeatCredentials(): TakeatCredentials {
   }
 
   try {
-    const raw = localStorage.getItem(TAKEAT_CREDS_STORAGE);
+    const raw = localStorage.getItem(getTakeatCredsStorage());
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
@@ -212,12 +213,12 @@ export function getTakeatCredentials(): TakeatCredentials {
 export function saveTakeatCredentials(creds: TakeatCredentials): void {
   activeTakeatCreds = creds;
   try {
-    localStorage.setItem(TAKEAT_CREDS_STORAGE, JSON.stringify(creds));
+    localStorage.setItem(getTakeatCredsStorage(), JSON.stringify(creds));
     if (creds.apiKey) {
-      localStorage.setItem(TAKEAT_KEY_STORAGE, creds.apiKey.trim());
+      localStorage.setItem(getTakeatKeyStorage(), creds.apiKey.trim());
     }
     cachedToken = null;
-    sessionStorage.removeItem(TAKEAT_TOKEN_STORAGE);
+    sessionStorage.removeItem(getTakeatTokenStorage());
   } catch {}
 
   // Salva no Firebase RTDB para que todos os celulares/motoboys sincronizem automaticamente
@@ -230,10 +231,10 @@ export function saveTakeatCredentials(creds: TakeatCredentials): void {
 export function clearTakeatCredentials(): void {
   activeTakeatCreds = null;
   try {
-    localStorage.removeItem(TAKEAT_CREDS_STORAGE);
-    localStorage.removeItem(TAKEAT_KEY_STORAGE);
+    localStorage.removeItem(getTakeatCredsStorage());
+    localStorage.removeItem(getTakeatKeyStorage());
     cachedToken = null;
-    sessionStorage.removeItem(TAKEAT_TOKEN_STORAGE);
+    sessionStorage.removeItem(getTakeatTokenStorage());
   } catch {}
 }
 
@@ -253,7 +254,7 @@ export function isTakeatConfigured(): boolean {
  */
 export function getTakeatApiKey(): string {
   try {
-    const saved = localStorage.getItem(TAKEAT_KEY_STORAGE);
+    const saved = localStorage.getItem(getTakeatKeyStorage());
     if (saved && saved.trim()) return saved.trim();
   } catch {}
   return (import.meta.env.VITE_TAKEAT_API_KEY || "").trim();
@@ -264,11 +265,11 @@ export function getTakeatApiKey(): string {
  */
 export function saveTakeatApiKey(apiKey: string): void {
   try {
-    localStorage.setItem(TAKEAT_KEY_STORAGE, apiKey.trim());
+    localStorage.setItem(getTakeatKeyStorage(), apiKey.trim());
     const existing = getTakeatCredentials();
     saveTakeatCredentials({ ...existing, apiKey: apiKey.trim() });
     cachedToken = null;
-    sessionStorage.removeItem(TAKEAT_TOKEN_STORAGE);
+    sessionStorage.removeItem(getTakeatTokenStorage());
   } catch {}
 }
 
@@ -277,9 +278,9 @@ export function saveTakeatApiKey(apiKey: string): void {
  */
 export function clearTakeatApiKey(): void {
   try {
-    localStorage.removeItem(TAKEAT_KEY_STORAGE);
+    localStorage.removeItem(getTakeatKeyStorage());
     cachedToken = null;
-    sessionStorage.removeItem(TAKEAT_TOKEN_STORAGE);
+    sessionStorage.removeItem(getTakeatTokenStorage());
   } catch {}
 }
 
@@ -288,7 +289,7 @@ export function clearTakeatApiKey(): void {
  */
 export function isTakeatSyncEnabled(): boolean {
   try {
-    const val = localStorage.getItem(TAKEAT_SYNC_STORAGE);
+    const val = localStorage.getItem(getTakeatSyncStorage());
     // Padrão ativado se já tiver credenciais configuradas
     if (val === null) return isTakeatConfigured();
     return val === "true";
@@ -302,7 +303,7 @@ export function isTakeatSyncEnabled(): boolean {
  */
 export function setTakeatSyncEnabled(enabled: boolean): void {
   try {
-    localStorage.setItem(TAKEAT_SYNC_STORAGE, enabled ? "true" : "false");
+    localStorage.setItem(getTakeatSyncStorage(), enabled ? "true" : "false");
   } catch {}
 }
 
@@ -391,7 +392,7 @@ export async function loginTakeatWithPassword(email: string, password: string): 
   const expiresAt = Date.now() + 4 * 60 * 60 * 1000;
   cachedToken = { token, expiresAt };
   try {
-    sessionStorage.setItem(TAKEAT_TOKEN_STORAGE, JSON.stringify(cachedToken));
+    sessionStorage.setItem(getTakeatTokenStorage(), JSON.stringify(cachedToken));
   } catch {}
 
   return token;
@@ -409,7 +410,7 @@ export async function authenticateTakeat(apiKeyOverride?: string): Promise<strin
 
   // Verifica cache no sessionStorage
   try {
-    const stored = sessionStorage.getItem(TAKEAT_TOKEN_STORAGE);
+    const stored = sessionStorage.getItem(getTakeatTokenStorage());
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed.token && parsed.expiresAt > now + 30000) {
@@ -474,7 +475,7 @@ export async function authenticateTakeat(apiKeyOverride?: string): Promise<strin
 
     cachedToken = { token, expiresAt };
     try {
-      sessionStorage.setItem(TAKEAT_TOKEN_STORAGE, JSON.stringify(cachedToken));
+      sessionStorage.setItem(getTakeatTokenStorage(), JSON.stringify(cachedToken));
     } catch {}
 
     return token;
@@ -626,7 +627,7 @@ export async function syncTakeatMotoboysToRTDB(apiKey?: string): Promise<Driver[
         vehicle: "Moto",
         defaultFee: idx >= 0 && updatedDrivers[idx].defaultFee ? updatedDrivers[idx].defaultFee : 7.0,
         active: mb.active !== false,
-        companyId: "house-burger-190",
+        companyId: getActiveStore().id === "foodpark" ? "house-foodpark" : "house-burger-190",
         takeatId: mb.id,
         createdAt: idx >= 0 && updatedDrivers[idx].createdAt ? updatedDrivers[idx].createdAt : new Date().toISOString(),
       };
@@ -1041,8 +1042,8 @@ export function mapTakeatSessionToDelivery(
   driversList: Driver[] = [],
   assignedMotoboy?: TakeatAssignedDriver | null,
   basketOrder?: Record<string, unknown>,
-  defaultDriverName = "Carlos Eduardo (Kaká)",
-  defaultDriverId = "driver-1"
+  defaultDriverName = getActiveStore().id === "foodpark" ? "Gabriel" : "Carlos Eduardo (Kaká)",
+  defaultDriverId = getActiveStore().id === "foodpark" ? "drv-takeat-216626" : "driver-1"
 ): Delivery {
   const rawSession = session as unknown as Record<string, unknown>;
   const rawBasket = basketOrder as Record<string, unknown> | undefined;

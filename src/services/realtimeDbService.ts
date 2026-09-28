@@ -1,9 +1,10 @@
 import { get, onValue, ref, remove, set, update } from "firebase/database";
 import { rtdb } from "./firebase";
 import type { Delivery, Driver, User } from "../types";
+import { getRtdbPath, getStoreCacheKey } from "./storeService";
 
-const DELIV_CACHE_KEY = "rotacerta_deliveries_rtdb_cache";
-const DRIVERS_CACHE_KEY = "rotacerta_drivers_rtdb_cache";
+const getDelivCacheKey = () => getStoreCacheKey("rotacerta_deliveries_rtdb_cache");
+const getDriversCacheKey = () => getStoreCacheKey("rotacerta_drivers_rtdb_cache");
 
 /**
  * Normaliza lista de entregas a partir do snapshot do RTDB (que pode vir como objeto { [id]: Delivery })
@@ -35,7 +36,7 @@ export function subscribeToDeliveriesRTDB(
 ): () => void {
   // Dispara cache local imediatamente se disponível
   try {
-    const cached = localStorage.getItem(DELIV_CACHE_KEY);
+    const cached = localStorage.getItem(getDelivCacheKey());
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) onChange(parsed);
@@ -47,14 +48,14 @@ export function subscribeToDeliveriesRTDB(
     return () => undefined;
   }
 
-  const deliveriesRef = ref(rtdb, "rotacerta/deliveries");
+  const deliveriesRef = ref(rtdb, getRtdbPath("deliveries"));
   const unsubscribe = onValue(
     deliveriesRef,
     (snapshot) => {
       const val = snapshot.val();
       const list = normalizeDeliveries(val);
       try {
-        localStorage.setItem(DELIV_CACHE_KEY, JSON.stringify(list));
+        localStorage.setItem(getDelivCacheKey(), JSON.stringify(list));
       } catch {}
       onChange(list);
     },
@@ -79,34 +80,34 @@ export function cleanForRTDB<T>(data: T): T {
 export async function saveDeliveryRTDB(delivery: Delivery): Promise<void> {
   // Salva no cache local
   try {
-    const cached = localStorage.getItem(DELIV_CACHE_KEY);
+    const cached = localStorage.getItem(getDelivCacheKey());
     const list: Delivery[] = cached ? JSON.parse(cached) : [];
     const idx = list.findIndex((d) => d.id === delivery.id);
     if (idx >= 0) list[idx] = delivery;
     else list.unshift(delivery);
-    localStorage.setItem(DELIV_CACHE_KEY, JSON.stringify(list));
+    localStorage.setItem(getDelivCacheKey(), JSON.stringify(list));
   } catch {}
 
   if (!rtdb) return;
-  const itemRef = ref(rtdb, `rotacerta/deliveries/${delivery.id}`);
+  const itemRef = ref(rtdb, `${getRtdbPath("deliveries")}/${delivery.id}`);
   await set(itemRef, cleanForRTDB(delivery));
 }
 
 export async function updateDeliveryRTDB(deliveryId: string, updates: Partial<Delivery>): Promise<void> {
   try {
-    const cached = localStorage.getItem(DELIV_CACHE_KEY);
+    const cached = localStorage.getItem(getDelivCacheKey());
     if (cached) {
       const list: Delivery[] = JSON.parse(cached);
       const idx = list.findIndex((d) => d.id === deliveryId);
       if (idx >= 0) {
         list[idx] = { ...list[idx], ...updates };
-        localStorage.setItem(DELIV_CACHE_KEY, JSON.stringify(list));
+        localStorage.setItem(getDelivCacheKey(), JSON.stringify(list));
       }
     }
   } catch {}
 
   if (!rtdb) return;
-  const itemRef = ref(rtdb, `rotacerta/deliveries/${deliveryId}`);
+  const itemRef = ref(rtdb, `${getRtdbPath("deliveries")}/${deliveryId}`);
   await update(itemRef, cleanForRTDB(updates));
 }
 
@@ -117,7 +118,7 @@ export function subscribeToDeliveryByIdRTDB(
 ): () => void {
   // Tenta ler do cache local primeiro
   try {
-    const cached = localStorage.getItem(DELIV_CACHE_KEY);
+    const cached = localStorage.getItem(getDelivCacheKey());
     if (cached) {
       const list: Delivery[] = JSON.parse(cached);
       const found = list.find((d) => d.id === deliveryId);
@@ -126,7 +127,7 @@ export function subscribeToDeliveryByIdRTDB(
   } catch {}
 
   if (!rtdb) return () => undefined;
-  const itemRef = ref(rtdb, `rotacerta/deliveries/${deliveryId}`);
+  const itemRef = ref(rtdb, `${getRtdbPath("deliveries")}/${deliveryId}`);
   return onValue(
     itemRef,
     (snapshot) => {
@@ -168,7 +169,7 @@ export async function updateDriverGpsLocationRTDB(
   const updates: Record<string, unknown> = {};
 
   if (driverId) {
-    updates[`rotacerta/drivers/${driverId}/location`] = cleanForRTDB({
+    updates[`${getRtdbPath("drivers")}/${driverId}/location`] = cleanForRTDB({
       latitude: telemetry.latitude,
       longitude: telemetry.longitude,
       speed: typeof telemetry.speed === "number" ? Math.round(telemetry.speed) : null,
@@ -196,7 +197,7 @@ export async function updateDriverGpsLocationRTDB(
         lat: telemetry.latitude,
         lng: telemetry.longitude,
       };
-      updates[`rotacerta/deliveries/${deliveryId}/driverLocation`] = cleanForRTDB({
+      updates[`${getRtdbPath("deliveries")}/${deliveryId}/driverLocation`] = cleanForRTDB({
         latitude: telemetry.latitude,
         longitude: telemetry.longitude,
         heading: telemetry.heading ?? null,
@@ -214,30 +215,30 @@ export async function updateDriverGpsLocationRTDB(
 
 export async function deleteDeliveryRTDB(deliveryId: string): Promise<void> {
   try {
-    const cached = localStorage.getItem(DELIV_CACHE_KEY);
+    const cached = localStorage.getItem(getDelivCacheKey());
     if (cached) {
       const list: Delivery[] = JSON.parse(cached);
       const filtered = list.filter((d) => d.id !== deliveryId);
-      localStorage.setItem(DELIV_CACHE_KEY, JSON.stringify(filtered));
+      localStorage.setItem(getDelivCacheKey(), JSON.stringify(filtered));
     }
   } catch {}
 
   if (!rtdb) return;
-  const itemRef = ref(rtdb, `rotacerta/deliveries/${deliveryId}`);
+  const itemRef = ref(rtdb, `${getRtdbPath("deliveries")}/${deliveryId}`);
   await remove(itemRef);
 }
 
 export async function batchSaveDeliveriesRTDB(deliveries: Delivery[]): Promise<void> {
   if (!deliveries.length) return;
   try {
-    localStorage.setItem(DELIV_CACHE_KEY, JSON.stringify(deliveries));
+    localStorage.setItem(getDelivCacheKey(), JSON.stringify(deliveries));
   } catch {}
 
   if (!rtdb) return;
   const updates: Record<string, unknown> = {};
   for (const del of deliveries) {
     if (del && del.id) {
-      updates[`rotacerta/deliveries/${del.id}`] = cleanForRTDB(del);
+      updates[`${getRtdbPath("deliveries")}/${del.id}`] = cleanForRTDB(del);
     }
   }
   await update(ref(rtdb), updates);
@@ -252,7 +253,7 @@ export function subscribeToDriversRTDB(
   onError?: (err: Error) => void,
 ): () => void {
   try {
-    const cached = localStorage.getItem(DRIVERS_CACHE_KEY);
+    const cached = localStorage.getItem(getDriversCacheKey());
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) onChange(parsed);
@@ -264,14 +265,14 @@ export function subscribeToDriversRTDB(
     return () => undefined;
   }
 
-  const driversRef = ref(rtdb, "rotacerta/drivers");
+  const driversRef = ref(rtdb, getRtdbPath("drivers"));
   const unsubscribe = onValue(
     driversRef,
     (snapshot) => {
       const val = snapshot.val();
       const list = normalizeDrivers(val);
       try {
-        localStorage.setItem(DRIVERS_CACHE_KEY, JSON.stringify(list));
+        localStorage.setItem(getDriversCacheKey(), JSON.stringify(list));
       } catch {}
       onChange(list);
     },
@@ -286,7 +287,7 @@ export function subscribeToDriversRTDB(
 
 export async function getDriversRTDB(): Promise<Driver[]> {
   try {
-    const cached = localStorage.getItem(DRIVERS_CACHE_KEY);
+    const cached = localStorage.getItem(getDriversCacheKey());
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed) && parsed.length) return parsed;
@@ -295,12 +296,12 @@ export async function getDriversRTDB(): Promise<Driver[]> {
 
   if (!rtdb) return [];
   try {
-    const driversRef = ref(rtdb, "rotacerta/drivers");
+    const driversRef = ref(rtdb, getRtdbPath("drivers"));
     const snapshot = await get(driversRef);
     if (snapshot.exists()) {
       const list = normalizeDrivers(snapshot.val());
       try {
-        localStorage.setItem(DRIVERS_CACHE_KEY, JSON.stringify(list));
+        localStorage.setItem(getDriversCacheKey(), JSON.stringify(list));
       } catch {}
       return list;
     }
@@ -312,31 +313,31 @@ export async function getDriversRTDB(): Promise<Driver[]> {
 
 export async function saveDriverRTDB(driver: Driver): Promise<void> {
   try {
-    const cached = localStorage.getItem(DRIVERS_CACHE_KEY);
+    const cached = localStorage.getItem(getDriversCacheKey());
     const list: Driver[] = cached ? JSON.parse(cached) : [];
     const idx = list.findIndex((d) => d.id === driver.id);
     if (idx >= 0) list[idx] = driver;
     else list.push(driver);
-    localStorage.setItem(DRIVERS_CACHE_KEY, JSON.stringify(list));
+    localStorage.setItem(getDriversCacheKey(), JSON.stringify(list));
   } catch {}
 
   if (!rtdb) return;
-  const itemRef = ref(rtdb, `rotacerta/drivers/${driver.id}`);
+  const itemRef = ref(rtdb, `${getRtdbPath("drivers")}/${driver.id}`);
   await set(itemRef, cleanForRTDB(driver));
 }
 
 export async function deleteDriverRTDB(driverId: string): Promise<void> {
   try {
-    const cached = localStorage.getItem(DRIVERS_CACHE_KEY);
+    const cached = localStorage.getItem(getDriversCacheKey());
     if (cached) {
       const list: Driver[] = JSON.parse(cached);
       const filtered = list.filter((d) => d.id !== driverId);
-      localStorage.setItem(DRIVERS_CACHE_KEY, JSON.stringify(filtered));
+      localStorage.setItem(getDriversCacheKey(), JSON.stringify(filtered));
     }
   } catch {}
 
   if (!rtdb) return;
-  const itemRef = ref(rtdb, `rotacerta/drivers/${driverId}`);
+  const itemRef = ref(rtdb, `${getRtdbPath("drivers")}/${driverId}`);
   await remove(itemRef);
 }
 
@@ -346,14 +347,14 @@ export async function deleteDriverRTDB(driverId: string): Promise<void> {
 
 export async function saveUserProfileRTDB(uid: string, profile: User): Promise<void> {
   if (!rtdb) return;
-  const userRef = ref(rtdb, `rotacerta/users/${uid}`);
+  const userRef = ref(rtdb, `${getRtdbPath("users")}/${uid}`);
   await set(userRef, cleanForRTDB(profile));
 }
 
 export async function getUserProfileRTDB(uid: string): Promise<User | null> {
   if (!rtdb) return null;
   try {
-    const userRef = ref(rtdb, `rotacerta/users/${uid}`);
+    const userRef = ref(rtdb, `${getRtdbPath("users")}/${uid}`);
     const snapshot = await get(userRef);
     if (snapshot.exists()) {
       return snapshot.val() as User;
@@ -379,7 +380,7 @@ export interface TakeatConfigRTDB {
 
 export async function saveTakeatConfigRTDB(config: TakeatConfigRTDB): Promise<void> {
   if (!rtdb) return;
-  const configRef = ref(rtdb, "rotacerta/config/takeat");
+  const configRef = ref(rtdb, getRtdbPath("config/takeat"));
   await set(configRef, cleanForRTDB({
     ...config,
     updatedAt: new Date().toISOString(),
@@ -389,7 +390,7 @@ export async function saveTakeatConfigRTDB(config: TakeatConfigRTDB): Promise<vo
 export async function getTakeatConfigRTDB(): Promise<TakeatConfigRTDB | null> {
   if (!rtdb) return null;
   try {
-    const configRef = ref(rtdb, "rotacerta/config/takeat");
+    const configRef = ref(rtdb, getRtdbPath("config/takeat"));
     const snapshot = await get(configRef);
     if (snapshot.exists()) {
       return snapshot.val() as TakeatConfigRTDB;
@@ -405,7 +406,7 @@ export function subscribeToTakeatConfigRTDB(
   onChange: (config: TakeatConfigRTDB | null) => void,
 ): () => void {
   if (!rtdb) return () => undefined;
-  const configRef = ref(rtdb, "rotacerta/config/takeat");
+  const configRef = ref(rtdb, getRtdbPath("config/takeat"));
   return onValue(configRef, (snapshot) => {
     if (snapshot.exists()) {
       onChange(snapshot.val() as TakeatConfigRTDB);

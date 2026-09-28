@@ -5,11 +5,13 @@ import {
   subscribeToDriversRTDB,
 } from "./realtimeDbService";
 
-const DRIVERS_STORAGE_KEY = "rotacerta_drivers";
+import { getStoreCacheKey } from "./storeService";
+
+const getDriversStorageKey = () => getStoreCacheKey("rotacerta_drivers");
 
 export function loadStoredDrivers(): Driver[] {
   try {
-    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(DRIVERS_STORAGE_KEY) : null;
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(getDriversStorageKey()) : null;
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
@@ -20,7 +22,7 @@ export function loadStoredDrivers(): Driver[] {
 
 export function saveStoredDrivers(drivers: Driver[]) {
   try {
-    localStorage.setItem(DRIVERS_STORAGE_KEY, JSON.stringify(drivers));
+    localStorage.setItem(getDriversStorageKey(), JSON.stringify(drivers));
   } catch {}
 }
 

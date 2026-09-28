@@ -8,12 +8,13 @@ import {
 import { auth, firebaseConfigured } from "./firebase";
 import { getUserProfileRTDB, saveUserProfileRTDB, saveDriverRTDB } from "./realtimeDbService";
 import type { User, Driver } from "../types";
+import { getActiveStore, getStoreCacheKey } from "./storeService";
 
-const LOCAL_USER_KEY = "rotacerta_current_user";
+const getLocalUserKey = () => getStoreCacheKey("rotacerta_current_user");
 
 export function getStoredUser(): User | null {
   try {
-    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(LOCAL_USER_KEY) : null;
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(getLocalUserKey()) : null;
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -23,9 +24,9 @@ export function getStoredUser(): User | null {
 export function setStoredUser(user: User | null) {
   try {
     if (user) {
-      localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(user));
+      localStorage.setItem(getLocalUserKey(), JSON.stringify(user));
     } else {
-      localStorage.removeItem(LOCAL_USER_KEY);
+      localStorage.removeItem(getLocalUserKey());
     }
   } catch {}
 }
@@ -169,7 +170,7 @@ export async function signIn(
               vehicle: "Moto",
               defaultFee: 7.0,
               active: true,
-              companyId: "house-burger-190",
+              companyId: getActiveStore().companyId,
               createdAt: new Date().toISOString(),
             });
           }
@@ -185,7 +186,7 @@ export async function signIn(
           email: cleanEmail,
           phone: driverPhone,
           role: targetRole,
-          companyId: "house-burger-190",
+          companyId: getActiveStore().companyId,
           takeatId,
           active: true,
         };
@@ -221,7 +222,7 @@ export async function signIn(
     email: cleanEmail,
     phone: "",
     role,
-    companyId: "house-burger-190",
+    companyId: getActiveStore().companyId,
     active: true,
   };
   setStoredUser(offlineUser);
@@ -273,7 +274,7 @@ export async function signUp(
       email: cleanEmail,
       phone,
       role,
-      companyId: "house-burger-190",
+      companyId: getActiveStore().companyId,
       active: true,
     };
 
@@ -289,7 +290,7 @@ export async function signUp(
         vehicle: "Moto",
         defaultFee: 7.0,
         active: true,
-        companyId: "house-burger-190",
+        companyId: getActiveStore().companyId,
         createdAt: new Date().toISOString(),
       };
       await saveDriverRTDB(driverRecord);
@@ -305,7 +306,7 @@ export async function signUp(
     email: cleanEmail,
     phone,
     role,
-    companyId: "house-burger-190",
+    companyId: getActiveStore().companyId,
     active: true,
   };
   setStoredUser(fallbackUser);
