@@ -797,80 +797,100 @@ main{min-height:100vh;margin-left:242px}header{height:78px;position:sticky;top:0
 
 /* Mobile Delivery Cards (SaaS Premium) */
 .mobile-card-list{display:flex;flex-direction:column;gap:12px}
-.delivery-card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,.04);position:relative;display:flex;flex-direction:column;gap:11px;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
-.delivery-card.is-selected{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 30%,transparent),0 8px 24px rgba(124,58,237,.08)}
-.delivery-card.is-delivered{opacity:.85;background:color-mix(in srgb,var(--surface) 97%,var(--surface-2));border-color:color-mix(in srgb,var(--success) 30%,var(--line))}
+/* Mobile Delivery Cards (Design Compacto e Moderno - Baseado na Referência) */
+.mobile-card-list{display:flex;flex-direction:column;gap:12px}
+.delivery-card,.compact-delivery-card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:0 2px 10px rgba(0,0,0,.03);position:relative;display:flex;flex-direction:column;gap:8px;transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease}
+.delivery-card.is-selected,.compact-delivery-card.is-selected{border-color:#4f46e5;box-shadow:0 0 0 2px rgba(79,70,229,.25),0 4px 14px rgba(79,70,229,.08)}
+.delivery-card.is-delivered,.compact-delivery-card.is-delivered{opacity:.88;background:color-mix(in srgb,var(--surface) 97%,var(--surface-2));border-color:rgba(16,185,129,.25)}
 
-/* Card Header */
-.delivery-card-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.delivery-card-header-left{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
-.delivery-card-header-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.order-num-badge{font-size:14px;font-weight:800;color:var(--ink);letter-spacing:-.3px}
-.platform-pill{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:6px;text-transform:uppercase;letter-spacing:.04em;display:inline-flex;align-items:center}
-.platform-pill.ifood{background:#ea1d2c;color:#fff;box-shadow:0 2px 6px rgba(234,29,44,.25)}
-.platform-pill.takeat{background:#f97316;color:#fff;box-shadow:0 2px 6px rgba(249,115,22,.25)}
-.order-time-text{font-size:11px;color:var(--muted);font-weight:500}
-.fee-chip{display:inline-flex;align-items:center;gap:3px;background:rgba(16,185,129,.1);color:#059669;font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:99px;border:1px solid rgba(16,185,129,.2);white-space:nowrap}
-:root[data-theme="dark"] .fee-chip{color:#34d399;background:rgba(16,185,129,.15);border-color:rgba(52,211,153,.25)}
+/* 1. Header */
+.cdc-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cdc-header-left{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.cdc-header-right{display:flex;align-items:center;flex-shrink:0}
+.cdc-checkbox{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--muted);background:transparent;display:grid;place-items:center;cursor:pointer;padding:0;color:#fff}
+.cdc-checkbox.is-selected{background:#4f46e5;border-color:#4f46e5}
+.cdc-stop-badge{background:#4f46e5;color:#fff;font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap;letter-spacing:-.2px}
+.cdc-order-num{font-size:17px;font-weight:800;color:var(--ink);letter-spacing:-.4px}
+.cdc-badge-ifood{background:#dc2626;color:#fff;font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap;letter-spacing:-.2px}
+.cdc-badge-loja{background:#fef3c7;color:#b45309;font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap}
+:root[data-theme="dark"] .cdc-badge-loja{background:rgba(245,158,11,.18);color:#fbbf24}
+.cdc-status-pill{font-size:12px;font-weight:700;padding:3px 10px;border-radius:6px;white-space:nowrap}
+.cdc-status-pill.em-rota{background:#e0f2fe;color:#0284c7}
+:root[data-theme="dark"] .cdc-status-pill.em-rota{background:rgba(2,132,199,.18);color:#38bdf8}
+.cdc-status-pill.aguardando{background:#fef3c7;color:#b45309}
+:root[data-theme="dark"] .cdc-status-pill.aguardando{background:rgba(245,158,11,.18);color:#fbbf24}
+.cdc-status-pill.pronta-para-sair{background:#ede9fe;color:#7c3aed}
+:root[data-theme="dark"] .cdc-status-pill.pronta-para-sair{background:rgba(124,58,237,.18);color:#a78bfa}
+.cdc-status-pill.entregue{background:#dcfce7;color:#16a34a}
+:root[data-theme="dark"] .cdc-status-pill.entregue{background:rgba(22,163,74,.18);color:#4ade80}
+.cdc-status-pill.problema{background:#fee2e2;color:#dc2626}
+:root[data-theme="dark"] .cdc-status-pill.problema{background:rgba(220,38,38,.18);color:#f87171}
 
-/* Metadata Chips Strip (Coleta, Localizador, Blindado) */
-.delivery-meta-strip{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 11px;background:var(--surface-2);border-radius:11px;border:1px solid var(--line);font-size:11px}
-.meta-chip{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink)}
-.meta-chip strong{font-weight:800;color:var(--muted);text-transform:uppercase;font-size:9px;letter-spacing:.04em}
-.meta-chip.coleta{color:#2563eb}
-:root[data-theme="dark"] .meta-chip.coleta{color:#60a5fa}
-.meta-chip.localizador{font-family:monospace;font-weight:700;color:#ea1d2c}
-:root[data-theme="dark"] .meta-chip.localizador{color:#f87171}
-.meta-chip.blindado{color:#059669;font-weight:700}
-:root[data-theme="dark"] .meta-chip.blindado{color:#34d399}
-.meta-chip-divider{width:3px;height:3px;border-radius:50%;background:var(--muted);opacity:.4}
+/* 2. Customer & Address Block */
+.cdc-customer-block{display:flex;flex-direction:column;gap:1.5px}
+.cdc-customer-name{font-size:15px;font-weight:600;color:var(--ink);letter-spacing:-.2px}
+.cdc-customer-street{font-size:16.5px;font-weight:800;color:var(--ink);letter-spacing:-.3px;line-height:1.25}
+.cdc-customer-district{font-size:13.5px;color:var(--muted);font-weight:500}
+.cdc-customer-ref{font-size:12.5px;color:var(--muted);opacity:.85}
 
-/* Customer Block */
-.customer-block b{font-size:15px;letter-spacing:-.3px;color:var(--ink);display:block}
-.customer-address-line{display:flex;align-items:flex-start;gap:6px;font-size:12px;color:var(--muted);margin-top:3px;line-height:1.35}
-.customer-address-line svg{width:14px;height:14px;flex-shrink:0;color:var(--primary);margin-top:2px}
-.customer-notes-pill{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted);background:var(--surface-2);padding:5px 9px;border-radius:8px;margin-top:5px;border-left:3px solid var(--primary)}
-.customer-notes-pill svg{width:12px;height:12px;flex-shrink:0;color:var(--primary)}
+/* 3. Finance & Items */
+.cdc-finance-block{border-top:1px solid var(--line);padding-top:8px;display:flex;flex-direction:column;gap:5px}
+.cdc-finance-row{display:flex;align-items:center;justify-content:space-between}
+.cdc-finance-left{font-size:14.5px;color:var(--ink)}
+.cdc-pending-dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;margin-right:5px;vertical-align:middle}
+.cdc-amount{font-weight:800;color:var(--ink)}
+.cdc-payment{color:var(--muted);font-size:13px}
+.cdc-fee{font-size:14px;font-weight:800;color:#16a34a}
+:root[data-theme="dark"] .cdc-fee{color:#4ade80}
+.cdc-items-row{display:flex;align-items:center;justify-content:space-between}
+.cdc-items-btn{border:0;background:transparent;padding:0;font-size:13px;font-weight:700;color:var(--ink);cursor:pointer;text-align:left;display:flex;align-items:center;gap:4px}
+.cdc-items-btn span{color:var(--ink)}
+.cdc-items-btn:hover{color:#4f46e5}
+.cdc-loc-btn{display:inline-flex;align-items:center;gap:5px;border:0;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;padding:2px 4px;border-radius:4px}
+.cdc-loc-btn:hover{background:var(--surface-2);color:var(--ink)}
+.cdc-contact-btn{display:inline-flex;align-items:center;gap:5px;text-decoration:none;border:1px solid rgba(37,211,102,.3);background:rgba(37,211,102,.08);color:#15803d;font-size:12.5px;font-weight:700;cursor:pointer;padding:4px 9px;border-radius:8px;transition:all .14s ease}
+.cdc-contact-btn:hover{background:rgba(37,211,102,.15)}
+:root[data-theme="dark"] .cdc-contact-btn{background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.35);color:#4ade80}
+.cdc-contact-btn.is-add{border-style:dashed;color:var(--muted);background:transparent}
+.cdc-items-dropdown{margin-top:4px;padding:8px 10px;border-radius:10px;background:var(--surface-2);display:flex;flex-direction:column;gap:5px;font-size:12px}
+.cdc-item-detail{display:flex;justify-content:space-between;gap:6px}
+.cdc-item-comp{display:block;font-size:11px;color:var(--muted);margin-top:1px}
+.cdc-item-note{display:block;font-size:11px;color:var(--muted);font-style:italic}
 
-/* Price & Payment Row */
-.price-row{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--surface-2);border-radius:12px;font-size:11.5px;border:1px solid var(--line)}
-.price-row-amount{font-weight:800;color:var(--ink);font-size:13px;letter-spacing:-.2px}
-.price-row-payment{color:var(--muted);font-size:11px}
-.price-row-driver{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);font-weight:600}
-.price-row-driver b{color:var(--ink)}
+/* 4. iFood Links Strip */
+.cdc-ifood-links-strip{display:flex;align-items:center;justify-content:space-around;padding:8px 12px;border-radius:10px;background:#fef2f2;border:1px solid #fee2e2;margin-top:1px}
+:root[data-theme="dark"] .cdc-ifood-links-strip{background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.2)}
+.cdc-ifood-sublink{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;color:#dc2626;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer}
+:root[data-theme="dark"] .cdc-ifood-sublink{color:#f87171}
+.cdc-ifood-divider{width:1px;height:16px;background:#fca5a5;opacity:.6}
 
-/* iFood Modern Action Card */
-.ifood-action-card{display:flex;align-items:center;justify-content:space-between;gap:10px;background:linear-gradient(135deg,rgba(234,29,44,.05),rgba(234,29,44,.02));border:1px solid rgba(234,29,44,.2);border-radius:13px;padding:9px 13px}
-.ifood-action-card-left{display:flex;align-items:center;gap:9px}
-.ifood-action-card-icon{width:28px;height:28px;border-radius:8px;background:rgba(234,29,44,.1);color:#ea1d2c;display:grid;place-items:center;flex-shrink:0}
-.ifood-action-card-left b{font-size:11.5px;font-weight:800;color:#ea1d2c;display:block;line-height:1.2}
-.ifood-action-card-left span{font-size:9.5px;color:var(--muted);display:block}
-.btn-ifood-action-pill{border:0;background:#ea1d2c;color:#fff;padding:6px 12px;border-radius:9px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;box-shadow:0 2px 8px rgba(234,29,44,.25);transition:all .16s ease}
-.btn-ifood-action-pill:active{transform:scale(.96)}
+/* 5. Main Action Buttons */
+.cdc-actions-wrapper{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.cdc-nav-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn-cdc-maps{height:40px;border:0;border-radius:10px;background:#2563eb;color:#fff!important;font-size:13.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none!important;cursor:pointer;transition:all .14s ease;user-select:none;box-shadow:0 1px 3px rgba(37,99,235,.25)}
+.btn-cdc-maps:active{transform:scale(.97)}
+.btn-cdc-waze{height:40px;border:0;border-radius:10px;background:#33ccff;color:#033d4d!important;font-size:13.5px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none!important;cursor:pointer;transition:all .14s ease;user-select:none;box-shadow:0 1px 3px rgba(51,204,255,.3)}
+:root[data-theme="dark"] .btn-cdc-waze{background:#00bbf9;color:#042b36!important}
+.btn-cdc-waze:active{transform:scale(.97)}
 
-/* Delivery Actions Modern Grid */
-.delivery-actions-stack{display:flex;flex-direction:column;gap:7px;margin-top:2px}
-.btn-primary-deliver{width:100%;height:42px;border:0;border-radius:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;box-shadow:0 4px 14px rgba(16,185,129,.3);transition:all .16s ease;user-select:none}
-.btn-primary-deliver:active{transform:scale(.98)}
-.delivery-tools-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
-.btn-tool-action{height:36px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font-size:11.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;text-decoration:none!important;cursor:pointer;transition:all .15s ease;user-select:none}
-.btn-tool-action:hover{background:var(--surface);border-color:color-mix(in srgb,var(--primary) 30%,var(--line))}
-.btn-tool-action:active{transform:scale(.97)}
-.btn-tool-action.wa{color:#16a34a}
-.btn-tool-action.wa:hover{background:rgba(34,197,94,.08);border-color:rgba(34,197,94,.3)}
-.btn-tool-action.maps{color:#4338ca}
-:root[data-theme="dark"] .btn-tool-action.maps{color:#818cf8}
-.btn-tool-action.waze{color:#0284c7}
-:root[data-theme="dark"] .btn-tool-action.waze{color:#38bdf8}
-.delivery-completed-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:12px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.22);color:#059669;font-size:12px;font-weight:700}
-:root[data-theme="dark"] .delivery-completed-bar{color:#34d399;background:rgba(16,185,129,.12);border-color:rgba(52,211,153,.25)}
-.btn-reopen-pill{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:4px 10px;border-radius:8px;font-size:10.5px;font-weight:700;cursor:pointer}
-
-/* Card ADM Footer */
-.delivery-card-adm-footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--line);font-size:11px}
-.adm-assign-select{height:32px;border-radius:9px;border:1px solid var(--line);font-size:11px;font-weight:600;background:var(--surface-2);color:var(--ink);padding:0 10px;outline:none}
-.btn-delete-card{border:0;background:transparent;color:var(--muted);width:30px;height:30px;border-radius:8px;display:grid;place-items:center;cursor:pointer;transition:all .15s ease}
-.btn-delete-card:hover{background:rgba(239,68,68,.1);color:#ef4444}
+.cdc-action-buttons{display:grid;gap:8px;margin-top:3px}
+.cdc-action-buttons.grid-1{grid-template-columns:1fr}
+.cdc-action-buttons.grid-2{grid-template-columns:1fr 1.2fr}
+.cdc-action-buttons.grid-3{grid-template-columns:1fr 1fr 1fr}
+.btn-cdc-rota{height:42px;border:0;border-radius:10px;background:#4f46e5;color:#fff!important;font-size:14.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none!important;cursor:pointer;transition:all .14s ease;user-select:none}
+.btn-cdc-rota:active{transform:scale(.97)}
+.btn-cdc-cheguei{height:40px;border:1.5px solid #22c55e;border-radius:10px;background:rgba(34,197,94,.06);color:#15803d!important;font-size:13.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none!important;cursor:pointer;transition:all .14s ease;user-select:none}
+:root[data-theme="dark"] .btn-cdc-cheguei{background:rgba(34,197,94,.1);border-color:#22c55e;color:#4ade80!important}
+.btn-cdc-cheguei:active{transform:scale(.97)}
+.btn-cdc-concluir{height:40px;border:0;border-radius:10px;background:#16a34a;color:#fff;font-size:13.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:all .14s ease;user-select:none}
+.btn-cdc-concluir:active{transform:scale(.97)}
+.vrp-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:6px;background:rgba(124,58,237,.12);color:#7c3aed;font-size:10px;font-weight:800;letter-spacing:.3px}
+:root[data-theme="dark"] .vrp-badge{background:rgba(167,139,250,.18);color:#c4b5fd}
+.cdc-delivered-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:10px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.22)}
+.cdc-delivered-label{display:flex;align-items:center;gap:6px;color:#16a34a;font-size:13px;font-weight:700}
+:root[data-theme="dark"] .cdc-delivered-label{color:#4ade80}
+.btn-cdc-reopen{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:4px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer}
+.cdc-adm-footer{display:flex;align-items:center;justify-content:space-between;padding-top:8px;border-top:1px solid var(--line);font-size:11px}
 
 /* Fullscreen Mobile Map */
 .mobile-map-container{position:relative;width:100%;height:calc(100vh - 138px);min-height:480px;border-radius:18px;overflow:hidden;border:1px solid var(--line)}

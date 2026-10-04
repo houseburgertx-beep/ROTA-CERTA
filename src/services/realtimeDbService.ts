@@ -6,12 +6,47 @@ import { getRtdbPath, getStoreCacheKey } from "./storeService";
 const getDelivCacheKey = () => getStoreCacheKey("rotacerta_deliveries_rtdb_cache");
 const getDriversCacheKey = () => getStoreCacheKey("rotacerta_drivers_rtdb_cache");
 
+function sanitizeDeliveryOrder(item: Delivery): Delivery {
+  if (!item || typeof item !== "object") return item;
+  let order = item.order;
+  const pickupCode = item.pickupCode;
+
+  if (pickupCode && typeof pickupCode === "string" && pickupCode.trim()) {
+    const cleanPc = pickupCode.trim().replace(/^#+/, "");
+    // Se o pedido tiver prefixo TK- ou se o número do pedido for um session id longo (>= 7 dígitos), usa o pickupCode da loja/senha
+    if (!order || order.includes("TK-") || (order.replace(/\D/g, "").length >= 7 && cleanPc.length <= 4)) {
+      order = `#${cleanPc}`;
+    }
+  } else if (order && typeof order === "string" && order.includes("TK-")) {
+    order = `#${order.replace(/#?TK-?/i, "").trim()}`;
+  }
+  return { ...item, order };
+}
+
 /**
  * Normaliza lista de entregas a partir do snapshot do RTDB (que pode vir como objeto { [id]: Delivery })
  */
 function normalizeDeliveries(raw: Record<string, Delivery> | Delivery[] | null): Delivery[] {
   if (!raw) return [];
-  const list = Array.isArray(raw) ? raw.filter(Boolean) : Object.values(raw);
+  let list: Delivery[];
+  if (Array.isArray(raw)) {
+    list = raw
+      .filter((item): item is Delivery => Boolean(item && typeof item === "object"))
+      .map((item, index) => {
+        if (!item.id || typeof item.id !== "string") {
+          return sanitizeDeliveryOrder({ ...item, id: `deliv-${index}` } as Delivery);
+        }
+        return sanitizeDeliveryOrder(item);
+      });
+  } else {
+    list = Object.entries(raw)
+      .map(([key, val]) => {
+        if (!val || typeof val !== "object") return null;
+        const id = (val.id && typeof val.id === "string") ? val.id : key;
+        return sanitizeDeliveryOrder({ ...val, id } as Delivery);
+      })
+      .filter((d): d is Delivery => Boolean(d && d.id && typeof d.id === "string"));
+  }
   // Ordena por data de criação decrescente
   return list.sort((a, b) => {
     const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -127,14 +162,38 @@ export function subscribeToDeliveryByIdRTDB(
   } catch {}
 
   if (!rtdb) return () => undefined;
-  const itemRef = ref(rtdb, `${getRtdbPath("deliveries")}/${deliveryId}`);
-  return onValue(
-    itemRef,
+
+  const primaryPath = `${getRtdbPath("deliveries")}/${deliveryId}`;
+  const otherPath = primaryPath.includes("stores/foodpark")
+    ? `rotacerta/deliveries/${deliveryId}`
+    : `rotacerta/stores/foodpark/deliveries/${deliveryId}`;
+
+  let secondaryUnsub: (() => void) | null = null;
+  const primaryRef = ref(rtdb, primaryPath);
+
+  const unsubPrimary = onValue(
+    primaryRef,
     (snapshot) => {
       if (snapshot.exists()) {
+        if (secondaryUnsub) {
+          secondaryUnsub();
+          secondaryUnsub = null;
+        }
         onChange(snapshot.val() as Delivery);
       } else {
-        onChange(null);
+        // Tenta buscar no caminho alternativo caso o link tenha sido aberto no domínio da outra loja
+        if (!secondaryUnsub && rtdb) {
+          const secondaryRef = ref(rtdb, otherPath);
+          secondaryUnsub = onValue(secondaryRef, (secSnap) => {
+            if (secSnap.exists()) {
+              onChange(secSnap.val() as Delivery);
+            } else {
+              onChange(null);
+            }
+          });
+        } else if (!secondaryUnsub) {
+          onChange(null);
+        }
       }
     },
     (err) => {
@@ -142,6 +201,11 @@ export function subscribeToDeliveryByIdRTDB(
       onError?.(err);
     },
   );
+
+  return () => {
+    unsubPrimary();
+    if (secondaryUnsub) secondaryUnsub();
+  };
 }
 
 export interface DriverTelemetryUpdate {
@@ -237,11 +301,13 @@ export async function batchSaveDeliveriesRTDB(deliveries: Delivery[]): Promise<v
   if (!rtdb) return;
   const updates: Record<string, unknown> = {};
   for (const del of deliveries) {
-    if (del && del.id) {
+    if (del && del.id && typeof del.id === "string") {
       updates[`${getRtdbPath("deliveries")}/${del.id}`] = cleanForRTDB(del);
     }
   }
-  await update(ref(rtdb), updates);
+  if (Object.keys(updates).length > 0) {
+    await update(ref(rtdb), updates);
+  }
 }
 
 // ==========================================

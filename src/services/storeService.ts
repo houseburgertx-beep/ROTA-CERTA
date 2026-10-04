@@ -25,7 +25,7 @@ export const STORES: Record<StoreId, StoreConfig> = {
     longitude: -39.7414,
     rtdbPrefix: "rotacerta",
     hostingDomain: "houseburger-entregas.web.app",
-    defaultTakeatEmail: "houseburgertx@gmail.com",
+    defaultTakeatEmail: "gleucehouse@gmail.com",
     companyId: "house-burger-190",
   },
   foodpark: {

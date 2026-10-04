@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowDownUp,
   Bell,
   BellOff,
   Bike,
@@ -15,6 +16,7 @@ import {
   CircleDollarSign,
   Compass,
   Copy,
+  Download,
   ExternalLink,
   EyeOff,
   LogOut,
@@ -323,9 +325,10 @@ function MobileDeliveryApp({
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("Todas");
   const [deliveryTabMode, setDeliveryTabMode] = useState<"active" | "all_today" | "completed">("active");
+  const [arrivalSortOrder, setArrivalSortOrder] = useState<"asc" | "desc">("asc");
   const [showAllHistory, setShowAllHistory] = useState<boolean>(false);
   const [selectedForRouteIds, setSelectedForRouteIds] = useState<string[]>([]);
-  const [modal, setModal] = useState<"new" | "ocr" | "driver" | "profile" | null>(null);
+  const [modal, setModal] = useState<"new" | "ocr" | "driver" | "profile" | "install" | null>(null);
   const [ocrData, setOcrData] = useState<Record<string, string> | null>(null);
   const [ifoodConfirmDelivery, setIfoodConfirmDelivery] = useState<Delivery | null>(null);
   const [toast, setToast] = useState("");
@@ -377,11 +380,11 @@ function MobileDeliveryApp({
         void flushOfflineQueue().then((res) => {
           setOfflinePendingCount(getOfflineQueue().length);
           if (res.syncedCount > 0) {
-            notify(`📶 Conexão restabelecida! ${res.syncedCount} alteração(ões) sincronizada(s) com a loja.`);
+            notify(`Conexão restabelecida! ${res.syncedCount} alteração(ões) sincronizada(s) com a loja.`);
           }
         });
       } else {
-        notify("⚠️ Sem sinal 4G. Modo offline ativado: entregas continuam salvas no aparelho!");
+        notify("Sem sinal de internet. Modo offline ativado: entregas continuam salvas no aparelho.");
       }
     });
 
@@ -435,7 +438,7 @@ function MobileDeliveryApp({
           vehicle: "Moto",
           defaultFee: 7.0,
           active: true,
-          companyId: "house-burger-190",
+          companyId: getActiveStore().companyId,
           createdAt: new Date().toISOString(),
         };
         void saveDriverRTDB(newDrv);
@@ -454,7 +457,7 @@ function MobileDeliveryApp({
         const newForMe = items.filter((d) => !prevIds.has(d.id) && isDeliveryForThisDriver(d));
         if (newForMe.length > 0) {
           playNewOrderAlert();
-          notify(`🔥 ${newForMe.length} novo(s) pedido(s) atribuído(s) a você!`);
+          notify(`${newForMe.length} novo(s) pedido(s) atribuído(s) a você!`);
         }
       }
       setDeliveries(items);
@@ -535,27 +538,22 @@ function MobileDeliveryApp({
             }
           }
 
-          // Para pedidos recém-despachados a um motoboy: salva individualmente no RTDB
-          // IMEDIATAMENTE para acionar o listener em tempo real no celular do motoboy
-          if (res.dispatchedDeliveryIds.length > 0) {
-            const dispatched = res.deliveries.filter((d) => res.dispatchedDeliveryIds.includes(d.id));
-            for (const d of dispatched) {
-              void updateDeliveryRTDB(d.id, {
-                driver: d.driver,
-                driverId: d.driverId,
-                driverPhone: d.driverPhone,
-                status: d.status,
-                deliveryFee: d.deliveryFee,
-                amount: d.amount,
-              });
+          // Salva IMEDIATAMENTE cada entrega atualizada/redespachada no RTDB
+          if (res.updatedDeliveries && res.updatedDeliveries.length > 0) {
+            for (const d of res.updatedDeliveries) {
+              void saveDeliveryRTDB(d);
             }
           }
-          void batchSaveDeliveriesRTDB(res.deliveries);
+
+          const modified = [...(res.newDeliveries || []), ...(res.updatedDeliveries || [])];
+          if (modified.length > 0) {
+            void batchSaveDeliveriesRTDB(modified);
+          }
         }
 
         if (res.addedCount > 0) {
           playNewOrderAlert();
-          notify(`🔥 ${res.addedCount} novo(s) pedido(s) Takeat recebido(s)!`);
+          notify(`${res.addedCount} novo(s) pedido(s) Takeat recebido(s)!`);
         }
       } catch (err: unknown) {
         console.warn("Erro no auto-sync Takeat:", err);
@@ -584,20 +582,15 @@ function MobileDeliveryApp({
                   void saveDeliveryRTDB(d);
                 }
               }
-              if (res.dispatchedDeliveryIds.length > 0) {
-                const dispatched = res.deliveries.filter((d) => res.dispatchedDeliveryIds.includes(d.id));
-                for (const d of dispatched) {
-                  void updateDeliveryRTDB(d.id, {
-                    driver: d.driver,
-                    driverId: d.driverId,
-                    driverPhone: d.driverPhone,
-                    status: d.status,
-                    deliveryFee: d.deliveryFee,
-                    amount: d.amount,
-                  });
+              if (res.updatedDeliveries && res.updatedDeliveries.length > 0) {
+                for (const d of res.updatedDeliveries) {
+                  void saveDeliveryRTDB(d);
                 }
               }
-              void batchSaveDeliveriesRTDB(res.deliveries);
+              const modified = [...(res.newDeliveries || []), ...(res.updatedDeliveries || [])];
+              if (modified.length > 0) {
+                void batchSaveDeliveriesRTDB(modified);
+              }
               if (res.addedCount > 0) playNewOrderAlert();
             }
           })
@@ -616,10 +609,10 @@ function MobileDeliveryApp({
   const handleManualSyncTakeat = async () => {
     if (!isTakeatConfigured()) {
       if (currentUser.role === "admin") {
-        notify("⚠️ Conecte sua conta Takeat (Login e Senha) na aba ADM.");
+        notify("Conecte sua conta Takeat (Login e Senha) na aba ADM.");
         setActiveTab("adm");
       } else {
-        notify("⚠️ Takeat ainda não configurada no painel da loja.");
+        notify("Takeat ainda não configurada no painel da loja.");
       }
       return;
     }
@@ -632,33 +625,27 @@ function MobileDeliveryApp({
           void saveDeliveryRTDB(d);
         }
       }
-      // Atualiza RTDB individualmente para pedidos despachados
-      if (res.dispatchedDeliveryIds.length > 0) {
-        const dispatched = res.deliveries.filter((d) => res.dispatchedDeliveryIds.includes(d.id));
-        for (const d of dispatched) {
-          void updateDeliveryRTDB(d.id, {
-            driver: d.driver,
-            driverId: d.driverId,
-            driverPhone: d.driverPhone,
-            status: d.status,
-            deliveryFee: d.deliveryFee,
-            amount: d.amount,
-          });
+      if (res.updatedDeliveries && res.updatedDeliveries.length > 0) {
+        for (const d of res.updatedDeliveries) {
+          void saveDeliveryRTDB(d);
         }
       }
-      void batchSaveDeliveriesRTDB(res.deliveries);
+      const modified = [...(res.newDeliveries || []), ...(res.updatedDeliveries || [])];
+      if (modified.length > 0) {
+        void batchSaveDeliveriesRTDB(modified);
+      }
       setIsTakeatConnected(true);
       if (res.addedCount > 0) {
         playNewOrderAlert();
-        notify(`✅ ${res.addedCount} novo(s) pedido(s) Takeat importado(s)!`);
+        notify(`${res.addedCount} novo(s) pedido(s) Takeat importado(s)!`);
       } else if (res.updatedCount > 0) {
-        notify(`✅ ${res.updatedCount} pedido(s) Takeat atualizado(s) (incluindo motoboys despachados)!`);
+        notify(`${res.updatedCount} pedido(s) Takeat atualizado(s) (incluindo motoboys despachados)!`);
       } else {
         notify("Tudo em dia! Nenhum novo pedido Takeat no momento.");
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erro ao sincronizar Takeat";
-      notify(`❌ ${msg}`);
+      notify(`${msg}`);
       setIsTakeatConnected(false);
     } finally {
       setTakeatSyncing(false);
@@ -669,7 +656,7 @@ function MobileDeliveryApp({
     const sample = getSampleTakeatDelivery();
     setDeliveries((prev) => [sample, ...prev]);
     await saveDeliveryRTDB(sample);
-    notify(`🍔 Pedido Takeat/iFood #${sample.order} adicionado para teste!`);
+    notify(`Pedido Takeat/iFood #${sample.order} adicionado para teste.`);
   };
 
   useEffect(() => {
@@ -926,9 +913,33 @@ function MobileDeliveryApp({
   const filteredDeliveries = useMemo(() => {
     let base: Delivery[] = [];
     if (deliveryTabMode === "active") {
-      base = optimizedActiveDeliveries;
+      base = [...activeDeliveries].sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        if (timeA && timeB && timeA !== timeB) {
+          return arrivalSortOrder === "asc" ? timeA - timeB : timeB - timeA;
+        }
+        const numA = parseInt(String(a.order).replace(/\D/g, ""), 10);
+        const numB = parseInt(String(b.order).replace(/\D/g, ""), 10);
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return arrivalSortOrder === "asc" ? numA - numB : numB - numA;
+        }
+        return 0;
+      });
     } else if (deliveryTabMode === "all_today") {
-      base = tonightDeliveries;
+      base = [...tonightDeliveries].sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        if (timeA && timeB && timeA !== timeB) {
+          return arrivalSortOrder === "asc" ? timeA - timeB : timeB - timeA;
+        }
+        const numA = parseInt(String(a.order).replace(/\D/g, ""), 10);
+        const numB = parseInt(String(b.order).replace(/\D/g, ""), 10);
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return arrivalSortOrder === "asc" ? numA - numB : numB - numA;
+        }
+        return 0;
+      });
     } else {
       base = showAllHistory
         ? allCompletedDeliveries
@@ -963,7 +974,8 @@ function MobileDeliveryApp({
     });
   }, [
     deliveryTabMode,
-    optimizedActiveDeliveries,
+    arrivalSortOrder,
+    activeDeliveries,
     tonightDeliveries,
     completedDeliveriesTonight,
     allCompletedDeliveries,
@@ -1023,7 +1035,7 @@ function MobileDeliveryApp({
     setDeliveries((prev) =>
       prev.map((d) => {
         if (d.id === deliveryId) {
-          notify(`🛡️ Pedido ${d.order} blindado no iFood! Taxa de ${money(d.deliveryFee)} somada.`);
+          notify(`Pedido ${d.order} blindado no iFood! Taxa de ${money(d.deliveryFee)} somada.`);
           return {
             ...d,
             status: "Entregue" as Status,
@@ -1068,12 +1080,12 @@ function MobileDeliveryApp({
     if (!isDeviceOnline()) {
       enqueueOfflineAction("update_delivery", { deliveryId, updates });
       setOfflinePendingCount(getOfflineQueue().length);
-      notify("📱 Telefone salvo localmente no aparelho (Modo Offline)");
+      notify("Telefone salvo localmente no aparelho (Modo Offline)");
       return;
     }
     try {
       await updateDeliveryRTDB(deliveryId, updates);
-      notify("📱 Telefone WhatsApp atualizado com sucesso!");
+      notify("Telefone WhatsApp atualizado com sucesso!");
     } catch (e) {
       console.warn("Erro ao atualizar telefone no RTDB, enfileirando offline:", e);
       enqueueOfflineAction("update_delivery", { deliveryId, updates });
@@ -1229,7 +1241,7 @@ function MobileDeliveryApp({
           }}
           title={`Loja conectada: ${activeStoreConfig.name}`}
         >
-          <span>🏪</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg>
           <span>{activeStoreConfig.shortName}</span>
         </div>
 
@@ -1252,7 +1264,7 @@ function MobileDeliveryApp({
               void flushOfflineQueue().then((res) => {
                 setOfflinePendingCount(getOfflineQueue().length);
                 if (res.syncedCount > 0) {
-                  notify(`📶 Sincronizado: ${res.syncedCount} alteração(ões)!`);
+                  notify(`Sincronizado: ${res.syncedCount} alteração(ões)!`);
                 } else {
                   notify("Aparelho ainda sem internet. Dados protegidos no celular.");
                 }
@@ -1260,7 +1272,7 @@ function MobileDeliveryApp({
             }}
             title="Sem 4G/Wi-Fi (Modo Offline). Toque para tentar sincronizar com a loja."
           >
-            <span>🟡 Offline</span>
+            <span>Offline</span>
             {offlinePendingCount > 0 && (
               <span style={{ background: "#000", color: "#fff", borderRadius: "10px", padding: "1px 5px", fontSize: "10px" }}>
                 {offlinePendingCount}
@@ -1269,8 +1281,26 @@ function MobileDeliveryApp({
           </div>
         )}
 
-        {/* Right: Quick Controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+        {/* Right: Quick Controls - apenas os essenciais para nao estourar o header mobile */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+          {/* Botão Instalar App */}
+          <button
+            type="button"
+            className="icon-btn"
+            style={{
+              width: "34px",
+              height: "34px",
+              borderRadius: "11px",
+              border: "1px solid var(--line)",
+              background: "var(--surface)",
+              position: "relative",
+            }}
+            onClick={() => setModal("install")}
+            title="Instalar app no celular"
+          >
+            <Download size={15} style={{ color: "var(--primary)" }} />
+          </button>
+
           {/* Botão Silenciar / Ativar Notificações */}
           <button
             type="button"
@@ -1278,11 +1308,10 @@ function MobileDeliveryApp({
               const next = !isMuted;
               setIsMuted(next);
               if (!next) {
-                // Ao reativar, toca o som para confirmar
                 void playIfoodNotificationSound();
-                notify("🔔 Notificações reativadas!");
+                notify("Notificações reativadas!");
               } else {
-                notify("🔕 Notificações silenciadas");
+                notify("Notificações silenciadas");
               }
             }}
             className="icon-btn"
@@ -1322,80 +1351,21 @@ function MobileDeliveryApp({
             <RefreshCw size={14} className={takeatSyncing ? "spin-animation" : ""} style={{ color: "var(--primary)" }} />
           </button>
 
-          {currentUser.role === "admin" && (
-            <div className="mode-toggle" style={{ padding: "2px" }}>
-              <button
-                type="button"
-                className={appMode === "adm" ? "active" : ""}
-                onClick={() => setAppMode("adm")}
-                style={{ padding: "4px 8px", fontSize: "10.5px" }}
-                title="Modo Loja"
-              >
-                <Users size={12} /> Loja
-              </button>
-              <button
-                type="button"
-                className={appMode === "motoboy" ? "active" : ""}
-                onClick={() => setAppMode("motoboy")}
-                style={{ padding: "4px 8px", fontSize: "10.5px" }}
-                title="Ver como Motoboy"
-              >
-                <Bike size={12} /> Moto
-              </button>
-            </div>
-          )}
-
-          {/* Acessibilidade: Tamanho de Letra para Motoboy (Normal / Grande) */}
+          {/* Botão Perfil / Configuracoes (abre sheet com todas as opcoes) */}
           <button
             type="button"
-            className={`icon-btn text-scale-toggle ${textScale === "large" ? "active" : ""}`}
+            className="icon-btn"
             style={{
+              width: "34px",
               height: "34px",
-              minWidth: "36px",
-              padding: "0 8px",
               borderRadius: "11px",
-              border: textScale === "large" ? "2px solid var(--primary)" : "1px solid var(--line)",
-              background: textScale === "large" ? "var(--primary-soft)" : "var(--surface)",
-              color: textScale === "large" ? "var(--primary)" : "var(--ink)",
-              fontWeight: 900,
-              fontSize: "13px",
-              letterSpacing: "-0.2px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
+              border: "1px solid var(--line)",
+              background: "var(--surface)",
             }}
-            onClick={() => {
-              const next = textScale === "normal" ? "large" : "normal";
-              const label = next === "large" ? "Grande (+20%)" : "Normal (Padrão)";
-              setTextScale(next);
-              notify(`Tamanho da Letra: ${label}`);
-            }}
-            title={`Tamanho da Letra: ${textScale === "normal" ? "Normal (Toque para ativar A+)" : "Grande (+20%) (Toque para voltar ao normal)"}`}
-            aria-label="Alternar tamanho da letra"
+            onClick={() => setModal("profile")}
+            title="Perfil e Configuracoes"
           >
-            <span>A+</span>
-          </button>
-
-          <button
-            type="button"
-            className="icon-btn theme-toggle"
-            style={{ width: "34px", height: "34px", borderRadius: "11px", border: "1px solid var(--line)" }}
-            onClick={() => setTheme((v) => (v === "light" ? "dark" : "light"))}
-            aria-label="Alternar tema"
-          >
-            {theme === "light" ? <Moon size={15} /> : <Sun size={15} />}
-          </button>
-
-          {/* Botão Sair direto no Header */}
-          <button
-            type="button"
-            className="btn-header-logout"
-            onClick={onLogout}
-            title="Sair da Conta"
-          >
-            <LogOut size={13} />
-            <span>Sair</span>
+            <Settings size={15} style={{ color: "var(--muted)" }} />
           </button>
         </div>
       </header>
@@ -1641,6 +1611,16 @@ function MobileDeliveryApp({
                         : st}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    className="native-filter-pill"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}
+                    onClick={() => setArrivalSortOrder(prev => prev === "asc" ? "desc" : "asc")}
+                    title={arrivalSortOrder === "asc" ? "Ordem de Chegada: Mais antigos primeiro" : "Ordem de Chegada: Mais recentes primeiro"}
+                  >
+                    <ArrowDownUp size={12} />
+                    {arrivalSortOrder === "asc" ? "Ordem de Chegada" : "Mais Recentes"}
+                  </button>
                 </div>
               )}
 
@@ -1798,7 +1778,11 @@ function MobileDeliveryApp({
                       <MobileDeliveryCard
                         key={d.id}
                         delivery={d}
-                        stopNumber={stopNumberMap.get(d.id)}
+                        stopNumber={
+                          selectedForRouteIds.length > 0
+                            ? (selectedForRouteIds.includes(d.id) ? (selectedForRouteIds.indexOf(d.id) + 1) : undefined)
+                            : (appMode === "motoboy" ? stopNumberMap.get(d.id) : undefined)
+                        }
                         onMarkDelivered={() => markAsDelivered(d.id)}
                         onUpdateStatus={(st) => updateStatus(d.id, st)}
                         onRemove={() => removeDelivery(d.id)}
@@ -1809,6 +1793,7 @@ function MobileDeliveryApp({
                         onToggleSelect={() => toggleDeliverySelection(d.id)}
                         onOpenIfoodConfirm={() => setIfoodConfirmDelivery(d)}
                         onUpdatePhone={(phone) => updateDeliveryPhone(d.id, phone)}
+                        onNotify={notify}
                         onAssignDriver={(driverId) => {
                           const drv = drivers.find((x) => x.id === driverId);
                           const driverName = drv ? drv.name : "Não atribuído";
@@ -1820,7 +1805,7 @@ function MobileDeliveryApp({
                             ),
                           );
                           void updateDeliveryRTDB(d.id, { driverId, driver: driverName });
-                          notify(`🛵 Entrega atribuída a ${driverName}`);
+                          notify(`Entrega atribuída a ${driverName}`);
                         }}
                       />
                     ))}
@@ -2067,6 +2052,136 @@ function MobileDeliveryApp({
         />
       )}
 
+      {/* Modal: Instalar App */}
+      {modal === "install" && (
+        <div className="overlay" onClick={() => setModal(null)}>
+          <div
+            className="modal"
+            style={{ maxWidth: "420px", borderRadius: "22px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head" style={{ borderBottom: "1px solid var(--line)", padding: "20px 22px 16px" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                  <div style={{
+                    width: "34px", height: "34px", borderRadius: "10px",
+                    background: "var(--primary-soft)", color: "var(--primary)",
+                    display: "grid", placeItems: "center"
+                  }}>
+                    <Download size={18} />
+                  </div>
+                  <h2 style={{ margin: 0, fontSize: "17px", letterSpacing: "-.3px" }}>Instalar no Celular</h2>
+                </div>
+                <p style={{ margin: 0, color: "var(--muted)", fontSize: "11px" }}>
+                  Adicione o app na tela inicial para acesso rapido, sem precisar abrir o navegador.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModal(null)}
+                style={{ border: 0, background: "var(--surface-2)", width: "32px", height: "32px", borderRadius: "10px", cursor: "pointer", display: "grid", placeItems: "center", color: "var(--muted)", flexShrink: 0 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ padding: "18px 22px 22px", display: "flex", flexDirection: "column", gap: "16px" }}>
+
+              {/* iOS / iPhone */}
+              <div style={{
+                border: "1px solid var(--line)", borderRadius: "16px",
+                padding: "16px", background: "var(--surface-2)"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                  <div style={{
+                    width: "36px", height: "36px", borderRadius: "10px",
+                    background: "#000", color: "#fff",
+                    display: "grid", placeItems: "center", flexShrink: 0
+                  }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <b style={{ fontSize: "13px", display: "block" }}>iPhone (Safari)</b>
+                    <span style={{ fontSize: "10px", color: "var(--muted)" }}>iOS 14 ou superior</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {[
+                    { n: 1, txt: "Abra este link no Safari (nao funciona em outros navegadores)", icon: "🧭" },
+                    { n: 2, txt: "Toque no icone de compartilhar na barra inferior (quadrado com seta para cima)", icon: "⬆️" },
+                    { n: 3, txt: "Role a lista e toque em \"Adicionar a Tela de Inicio\"", icon: "➕" },
+                    { n: 4, txt: "Confirme tocando em \"Adicionar\" no canto superior direito", icon: "✅" },
+                  ].map(step => (
+                    <div key={step.n} style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                      <div style={{
+                        width: "22px", height: "22px", borderRadius: "7px",
+                        background: "var(--primary)", color: "#fff",
+                        display: "grid", placeItems: "center",
+                        fontSize: "11px", fontWeight: 800, flexShrink: 0, marginTop: "1px"
+                      }}>{step.n}</div>
+                      <span style={{ fontSize: "11px", lineHeight: "1.4", color: "var(--ink)" }}>{step.txt}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Android */}
+              <div style={{
+                border: "1px solid var(--line)", borderRadius: "16px",
+                padding: "16px", background: "var(--surface-2)"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                  <div style={{
+                    width: "36px", height: "36px", borderRadius: "10px",
+                    background: "#4caf50", color: "#fff",
+                    display: "grid", placeItems: "center", flexShrink: 0
+                  }}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.523 15.341a1 1 0 0 1-.75-.338L13.5 11.5V17a1 1 0 0 1-2 0v-5.5L8.227 15.003a1 1 0 0 1-1.454-1.373L12 7.5l5.227 6.13a1 1 0 0 1-.704 1.711zM6.5 4A1.5 1.5 0 0 0 5 5.5v13A1.5 1.5 0 0 0 6.5 20h11A1.5 1.5 0 0 0 19 18.5v-13A1.5 1.5 0 0 0 17.5 4z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <b style={{ fontSize: "13px", display: "block" }}>Android (Chrome)</b>
+                    <span style={{ fontSize: "10px", color: "var(--muted)" }}>Qualquer Android com Chrome</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {[
+                    { n: 1, txt: "Abra este link no Google Chrome", icon: "" },
+                    { n: 2, txt: "Toque nos 3 pontos no canto superior direito do Chrome", icon: "" },
+                    { n: 3, txt: "Toque em \"Adicionar a tela inicial\" ou \"Instalar app\"", icon: "" },
+                    { n: 4, txt: "Confirme tocando em \"Adicionar\" ou \"Instalar\"", icon: "" },
+                  ].map(step => (
+                    <div key={step.n} style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+                      <div style={{
+                        width: "22px", height: "22px", borderRadius: "7px",
+                        background: "#4caf50", color: "#fff",
+                        display: "grid", placeItems: "center",
+                        fontSize: "11px", fontWeight: 800, flexShrink: 0, marginTop: "1px"
+                      }}>{step.n}</div>
+                      <span style={{ fontSize: "11px", lineHeight: "1.4", color: "var(--ink)" }}>{step.txt}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{
+                background: "var(--primary-soft)", borderRadius: "12px",
+                padding: "12px 14px", display: "flex", gap: "10px", alignItems: "flex-start"
+              }}>
+                <Download size={16} style={{ color: "var(--primary)", flexShrink: 0, marginTop: "1px" }} />
+                <span style={{ fontSize: "11px", color: "var(--primary)", fontWeight: "600", lineHeight: "1.4" }}>
+                  Depois de instalado, o app abre como um aplicativo nativo, sem barra do navegador, e funciona muito mais rapido.
+                </span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
       {modal === "profile" && (
         <div className="app-sheet-backdrop" onClick={() => setModal(null)}>
           <div className="app-sheet-content" onClick={(e) => e.stopPropagation()}>
@@ -2225,6 +2340,34 @@ function MobileDeliveryApp({
 }
 
 // -------------------------------------------------------------
+// ÍCONE VETORIAL DO WHATSAPP (SEM EMOJIS, DESIGN OFICIAL)
+// -------------------------------------------------------------
+function WhatsAppIcon({
+  size = 15,
+  color = "#25D366",
+  className,
+}: {
+  size?: number;
+  color?: string;
+  className?: string;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill={color}
+      className={className}
+      style={{ flexShrink: 0, display: "inline-block", verticalAlign: "middle" }}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M17.472 14.382c-.301-.15-1.782-.879-2.058-.98-.276-.1-.477-.15-.678.15-.2.301-.778.98-.954 1.18-.176.201-.351.226-.653.075-.301-.15-1.272-.469-2.423-1.496-.896-.799-1.5-1.786-1.677-2.087-.176-.301-.019-.464.132-.614.136-.135.301-.351.452-.527.15-.176.201-.301.301-.502.1-.201.05-.376-.025-.527-.075-.15-.678-1.634-.929-2.239-.244-.589-.493-.509-.678-.519-.176-.01-.376-.01-.577-.01-.201 0-.527.075-.803.376s-1.054 1.03-1.054 2.511c0 1.481 1.079 2.911 1.23 3.112.15.201 2.124 3.243 5.145 4.549.719.311 1.28.497 1.718.636.722.23 1.378.197 1.898.12.579-.087 1.782-.728 2.033-1.431.251-.703.251-1.305.176-1.431-.075-.125-.276-.201-.577-.351z" />
+      <path d="M12.004 2C6.486 2 2 6.486 2 12c0 1.95.56 3.77 1.532 5.317L2.14 21.656a.75.75 0 00.916.916l4.437-1.385A9.954 9.954 0 0012.004 22c5.518 0 10.004-4.486 10.004-10S17.522 2 12.004 2zm0 18.25a8.212 8.212 0 01-4.223-1.168.75.75 0 00-.549-.092l-3.328 1.038 1.055-3.276a.75.75 0 00-.091-.555A8.216 8.216 0 013.75 12c0-4.552 3.702-8.25 8.254-8.25 4.551 0 8.25 3.698 8.25 8.25 0 4.552-3.699 8.25-8.25 8.25z" />
+    </svg>
+  );
+}
+
+// -------------------------------------------------------------
 // COMPONENTE: Card de Entrega Mobile
 // -------------------------------------------------------------
 function MobileDeliveryCard({
@@ -2241,6 +2384,7 @@ function MobileDeliveryCard({
   onOpenIfoodConfirm,
   stopNumber,
   onUpdatePhone,
+  onNotify,
 }: {
   delivery: Delivery;
   onMarkDelivered: () => void;
@@ -2255,39 +2399,51 @@ function MobileDeliveryCard({
   onOpenIfoodConfirm?: () => void;
   stopNumber?: number;
   onUpdatePhone?: (phone: string) => void;
+  onNotify?: (msg: string) => void;
 }) {
   const [showItemsDetail, setShowItemsDetail] = useState(false);
   const isDelivered = delivery.status === "Entregue" || (delivery.status as string) === "delivered";
 
-  // Validação e sanitização inteligente de WhatsApp (sem zeros falsos, sem duplicar 55)
+  // Identificação de iFood: usa exclusivamente o campo platform (definido na sincronização)
+  // ou ifoodLocalizer (localizador de 6-10 dígitos do pedido iFood)
+  // NAO usa pickupCode nem notes("coleta") pois pedidos da loja também tem senha de retirada
+  const isIfood =
+    delivery.platform === "ifood" ||
+    Boolean(delivery.ifoodLocalizer) ||
+    Boolean(delivery.payment?.toLowerCase().includes("ifood"));
+
+  // Formatação limpa do número do pedido para o card e WhatsApp (elimina 'TK-' e prioriza senha da loja)
+  const cleanOrderNum = (
+    (!isIfood && delivery.pickupCode
+      ? delivery.pickupCode
+      : delivery.order
+    ) || ""
+  )
+    .replace(/#?TK-?/i, "")
+    .replace(/^#+/, "")
+    .trim();
+  const displayOrderStr = cleanOrderNum
+    ? `#${cleanOrderNum}`
+    : delivery.order?.startsWith("#")
+    ? delivery.order
+    : `#${delivery.order}`;
+
+  // Validação e sanitização inteligente de WhatsApp
   const validWhatsApp = sanitizeWhatsAppNumber(delivery.phone, delivery.notes);
 
   const whatsappUrl = validWhatsApp
     ? `https://wa.me/${validWhatsApp}?text=${encodeURIComponent(
-        `Olá ${delivery.customer}! Sou o motoboy com seu pedido #${delivery.order}. Já estou a caminho do seu endereço: ${delivery.address}.`,
+        `Olá ${delivery.customer}! Sou o motoboy com seu pedido ${displayOrderStr}. Já estou a caminho do seu endereço: ${delivery.address}.`,
       )}`
     : null;
 
   const whatsappArrivedUrl = validWhatsApp
     ? `https://wa.me/${validWhatsApp}?text=${encodeURIComponent(
-        `Olá ${delivery.customer}! Sou o motoboy com seu pedido #${delivery.order}. Já cheguei no seu endereço e estou no portão te aguardando! Pode retirar, por favor? Obrigado!`,
+        `Olá ${delivery.customer}! Sou o motoboy com seu pedido ${displayOrderStr}. Já cheguei no seu endereço e estou no portão te aguardando! Pode retirar, por favor? Obrigado!`,
       )}`
     : null;
 
-  const trackingOrigin =
-    typeof window !== "undefined" && window.location.origin
-      ? window.location.origin
-      : "https://houseburger-entregas.web.app";
-  const trackingUrl = `${trackingOrigin}/?rastreio=${delivery.id}`;
-
-  const storeGreeting = STORE_POINT.name ? STORE_POINT.name.replace(" Hamburgueria", "") : "House Burger";
-  const whatsappTrackingUrl = validWhatsApp
-    ? `https://wa.me/${validWhatsApp}?text=${encodeURIComponent(
-        `Olá ${delivery.customer}! Seu pedido do ${storeGreeting} (Pedido #${delivery.order}) está a caminho com nosso motoboy ${delivery.driver || "da casa"}. Acompanhe ao vivo pelo mapa aqui: ${trackingUrl}`,
-      )}`
-    : null;
-
-  const handlePromptPhone = () => {
+  const handlePromptPhone = (actionAfter?: "contact" | "arrived") => {
     const input = window.prompt(
       `Digite o WhatsApp do cliente ${delivery.customer} (com DDD, ex: 73999998888):`
     );
@@ -2298,25 +2454,91 @@ function MobileDeliveryCard({
       return;
     }
     onUpdatePhone?.(sanitized);
+    if (actionAfter === "arrived") {
+      const url = `https://wa.me/${sanitized}?text=${encodeURIComponent(
+        `Olá ${delivery.customer}! Sou o motoboy com seu pedido ${displayOrderStr}. Já cheguei no seu endereço e estou no portão te aguardando! Pode retirar, por favor? Obrigado!`,
+      )}`;
+      window.open(url, "_blank");
+    } else if (actionAfter === "contact") {
+      const url = `https://wa.me/${sanitized}?text=${encodeURIComponent(
+        `Olá ${delivery.customer}! Sou o motoboy com seu pedido ${displayOrderStr}. Já estou a caminho do seu endereço: ${delivery.address}.`,
+      )}`;
+      window.open(url, "_blank");
+    }
   };
+
   const mapsUrl = delivery.latitude && delivery.longitude
     ? `https://www.google.com/maps/dir/?api=1&destination=${delivery.latitude},${delivery.longitude}&travelmode=driving`
     : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${delivery.address}, ${delivery.district}, ${delivery.city || ""}`)}&travelmode=driving`;
+
   const wazeUrl = delivery.latitude && delivery.longitude
     ? `https://waze.com/ul?ll=${delivery.latitude},${delivery.longitude}&navigate=yes`
-    : `https://waze.com/ul?q=${encodeURIComponent(`${delivery.address}, ${delivery.district}`)}&navigate=yes`;
+    : `https://waze.com/ul?q=${encodeURIComponent(`${delivery.address}, ${delivery.district}, ${delivery.city || ""}`)}&navigate=yes`;
 
+  // Limpeza e formatação de endereço
+  let streetLine = delivery.address || "Endereço não informado";
+  if (delivery.district && streetLine.toLowerCase().includes(delivery.district.toLowerCase())) {
+    const regex = new RegExp(`[,\\s-]+${delivery.district}.*`, "i");
+    const trimmed = streetLine.replace(regex, "").trim();
+    if (trimmed.length > 3) streetLine = trimmed;
+  }
+
+  const districtParts: string[] = [];
+  if (delivery.district) districtParts.push(delivery.district);
+  if (delivery.complement) districtParts.push(delivery.complement);
+  const districtLine = districtParts.join(" · ") || (delivery.city ? delivery.city : "");
+
+  // Remove códigos de coleta da observação de endereço para não poluir
   const cleanNotes = delivery.notes
     ?.split("|")
     .map((s) => s.trim())
-    .filter((s) => !s.toLowerCase().includes("código de coleta") && !s.toLowerCase().includes("codigo de coleta"))
+    .filter(
+      (s) =>
+        !s.toLowerCase().includes("código de coleta") &&
+        !s.toLowerCase().includes("codigo de coleta") &&
+        !s.toLowerCase().startsWith("coleta:") &&
+        !s.toLowerCase().startsWith("coleta ")
+    )
     .join(" • ");
 
+  const referenceLine = delivery.reference && delivery.reference !== "."
+    ? `Ref.: ${delivery.reference}`
+    : cleanNotes && cleanNotes.length > 0
+    ? (cleanNotes.toLowerCase().startsWith("ref") ? cleanNotes : `Ref.: ${cleanNotes}`)
+    : null;
+
+  const statusSlug = (delivery.status || "Aguardando").toLowerCase().replaceAll(" ", "-");
+
+  const ifoodOrderNum = delivery.platformOrderId
+    ? String(delivery.platformOrderId).replace(/^#/, "")
+    : delivery.pickupCode
+    ? String(delivery.pickupCode).replace(/^#/, "")
+    : "";
+
+  const isPendingPayment =
+    delivery.payment?.toLowerCase().includes("verificar") ||
+    delivery.payment?.toLowerCase().includes("pendente");
+
+  const itemCount =
+    delivery.items && delivery.items.length > 0
+      ? delivery.items.reduce((acc, it) => acc + (it.amount || 1), 0)
+      : 1;
+
+  const handleCopyLocator = () => {
+    if (!delivery.ifoodLocalizer) return;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(delivery.ifoodLocalizer);
+    }
+    onNotify?.(`Localizador ${delivery.ifoodLocalizer} copiado!`);
+  };
+
   return (
-    <article className={`delivery-card ${isDelivered ? "is-delivered" : ""} ${selected ? "is-selected" : ""}`}>
-      {/* SaaS Premium Header: Order # + Platform + Time on left, Fee + Status on right */}
-      <div className="delivery-card-header">
-        <div className="delivery-card-header-left">
+    <article
+      className={`compact-delivery-card ${isDelivered ? "is-delivered" : ""} ${selected ? "is-selected" : ""}`}
+    >
+      {/* 1. Header: [1ª Parada] #33 [iFood #6879] ... [Status] */}
+      <div className="cdc-header">
+        <div className="cdc-header-left">
           {showSelectCheckbox && !isDelivered && (
             <button
               type="button"
@@ -2324,332 +2546,259 @@ function MobileDeliveryCard({
                 e.stopPropagation();
                 onToggleSelect?.();
               }}
-              className={`minimal-checkbox ${selected ? "is-selected" : ""}`}
+              className={`cdc-checkbox ${selected ? "is-selected" : ""}`}
               title={selected ? "Remover da rota agrupada" : "Selecionar para rota agrupada"}
             >
-              {selected && <Check size={14} strokeWidth={3} />}
+              {selected && <Check size={13} strokeWidth={3} />}
             </button>
           )}
+
           {stopNumber !== undefined && !isDelivered && (
-            <span className="stop-sequence-badge" title={`Parada #${stopNumber} da rota otimizada`}>
-              <Bike size={11} /> {stopNumber}ª Parada
+            <span className="cdc-stop-badge">
+              {stopNumber}ª parada
             </span>
           )}
-          <span className="order-num-badge">{delivery.order}</span>
-          {delivery.platform === "ifood" && (
-            <span className="platform-pill ifood" title="Pedido via iFood">
-              iFood{delivery.platformOrderId && delivery.platformOrderId !== delivery.order && !delivery.order.includes(delivery.platformOrderId) ? ` #${delivery.platformOrderId.replace(/^#/, "")}` : ""}
+
+          <span className="cdc-order-num">
+            {displayOrderStr}
+          </span>
+
+          {isIfood ? (
+            <span className="cdc-badge-ifood">
+              iFood{ifoodOrderNum && ifoodOrderNum !== cleanOrderNum ? ` #${ifoodOrderNum}` : ""}
             </span>
-          )}
-          {delivery.platform === "takeat" && (
-            <span className="platform-pill takeat" title="Pedido direto da Loja (Takeat)">
+          ) : (
+            <span className="cdc-badge-loja">
               Loja
             </span>
           )}
-          <span className="order-time-text">{delivery.time}</span>
         </div>
 
-        <div className="delivery-card-header-right">
-          <span className="fee-chip">
-            Taxa {money(delivery.deliveryFee)}
+        <div className="cdc-header-right">
+          <span className={`cdc-status-pill ${statusSlug}`}>
+            {delivery.status}
           </span>
-          <StatusBadge status={delivery.status} />
         </div>
       </div>
 
-      {/* Metadata Strip: Coleta, Localizador, Blindagem (zero overflow) */}
-      {(delivery.pickupCode || delivery.ifoodLocalizer || delivery.ifoodConfirmed) && (
-        <div className="delivery-meta-strip">
-          {delivery.pickupCode && (
-            <span className="meta-chip coleta">
-              <strong>Coleta</strong> #{delivery.pickupCode}
-            </span>
-          )}
-          {delivery.pickupCode && (delivery.ifoodLocalizer || delivery.ifoodConfirmed) && (
-            <span className="meta-chip-divider" />
-          )}
-          {delivery.ifoodLocalizer && (
-            <span className="meta-chip localizador" title="Localizador iFood">
-              <strong>Loc</strong> {delivery.ifoodLocalizer}
-            </span>
-          )}
-          {delivery.ifoodConfirmed && (
-            <>
-              {delivery.ifoodLocalizer && <span className="meta-chip-divider" />}
-              <span className="meta-chip blindado" title="Entrega Blindada e Confirmada">
-                <ShieldCheck size={12} /> Blindado
-              </span>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Customer Info */}
-      <div className="customer-block">
-        <b>{delivery.customer}</b>
-        <div className="customer-address-line">
-          <MapPin />
-          <span>{delivery.address} {delivery.district ? `· ${delivery.district}` : ""}</span>
-        </div>
-        {cleanNotes ? (
-          <div className="customer-notes-pill">
-            <span>{cleanNotes}</span>
-          </div>
-        ) : null}
+      {/* 2. Customer & Address Block */}
+      <div className="cdc-customer-block">
+        <div className="cdc-customer-name">{delivery.customer}</div>
+        <div className="cdc-customer-street">{streetLine}</div>
+        {districtLine && <div className="cdc-customer-district">{districtLine}</div>}
+        {referenceLine && <div className="cdc-customer-ref">{referenceLine}</div>}
       </div>
 
-      {/* Itens do Pedido (Takeat / iFood / Comanda) */}
-      {(delivery.itemsSummary || (delivery.items && delivery.items.length > 0)) && (
-        <div className="delivery-items-block">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: "11px", fontWeight: "800", color: "var(--ink)", display: "flex", alignItems: "center", gap: "5px" }}>
-              <Package size={13} style={{ color: "var(--primary)" }} />
-              Itens ({delivery.items ? delivery.items.length : 1}):
-            </span>
-            {delivery.items && delivery.items.length > 0 && (
-              <button
-                type="button"
-                className="btn-expand-items"
-                onClick={() => setShowItemsDetail(!showItemsDetail)}
-              >
-                {showItemsDetail ? "▲ Ocultar" : "▼ Ver detalhes"}
-              </button>
-            )}
+      {/* 3. Finance & Items Block */}
+      <div className="cdc-finance-block">
+        <div className="cdc-finance-row">
+          <div className="cdc-finance-left">
+            {isPendingPayment && <span className="cdc-pending-dot" />}
+            <span className="cdc-amount">{money(delivery.amount)}</span>
+            <span className="cdc-payment"> · {delivery.payment || "A Cobrar"}</span>
           </div>
-
-          <div className="delivery-items-summary">
-            {delivery.itemsSummary || delivery.items?.map((it) => `${it.amount}x ${it.name}`).join(" • ")}
-          </div>
-
-          {showItemsDetail && delivery.items && delivery.items.length > 0 && (
-            <div className="delivery-items-detail-list">
-              {delivery.items.map((it, idx) => (
-                <div key={idx} className="delivery-item-detail-row">
-                  <div style={{ flex: 1 }}>
-                    <span style={{ fontWeight: "700" }}>{it.amount}x {it.name}</span>
-                    {it.complements && it.complements.length > 0 && (
-                      <span className="delivery-item-complements">
-                        + {it.complements.join(", ")}
-                      </span>
-                    )}
-                    {it.details && (
-                      <small className="delivery-item-notes">Obs: {it.details}</small>
-                    )}
-                  </div>
-                  {it.price > 0 && (
-                    <span className="delivery-item-price">
-                      {money(it.totalPrice || it.price * it.amount)}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          <span className="cdc-fee">Taxa {money(delivery.deliveryFee)}</span>
         </div>
-      )}
 
-      {/* Price & Payment */}
-      <div className="price-row">
-        <div>
-          <span className="price-row-amount">{money(delivery.amount)}</span>
-          <span style={{ margin: "0 6px", color: "var(--muted)" }}>•</span>
-          <span className="price-row-payment">{delivery.payment}</span>
-        </div>
-        <div className="price-row-driver">
-          <span>Motoboy:</span>
-          <b>{delivery.driver}</b>
-        </div>
-      </div>
-
-      {/* Modern iFood Confirmation Banner / Action */}
-      {(delivery.platform === "ifood" || Boolean(delivery.ifoodLocalizer)) && (
-        <div>
-          {delivery.ifoodConfirmed ? (
-            <div className="ifood-confirmed-banner">
-              <ShieldCheck size={14} />
-              <span>Entrega Blindada e Confirmada no iFood</span>
-            </div>
-          ) : !isDelivered ? (
-            <div className="ifood-action-card">
-              <div className="ifood-action-card-left">
-                <div className="ifood-action-card-icon">
-                  <ShieldCheck size={16} />
-                </div>
-                <div>
-                  <b>Confirmação de Entrega iFood</b>
-                  <span>{delivery.ifoodLocalizer ? `Localizador: ${delivery.ifoodLocalizer}` : "Blindar e validar no iFood"}</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="btn-ifood-action-pill"
-                onClick={onOpenIfoodConfirm}
-                title="Abrir confirmação de entrega própria no iFood"
-              >
-                Confirmar <ExternalLink size={12} />
-              </button>
-            </div>
-          ) : null}
-
-          {/* Ligar iFood 0800 + localizador — minimalista */}
-          <a
-            href={`tel:08007217000${delivery.ifoodLocalizer ? `;${delivery.ifoodLocalizer}` : ""}`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "5px",
-              padding: "5px 10px",
-              marginTop: "6px",
-              borderRadius: "8px",
-              background: "#ea1d2c",
-              color: "#fff",
-              textDecoration: "none",
-              fontSize: "11px",
-              fontWeight: 700,
-            }}
-            title="Ligar iFood 0800 721 7000"
-          >
-            <PhoneCall size={12} />
-            0800 721 7000{delivery.ifoodLocalizer ? ` ; ${delivery.ifoodLocalizer}` : ""}
-          </a>
-        </div>
-      )}
-
-      {/* Action Buttons Stack (Hero Deliver Button + 3 Modern Tools) */}
-      <div className="delivery-actions-stack">
-        {!isDelivered ? (
+        <div className="cdc-items-row">
           <button
             type="button"
-            className="btn-primary-deliver"
-            onClick={onMarkDelivered}
-            title="Marcar como entregue e somar na noite"
+            className="cdc-items-btn"
+            onClick={() => setShowItemsDetail(!showItemsDetail)}
           >
-            <CheckCircle2 size={16} /> Concluir Entrega
+            <span>
+              {itemCount} {itemCount === 1 ? "item" : "itens"} · Ver detalhes
+            </span>
+            {showItemsDetail ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           </button>
-        ) : (
-          <div className="delivery-completed-bar">
-            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <CheckCircle2 size={15} /> Pedido Entregue
-            </span>
-            <button
-              type="button"
-              className="btn-reopen-pill"
-              onClick={() => onUpdateStatus("Aguardando")}
-              title="Reabrir entrega"
-            >
-              Reabrir
-            </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {delivery.ifoodLocalizer && (
+              <button
+                type="button"
+                className="cdc-loc-btn"
+                onClick={handleCopyLocator}
+                title="Copiar localizador iFood"
+              >
+                <span>Loc. {delivery.ifoodLocalizer}</span>
+                <Copy size={13} />
+              </button>
+            )}
+
+            {!isIfood && (
+              validWhatsApp ? (
+                <a
+                  href={whatsappUrl!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="cdc-contact-btn"
+                  title="Conversar no WhatsApp"
+                >
+                  <WhatsAppIcon size={14} color="#15803d" />
+                  <span>Contato</span>
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  className="cdc-contact-btn is-add"
+                  onClick={() => handlePromptPhone("contact")}
+                  title="Digitar número de WhatsApp"
+                >
+                  <WhatsAppIcon size={14} color="#15803d" />
+                  <span>Contato</span>
+                </button>
+              )
+            )}
           </div>
-        )}
-
-        {!isDelivered && validWhatsApp && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <a
-              href={whatsappTrackingUrl!}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                background: "linear-gradient(135deg, #059669 0%, #047857 100%)",
-                color: "#ffffff",
-                padding: "10px 14px",
-                borderRadius: "12px",
-                fontSize: "12.5px",
-                fontWeight: 800,
-                textDecoration: "none",
-                boxShadow: "0 2px 8px rgba(5, 150, 105, 0.25)",
-              }}
-              title="Enviar link de rastreamento do mapa em tempo real para o WhatsApp do cliente"
-            >
-              <Navigation size={15} />
-              <span>Enviar Rastreio com Mapa (WhatsApp)</span>
-            </a>
-
-            <a
-              href={whatsappArrivedUrl!}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-arrived-whatsapp"
-              title="Avisar cliente no WhatsApp que já chegou no portão"
-            >
-              <MessageSquare size={16} />
-              <span>Cheguei no Portão (Avisar no WhatsApp)</span>
-            </a>
-          </div>
-        )}
-
-        {!isDelivered && !validWhatsApp && (
-          <div className="no-phone-action-box">
-            <span className="no-phone-tag">
-              <ShieldCheck size={13} /> {delivery.platform === "ifood" ? "WhatsApp oculto pelo iFood" : "Sem WhatsApp cadastrado"}
-            </span>
-            <button
-              type="button"
-              className="btn-add-phone-chip"
-              onClick={handlePromptPhone}
-              title="Informar telefone da comanda impressa"
-            >
-              <Pencil size={11} /> Digitar WhatsApp
-            </button>
-          </div>
-        )}
-
-        <div className="delivery-tools-row">
-          {validWhatsApp ? (
-            <a
-              href={whatsappUrl!}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-tool-action wa"
-              title="Chamar no WhatsApp"
-            >
-              <MessageSquare size={13} /> WhatsApp
-            </a>
-          ) : (
-            <button
-              type="button"
-              className="btn-tool-action wa is-disabled"
-              onClick={handlePromptPhone}
-              title="Informar número de WhatsApp"
-            >
-              <MessageSquare size={13} /> Sem WhatsApp
-            </button>
-          )}
-
-          <a
-            href={mapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-tool-action maps"
-            title="Abrir no Google Maps"
-          >
-            <Navigation size={13} /> Maps
-          </a>
-
-          <a
-            href={wazeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-tool-action waze"
-            title="Abrir no Waze"
-          >
-            Waze
-          </a>
         </div>
+
+        {/* Detalhes de itens expansíveis */}
+        {showItemsDetail && (
+          <div className="cdc-items-dropdown">
+            {delivery.items && delivery.items.length > 0 ? (
+              delivery.items.map((it, idx) => (
+                <div key={idx} className="cdc-item-detail">
+                  <div style={{ flex: 1 }}>
+                    <strong>{it.amount}x {it.name}</strong>
+                    {it.complements && it.complements.length > 0 && (
+                      <span className="cdc-item-comp">+ {it.complements.join(", ")}</span>
+                    )}
+                    {it.details && <span className="cdc-item-note">Obs: {it.details}</span>}
+                  </div>
+                  {it.price > 0 && <span>{money(it.totalPrice || it.price * it.amount)}</span>}
+                </div>
+              ))
+            ) : (
+              <div style={{ color: "var(--muted)", fontSize: "12px" }}>
+                {delivery.itemsSummary || "Nenhum detalhe adicional de itens."}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ADM extras: assign driver or delete */}
+      {/* 4. iFood Strip: [ Contato iFood ] | [ Confirmar no iFood ] */}
+      {isIfood && !isDelivered && (
+        <div className="cdc-ifood-links-strip">
+          <a
+            href={`tel:08007217000${delivery.ifoodLocalizer ? `;${delivery.ifoodLocalizer}` : ""}`}
+            className="cdc-ifood-sublink"
+            title="Ligar iFood 0800 721 7000"
+          >
+            <PhoneCall size={13} />
+            <span>Contato iFood</span>
+          </a>
+          <span className="cdc-ifood-divider" />
+          <button
+            type="button"
+            className="cdc-ifood-sublink"
+            onClick={onOpenIfoodConfirm}
+            title="Confirmar entrega no iFood"
+          >
+            <ExternalLink size={13} />
+            <span>Confirmar no iFood</span>
+          </button>
+        </div>
+      )}
+
+      {delivery.ifoodConfirmed && (
+        <div className="ifood-confirmed-banner">
+          <ShieldCheck size={14} />
+          <span>Entrega Blindada e Confirmada no iFood</span>
+        </div>
+      )}
+
+      {/* 5. Action Buttons (Linha 1: Navegação 1-Toque Maps & Waze | Linha 2: Cheguei + Concluir) */}
+      {!isDelivered ? (
+        <div className="cdc-actions-wrapper">
+          {/* Navegação Rápida 1-Toque para Motoboys */}
+          <div className="cdc-nav-grid">
+            <a
+              href={mapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-cdc-maps"
+              title="Abrir navegação no Google Maps"
+            >
+              <Navigation size={14} />
+              <span>Maps</span>
+            </a>
+
+            <a
+              href={wazeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-cdc-waze"
+              title="Abrir navegação no Waze"
+            >
+              <span>Waze</span>
+            </a>
+          </div>
+
+          {/* Ações Operacionais da Entrega */}
+          <div className={`cdc-action-buttons ${isIfood ? "grid-1" : "grid-2"}`}>
+            {!isIfood && (
+              validWhatsApp ? (
+                <a
+                  href={whatsappArrivedUrl!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-cdc-cheguei"
+                  title="Avisar cliente no WhatsApp que já chegou no portão"
+                >
+                  <WhatsAppIcon size={16} color="#15803d" />
+                  <span>Cheguei</span>
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-cdc-cheguei"
+                  onClick={() => handlePromptPhone("arrived")}
+                  title="Informar WhatsApp para avisar chegada no portão"
+                >
+                  <WhatsAppIcon size={16} color="#15803d" />
+                  <span>Cheguei</span>
+                </button>
+              )
+            )}
+
+            <button
+              type="button"
+              className="btn-cdc-concluir"
+              onClick={onMarkDelivered}
+              title="Concluir entrega"
+            >
+              <Check size={15} strokeWidth={2.8} />
+              <span>Concluir</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="cdc-delivered-bar">
+          <span className="cdc-delivered-label">
+            <CheckCircle2 size={15} /> Pedido Entregue
+          </span>
+          <button
+            type="button"
+            className="btn-cdc-reopen"
+            onClick={() => onUpdateStatus("Aguardando")}
+            title="Reabrir entrega"
+          >
+            Reabrir
+          </button>
+        </div>
+      )}
+
+      {/* 6. ADM Extras */}
       {isAdm && (
-        <div className="delivery-card-adm-footer">
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ color: "var(--muted)", fontWeight: "600" }}>Atribuir motoboy:</span>
+        <div className="cdc-adm-footer">
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ color: "var(--muted)", fontWeight: "600" }}>Motoboy:</span>
             <select
               value={delivery.driverId || ""}
               onChange={(e) => onAssignDriver(e.target.value)}
               className="adm-assign-select"
+              style={{ fontSize: "12px", height: "30px", borderRadius: "6px", padding: "0 6px" }}
             >
               <option value="">Selecione motoboy</option>
               {drivers.map((drv) => (
@@ -2662,6 +2811,7 @@ function MobileDeliveryCard({
             onClick={onRemove}
             className="btn-delete-card"
             title="Excluir entrega"
+            style={{ border: 0, background: "transparent", color: "var(--danger)", cursor: "pointer", padding: "4px" }}
           >
             <Trash2 size={16} />
           </button>
@@ -2890,8 +3040,11 @@ function MobileMapView({
       return;
     }
     const first = orderedDeliveries[0];
-    const url = `https://waze.com/ul?ll=${first.latitude},${first.longitude}&navigate=yes`;
+    const url = first.latitude && first.longitude
+      ? `https://waze.com/ul?ll=${first.latitude},${first.longitude}&navigate=yes`
+      : `https://waze.com/ul?q=${encodeURIComponent(`${first.address}, ${first.district}`)}&navigate=yes`;
     window.open(url, "_blank", "noopener,noreferrer");
+    notify("Navegação da 1ª parada aberta no Waze!");
   }
 
   return (
@@ -2950,15 +3103,18 @@ function MobileMapView({
               {orderedDeliveries.length > 0
                 ? `${orderedDeliveries.length} parada(s) no percurso`
                 : route
-                  ? "Retornando para a Loja 🏠"
-                  : "Aguardando pedidos na Loja 🛵"}
+                  ? "Retornando para a Loja"
+                  : "Aguardando pedidos na Loja"}
             </b>
-            <span>
+            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               {route
                 ? `${(route.distanceMeters / 1000).toFixed(1)} km · ~${Math.round(route.durationSeconds / 60)} min de moto`
                 : currentDriverGps
                   ? "Sua moto está conectada e transmitindo ao vivo"
                   : "Traçando melhor rota viária…"}
+              {route?.provider === "valhalla" && (
+                <span className="vrp-badge">⚡ Valhalla VRP</span>
+              )}
             </span>
           </div>
           <div style={{ display: "flex", gap: "6px" }}>
@@ -3038,7 +3194,7 @@ function MobileMapView({
                         17,
                         { animate: true },
                       );
-                      notify(`Focando em 🛵 ${drv.name.split(" ")[0]}`);
+                      notify(`Focando em ${drv.name.split(" ")[0]}`);
                     }
                   }}
                   style={{
@@ -3065,7 +3221,7 @@ function MobileMapView({
                       boxShadow: isMoving ? "0 0 0 2px rgba(16,185,129,0.3)" : "none",
                     }}
                   />
-                  🛵 {drv.name.split(" ")[0]}
+                  {drv.name.split(" ")[0]}
                   {isMoving && drv.location?.speed ? (
                     <span style={{ color: "#10b981", fontSize: "10px" }}>
                       {Math.round(drv.location.speed)} km/h
@@ -3300,8 +3456,8 @@ function FreeMapInternal({
         className: "driver-marker-container",
         html: `
           <div style="position:relative; width:34px; height:34px; display:flex; align-items:center; justify-content:center;">
-            <div style="background:${markerColor}; color:#fff; border-radius:50%; width:34px; height:34px; display:grid; place-items:center; font-size:16px; border:2.5px solid #fff; box-shadow:0 3px 10px rgba(0,0,0,0.3); animation: driver-ring-anim 2s infinite ease-in-out;">
-              🛵
+            <div style="background:${markerColor}; color:#fff; border-radius:50%; width:34px; height:34px; display:grid; place-items:center; border:2.5px solid #fff; box-shadow:0 3px 10px rgba(0,0,0,0.3); animation: driver-ring-anim 2s infinite ease-in-out;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>
             </div>
             <div style="position:absolute; bottom:-16px; left:50%; transform:translateX(-50%); background:rgba(17,24,39,0.92); color:#fff; font-size:10px; font-weight:800; padding:1px 6px; border-radius:6px; white-space:nowrap; box-shadow:0 2px 5px rgba(0,0,0,0.3); pointer-events:none; border:1px solid rgba(255,255,255,0.25);">
               ${firstName} ${speed && speed > 3 ? `(${Math.round(speed)}km/h)` : ""}
@@ -3321,20 +3477,22 @@ function FreeMapInternal({
         .bindPopup(
           `<div style="font-family:Inter,sans-serif;font-size:12px;padding:6px;min-width:180px">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-              <div style="background:${markerColor};color:#fff;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:16px">🛵</div>
+              <div style="background:${markerColor};color:#fff;width:32px;height:32px;border-radius:50%;display:grid;place-items:center">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>
+              </div>
               <div>
                 <b style="font-size:13px;color:#111827;display:block">${drv.name}</b>
                 <span style="font-size:10.5px;color:#6b7280;font-weight:600">${statusText || (isMoving ? "Em Trânsito" : "Parado")}</span>
               </div>
             </div>
             <div style="background:#f3f4f6;border-radius:8px;padding:8px;font-size:11px;margin-bottom:8px;line-height:1.5">
-              <div>⚡ <b>Velocidade:</b> ${speed && speed > 3 ? `${Math.round(speed)} km/h` : "Parado"}</div>
-              ${batteryLevel != null ? `<div>🔋 <b>Bateria:</b> ${formatBattery(batteryLevel)}</div>` : ""}
-              <div>🕒 <b>Último sinal:</b> ${timeText}</div>
+              <div><b>Velocidade:</b> ${speed && speed > 3 ? `${Math.round(speed)} km/h` : "Parado"}</div>
+              ${batteryLevel != null ? `<div><b>Bateria:</b> ${formatBattery(batteryLevel)}</div>` : ""}
+              <div><b>Último sinal:</b> ${timeText}</div>
             </div>
             ${
               waUrl
-                ? `<a href="${waUrl}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;background:#25d366;color:#fff;font-weight:700;padding:7px;border-radius:8px;text-decoration:none;font-size:11.5px">💬 Chamar no WhatsApp</a>`
+                ? `<a href="${waUrl}" target="_blank" rel="noopener noreferrer" style="display:block;text-align:center;background:#25d366;color:#fff;font-weight:700;padding:7px;border-radius:8px;text-decoration:none;font-size:11.5px">Chamar no WhatsApp</a>`
                 : ""
             }
           </div>`
@@ -3367,7 +3525,7 @@ function FreeMapInternal({
         fillColor: "#111827",
         fillOpacity: 1,
       })
-        .bindTooltip(`🏠 ${STORE_POINT.name}`, { direction: "top", permanent: false })
+        .bindTooltip(STORE_POINT.name, { direction: "top", permanent: false })
         .addTo(instance);
 
       // Camadas de polilinha, entregas e motoboys
@@ -3518,8 +3676,8 @@ function FreeMapInternal({
             `
                 : ""
             }
-            <div style="position:relative; z-index:2; background:linear-gradient(135deg, #ea1d2c, #b91c1c); color:#fff; border-radius:50%; width:38px; height:38px; display:grid; place-items:center; font-size:18px; border:2.5px solid #fff; box-shadow:0 4px 14px rgba(234,29,44,0.5); transform:rotate(${heading !== null ? heading : 0}deg); transition:transform 0.3s ease-out;">
-              🛵
+            <div style="position:relative; z-index:2; background:linear-gradient(135deg, #ea1d2c, #b91c1c); color:#fff; border-radius:50%; width:38px; height:38px; display:grid; place-items:center; border:2.5px solid #fff; box-shadow:0 4px 14px rgba(234,29,44,0.5); transform:rotate(${heading !== null ? heading : 0}deg); transition:transform 0.3s ease-out;">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>
             </div>
             <div style="position:absolute; bottom:-18px; left:50%; transform:translateX(-50%); background:rgba(17,24,39,0.94); color:#fff; font-size:10px; font-weight:800; padding:2px 7px; border-radius:10px; white-space:nowrap; box-shadow:0 3px 8px rgba(0,0,0,0.35); pointer-events:none; border:1px solid rgba(255,255,255,0.25); display:flex; align-items:center; gap:4px; z-index:3;">
               <span style="width:6px; height:6px; border-radius:50%; background:#10b981; display:inline-block; box-shadow:0 0 6px #10b981;"></span>
@@ -3544,16 +3702,18 @@ function FreeMapInternal({
         marker.bindPopup(`
           <div style="font-family:Inter,sans-serif;font-size:12px;padding:6px;min-width:180px">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-              <div style="background:#ea1d2c;color:#fff;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:18px">🛵</div>
+              <div style="background:#ea1d2c;color:#fff;width:34px;height:34px;border-radius:50%;display:grid;place-items:center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>
+              </div>
               <div>
                 <b style="font-size:13px;color:#111827;display:block">${currentDriverName || "Sua Posição"} (Você)</b>
                 <span style="font-size:10.5px;color:#10b981;font-weight:700">● Rastreamento em Tempo Real</span>
               </div>
             </div>
             <div style="background:#f3f4f6;border-radius:8px;padding:8px;font-size:11px;margin-bottom:6px;line-height:1.5">
-              <div>⚡ <b>Velocidade:</b> ${speed !== null && speed > 2 ? `${speed} km/h` : "Parado / Em Espera"}</div>
-              ${heading !== null ? `<div>🧭 <b>Direção:</b> ${heading}°</div>` : ""}
-              ${accuracy !== null ? `<div>📍 <b>Precisão GPS:</b> ±${accuracy}m</div>` : ""}
+              <div><b>Velocidade:</b> ${speed !== null && speed > 2 ? `${speed} km/h` : "Parado / Em Espera"}</div>
+              ${heading !== null ? `<div><b>Direção:</b> ${heading}°</div>` : ""}
+              ${accuracy !== null ? `<div><b>Precisão GPS:</b> ±${accuracy}m</div>` : ""}
             </div>
           </div>
         `);
@@ -3915,7 +4075,7 @@ function NewDeliveryModal({
             </label>
 
             <label style={{ background: "rgba(34,197,94,.08)", borderRadius: "12px", padding: "6px 8px" }}>
-              <span style={{ color: "#16a34a", fontWeight: "800" }}>★ Taxa do Motoboy (R$)</span>
+              <span style={{ color: "#16a34a", fontWeight: "800" }}>Taxa do Motoboy (R$)</span>
               <input
                 value={deliveryFee}
                 onChange={(e) => setDeliveryFee(e.target.value)}
@@ -4154,7 +4314,7 @@ function IfoodConfirmationModal({
               </label>
               {cleanLocalizer.length === 8 && (
                 <span style={{ fontSize: "10px", color: "#16a34a", fontWeight: "700" }}>
-                  ✔ 8 dígitos identificados
+                  8 dígitos identificados
                 </span>
               )}
             </div>
@@ -4772,9 +4932,9 @@ function AdminDriversTab({
     try {
       const updated = await syncTakeatMotoboysToRTDB();
       if (updated && updated.length) {
-        notify(`✅ ${updated.length} motoboy(s) sincronizados com o Takeat!`);
+        notify(`${updated.length} motoboy(s) sincronizados com o Takeat!`);
       } else {
-        notify("⚠️ Nenhum motoboy retornado do Takeat. Verifique a conexão.");
+        notify("Nenhum motoboy retornado do Takeat. Verifique a conexão.");
       }
     } catch {
       notify("Erro ao sincronizar motoboys do Takeat.");
@@ -4797,11 +4957,11 @@ function AdminDriversTab({
           email: email.trim(),
           password: password.trim(),
         });
-        notify("✅ Conectado à Takeat com sucesso! Pedidos ativos no sistema.");
+        notify("Conectado à Takeat com sucesso! Pedidos ativos no sistema.");
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Falha ao autenticar na Takeat";
-      notify(`❌ ${msg}`);
+      notify(msg);
     } finally {
       setConnecting(false);
     }
@@ -4820,11 +4980,11 @@ function AdminDriversTab({
           authMethod: "apikey",
           apiKey: apiKey.trim(),
         });
-        notify("✅ Chave de API Takeat validada e salva no sistema!");
+        notify("Chave de API Takeat validada e salva no sistema!");
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Falha na validação da chave";
-      notify(`❌ ${msg}`);
+      notify(msg);
     } finally {
       setConnecting(false);
     }
@@ -4901,14 +5061,14 @@ function AdminDriversTab({
             className={`takeat-tab-btn ${authMethod === "credentials" ? "active" : ""}`}
             onClick={() => setAuthMethod("credentials")}
           >
-            👤 Conectar por Login e Senha (Recomendado)
+            Conectar por Login e Senha (Recomendado)
           </button>
           <button
             type="button"
             className={`takeat-tab-btn ${authMethod === "apikey" ? "active" : ""}`}
             onClick={() => setAuthMethod("apikey")}
           >
-            🔑 Conectar por Chave de API
+            Conectar por Chave de API
           </button>
         </div>
 
@@ -5031,11 +5191,11 @@ function AdminDriversTab({
         {/* Resumo dos campos capturados */}
         <div style={{ background: "var(--surface-2)", borderRadius: "10px", padding: "10px", fontSize: "10.5px", color: "var(--muted)", lineHeight: "1.5" }}>
           <b style={{ color: "var(--ink)", display: "block", marginBottom: "4px" }}>Campos extraídos automaticamente em tempo real:</b>
-          <div>✔ <b>Cliente & Telefone</b>: com links rápidos para ligar e chamar no WhatsApp</div>
-          <div>✔ <b>Identificador iFood & Código de Coleta</b>: extraído da comanda/pedido Takeat</div>
-          <div>✔ <b>Endereço Completo & GPS</b>: logradouro, número, bairro, cidade, CEP, complemento e latitude/longitude</div>
-          <div>✔ <b>Taxa de Entrega & Valor Total</b>: soma automática na noite e mês do motoboy</div>
-          <div>✔ <b>Itens do Pedido</b>: quantidade, nome do item, complementos e observações</div>
+          <div>• <b>Cliente & Telefone</b>: com links rápidos para ligar e chamar no WhatsApp</div>
+          <div>• <b>Identificador iFood & Código de Coleta</b>: extraído da comanda/pedido Takeat</div>
+          <div>• <b>Endereço Completo & GPS</b>: logradouro, número, bairro, cidade, CEP, complemento e latitude/longitude</div>
+          <div>• <b>Taxa de Entrega & Valor Total</b>: soma automática na noite e mês do motoboy</div>
+          <div>• <b>Itens do Pedido</b>: quantidade, nome do item, complementos e observações</div>
         </div>
       </div>
 

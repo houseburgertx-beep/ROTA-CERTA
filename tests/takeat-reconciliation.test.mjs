@@ -143,3 +143,98 @@ test("calculateFinancialStats calcula faturamento com tolerância a case e drive
   assert.equal(statsStefany.count, 1);
   assert.equal(statsStefany.total, 7.0);
 });
+
+test("sanitizeDeliveryOrder remove prefixo TK- e recupera senha da loja", () => {
+  function sanitizeDeliveryOrder(item) {
+    if (!item || typeof item !== "object") return item;
+    let order = item.order;
+    const pickupCode = item.pickupCode;
+
+    if (pickupCode && typeof pickupCode === "string" && pickupCode.trim()) {
+      const cleanPc = pickupCode.trim().replace(/^#+/, "");
+      if (!order || order.includes("TK-") || (order.replace(/\D/g, "").length >= 7 && cleanPc.length <= 4)) {
+        order = `#${cleanPc}`;
+      }
+    } else if (order && typeof order === "string" && order.includes("TK-")) {
+      order = `#${order.replace(/#?TK-?/i, "").trim()}`;
+    }
+    return { ...item, order };
+  }
+
+  // Caso 1: pedido de loja que veio com #TK-62155127 mas tem senha 9
+  const d1 = sanitizeDeliveryOrder({
+    id: "takeat-62155127",
+    order: "#TK-62155127",
+    pickupCode: "9",
+    customer: "Jackson"
+  });
+  assert.equal(d1.order, "#9");
+
+  // Caso 2: pedido de loja que veio com #TK-62164008 e senha 17
+  const d2 = sanitizeDeliveryOrder({
+    id: "takeat-62164008",
+    order: "#TK-62164008",
+    pickupCode: "17",
+    customer: "Wanderson"
+  });
+  assert.equal(d2.order, "#17");
+
+  // Caso 3: pedido legado com TK- sem pickupCode conhecido
+  const d3 = sanitizeDeliveryOrder({
+    id: "takeat-61426964",
+    order: "#TK-61426964",
+    customer: "Claudio"
+  });
+  assert.equal(d3.order, "#61426964");
+  assert.ok(!d3.order.includes("TK-"));
+
+  // Caso 4: pedido normal sem TK- é preservado intacto
+  const d4 = sanitizeDeliveryOrder({
+    id: "takeat-1",
+    order: "#1",
+    customer: "Mirian"
+  });
+  assert.equal(d4.order, "#1");
+});
+
+test("Formatação de exibição de pedidos de loja e iFood", () => {
+  function formatDisplayOrder(delivery) {
+    const isIfood =
+      delivery.platform === "ifood" ||
+      Boolean(delivery.ifoodLocalizer) ||
+      Boolean(delivery.payment?.toLowerCase().includes("ifood"));
+
+    const cleanOrderNum = (
+      (!isIfood && delivery.pickupCode
+        ? delivery.pickupCode
+        : delivery.order
+      ) || ""
+    )
+      .replace(/#?TK-?/i, "")
+      .replace(/^#+/, "")
+      .trim();
+
+    return cleanOrderNum
+      ? `#${cleanOrderNum}`
+      : delivery.order?.startsWith("#")
+      ? delivery.order
+      : `#${delivery.order}`;
+  }
+
+  // Pedido loja com pickupCode
+  assert.equal(
+    formatDisplayOrder({ platform: "takeat", order: "#TK-62155127", pickupCode: "9" }),
+    "#9"
+  );
+  // Pedido loja sem pickupCode mas com order limpo
+  assert.equal(
+    formatDisplayOrder({ platform: "takeat", order: "#21" }),
+    "#21"
+  );
+  // Pedido iFood com order próprio e pickupCode
+  assert.equal(
+    formatDisplayOrder({ platform: "ifood", order: "#18", pickupCode: "18" }),
+    "#18"
+  );
+});
+

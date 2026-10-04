@@ -103,6 +103,8 @@ export interface Delivery {
     updatedAt?: string;
     heading?: number;
   };
+  driver_latitude?: number;
+  driver_longitude?: number;
 }
 export interface RouteStop { deliveryId:string; position:number; point:GeoPoint }
 export type RoutingProvider = "openrouteservice"|"graphhopper"|"osrm"|"valhalla"|"local";

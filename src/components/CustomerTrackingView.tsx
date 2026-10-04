@@ -1,33 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import {
+  AlertCircle,
+  Bell,
   Bike,
   CheckCircle2,
   Clock,
-  ExternalLink,
+  Home,
   MapPin,
   MessageSquare,
   Navigation,
   Phone,
+  Search,
   ShieldCheck,
   Store,
 } from "lucide-react";
 import { subscribeToDeliveryByIdRTDB } from "../services/realtimeDbService";
+import { getActiveStore } from "../services/storeService";
 import type { Delivery } from "../types";
-
-const STORE_COORDS = {
-  name: "House Burger",
-  phone: "73998001122",
-  displayPhone: "(73) 99800-1122",
-  latitude: -17.5399,
-  longitude: -39.7414,
-};
 
 interface CustomerTrackingViewProps {
   deliveryId: string;
 }
 
 export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) {
+  const activeStore = getActiveStore();
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [loading, setLoading] = useState(true);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -41,66 +38,56 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
       return;
     }
 
-    const unsubscribe = subscribeToDeliveryByIdRTDB(
-      deliveryId,
-      (del) => {
-        setDelivery(del);
-        setLoading(false);
-      },
-      () => {
-        setLoading(false);
-      },
-    );
+    const unsub = subscribeToDeliveryByIdRTDB(deliveryId, (data) => {
+      setDelivery(data);
+      setLoading(false);
+    });
 
-    return () => {
-      unsubscribe?.();
-    };
+    return () => unsub();
   }, [deliveryId]);
 
-  // Inicializa e atualiza o mapa Leaflet dinamicamente
+  // Inicializa e atualiza o mapa Leaflet
   useEffect(() => {
-    if (!mapContainerRef.current || !delivery) return;
+    if (!mapContainerRef.current || !delivery || typeof window === "undefined") return;
 
-    let active = true;
-    void import("leaflet").then((L) => {
-      if (!active || !mapContainerRef.current) return;
+    const L = require("leaflet");
 
-      const destLat = delivery.latitude || STORE_COORDS.latitude;
-      const destLng = delivery.longitude || STORE_COORDS.longitude;
-      const driverLat = delivery.driverLocation?.latitude;
-      const driverLng = delivery.driverLocation?.longitude;
+    const destLat = delivery.latitude || activeStore.latitude;
+    const destLng = delivery.longitude || activeStore.longitude;
+    const driverLat = delivery.driver_latitude ?? delivery.driverLocation?.latitude;
+    const driverLng = delivery.driver_longitude ?? delivery.driverLocation?.longitude;
 
-      if (!mapInstanceRef.current) {
-        const map = L.map(mapContainerRef.current, {
-          zoomControl: false,
-          attributionControl: false,
-        }).setView([destLat, destLng], 15);
+    if (!mapInstanceRef.current) {
+      const map = L.map(mapContainerRef.current, {
+        zoomControl: false,
+        attributionControl: false,
+      }).setView([destLat, destLng], 15);
 
       L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
         maxZoom: 19,
       }).addTo(map);
 
-      // Marcador da Loja (House Burger)
+      // Marcador da Loja
       const storeIcon = L.divIcon({
         className: "custom-map-icon",
-        html: `<div style="background:#e11d48;color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(225,29,72,0.4);border:2px solid #fff;font-size:16px;">🍔</div>`,
+        html: `<div style="background:#e11d48;color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(225,29,72,0.4);border:2px solid #fff;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7"/></svg></div>`,
         iconSize: [34, 34],
         iconAnchor: [17, 17],
       });
-      L.marker([STORE_COORDS.latitude, STORE_COORDS.longitude], { icon: storeIcon })
-        .bindTooltip("<b>House Burger</b><br>Origem do Pedido", { direction: "top" })
+      L.marker([activeStore.latitude, activeStore.longitude], { icon: storeIcon })
+        .bindTooltip(`<b>${activeStore.shortName}</b><br>Origem do Pedido`, { direction: "top" })
         .addTo(map);
 
       // Marcador da Casa do Cliente
       if (delivery.latitude && delivery.longitude) {
         const homeIcon = L.divIcon({
           className: "custom-map-icon",
-          html: `<div style="background:#2563eb;color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(37,99,235,0.4);border:2px solid #fff;font-size:16px;">🏠</div>`,
+          html: `<div style="background:#2563eb;color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(37,99,235,0.4);border:2px solid #fff;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>`,
           iconSize: [34, 34],
           iconAnchor: [17, 17],
         });
         L.marker([destLat, destLng], { icon: homeIcon })
-          .bindTooltip(`<b>Seu Endereço</b><br>${delivery.address}`, { direction: "top" })
+          .bindTooltip(`<b>Endereço de Entrega</b><br>${delivery.address}`, { direction: "top" })
           .addTo(map);
       }
 
@@ -116,8 +103,8 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
         html: `
           <div style="position:relative;width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
             <div style="position:absolute;width:100%;height:100%;border-radius:50%;background:#16a34a;opacity:0.3;animation:pulse-marker 1.5s infinite;"></div>
-            <div style="position:relative;background:#16a34a;color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(22,163,74,0.5);border:2.5px solid #fff;font-size:17px;">
-              🛵
+            <div style="position:relative;background:#16a34a;color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(22,163,74,0.5);border:2.5px solid #fff;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>
             </div>
           </div>
         `,
@@ -127,7 +114,7 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
 
       if (!driverMarkerRef.current) {
         driverMarkerRef.current = L.marker([driverLat, driverLng], { icon: bikeIcon })
-          .bindTooltip(`<b>${delivery.driver || "Motoboy"} a caminho!</b>`, { direction: "top", permanent: true })
+          .bindTooltip(`<b>${delivery.driver || "Entregador"} a caminho</b>`, { direction: "top", permanent: true })
           .addTo(map);
       } else {
         driverMarkerRef.current.setLatLng([driverLat, driverLng]);
@@ -135,37 +122,18 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
 
       // Enquadra a moto e o destino juntos
       const points: Array<[number, number]> = [
-        [STORE_COORDS.latitude, STORE_COORDS.longitude],
+        [activeStore.latitude, activeStore.longitude],
         [driverLat, driverLng],
       ];
       if (delivery.latitude && delivery.longitude) {
         points.push([delivery.latitude, delivery.longitude]);
       }
       try {
-        map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 16 });
-      } catch {}
-    } else if (delivery.latitude && delivery.longitude) {
-      try {
-        map.fitBounds(
-          L.latLngBounds([
-            [STORE_COORDS.latitude, STORE_COORDS.longitude],
-            [destLat, destLng],
-          ]),
-          { padding: [40, 40], maxZoom: 16 },
-        );
-      } catch {}
+        const bounds = L.latLngBounds(points);
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+      } catch (e) {}
     }
-
-      // Força recalcular tamanho da tela em mobile
-      setTimeout(() => {
-        map.invalidateSize();
-      }, 250);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [delivery]);
+  }, [delivery, activeStore]);
 
   // Se estiver carregando
   if (loading) {
@@ -180,15 +148,16 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
 
   // Se não encontrar o pedido
   if (!delivery) {
+    const rawStorePhone = activeStore.phone.replace(/\D/g, "");
     return (
       <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#09090b", color: "#fff", padding: "20px", textAlign: "center", fontFamily: "sans-serif" }}>
-        <div style={{ fontSize: "48px", marginBottom: "16px" }}>🔍</div>
+        <Search size={44} color="#71717a" style={{ marginBottom: "16px" }} />
         <h2 style={{ fontSize: "20px", fontWeight: 800, margin: "0 0 8px 0" }}>Pedido não encontrado</h2>
         <p style={{ color: "#a1a1aa", fontSize: "14px", maxWidth: "340px", lineHeight: 1.5, margin: "0 0 24px 0" }}>
           O link de rastreio pode estar expirado ou o pedido ainda não foi registrado pelo restaurante.
         </p>
         <a
-          href={`https://api.whatsapp.com/send?phone=55${STORE_COORDS.phone}&text=${encodeURIComponent("Olá House Burger! Gostaria de informações sobre meu pedido.")}`}
+          href={`https://api.whatsapp.com/send?phone=55${rawStorePhone}&text=${encodeURIComponent(`Olá ${activeStore.shortName}! Gostaria de informações sobre meu pedido.`)}`}
           target="_blank"
           rel="noopener noreferrer"
           style={{ background: "#25D366", color: "#fff", textDecoration: "none", padding: "12px 20px", borderRadius: "12px", fontWeight: 800, fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}
@@ -203,24 +172,23 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
   const isDelivered = rawStatus === "entregue" || rawStatus === "delivered";
   const isOnRoute = rawStatus === "em rota" || rawStatus === "em_rota" || rawStatus === "on_route";
   const isArrived = rawStatus === "chegou" || rawStatus === "arrived";
-  const isPreparing = !isOnRoute && !isArrived && !isDelivered;
 
   const currentStep = isDelivered ? 4 : isArrived ? 3 : isOnRoute ? 2 : 1;
 
   const statusTitle = isDelivered
-    ? "Pedido Entregue! Bom apetite! 🎉"
+    ? "Pedido Entregue! Bom apetite!"
     : isArrived
-    ? "O Motoboy Chegou no seu Portão! 🔔"
+    ? "O Motoboy Chegou no seu Portão!"
     : isOnRoute
-    ? `A caminho com ${delivery.driver || "nosso entregador"} 🛵`
-    : "Seu House Burger está sendo preparado! 🍔";
+    ? `A caminho com ${delivery.driver || "nosso entregador"}`
+    : `Seu pedido está sendo preparado!`;
 
   const statusSub = isDelivered
     ? "Entrega finalizada com sucesso."
     : isArrived
     ? "O entregador está aguardando você no portão ou interfone."
     : isOnRoute
-    ? "Acompanhe a moto em tempo real se deslocando até o seu endereço."
+    ? "Acompanhe a rota em tempo real se deslocando até o seu endereço."
     : "Em breve o motoboy sairá para entrega.";
 
   const isPaidOnline =
@@ -230,17 +198,19 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
         delivery.payment.toLowerCase().includes("pago") ||
         delivery.payment.toLowerCase().includes("pix")));
 
+  const rawStorePhone = activeStore.phone.replace(/\D/g, "");
+
   return (
     <div style={{ minHeight: "100vh", background: "#09090b", color: "#f4f4f5", fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
       {/* Top Bar da Marca */}
       <header style={{ background: "#18181b", borderBottom: "1px solid #27272a", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 1000 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "linear-gradient(135deg, #e11d48, #f97316)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>
-            🍔
+          <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "linear-gradient(135deg, #e11d48, #f97316)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Store size={20} color="#fff" />
           </div>
           <div>
             <h1 style={{ margin: 0, fontSize: "16px", fontWeight: 900, letterSpacing: "-0.3px", color: "#fff" }}>
-              House Burger
+              {activeStore.name}
             </h1>
             <span style={{ fontSize: "11px", color: "#a1a1aa", fontWeight: 600 }}>
               Rastreamento em Tempo Real
@@ -259,11 +229,11 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
           {isDelivered ? (
             <span style={{ color: "#22c55e", display: "flex" }}><CheckCircle2 size={24} /></span>
           ) : isArrived ? (
-            <span style={{ fontSize: "22px" }}>🔔</span>
+            <span style={{ color: "#3b82f6", display: "flex" }}><Bell size={24} /></span>
           ) : isOnRoute ? (
-            <span style={{ fontSize: "22px" }}>🛵</span>
+            <span style={{ color: "#22c55e", display: "flex" }}><Bike size={24} /></span>
           ) : (
-            <span style={{ fontSize: "22px" }}>👨‍🍳</span>
+            <span style={{ color: "#f59e0b", display: "flex" }}><Clock size={24} /></span>
           )}
           <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 900, color: "#fff", letterSpacing: "-0.4px" }}>
             {statusTitle}
@@ -292,10 +262,10 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
           />
 
           {[
-            { step: 1, label: "Cozinha", icon: "🍳" },
-            { step: 2, label: "Na Rota", icon: "🛵" },
-            { step: 3, label: "No Portão", icon: "🚪" },
-            { step: 4, label: "Entregue", icon: "✓" },
+            { step: 1, label: "Cozinha", icon: <Clock size={13} /> },
+            { step: 2, label: "Na Rota", icon: <Bike size={13} /> },
+            { step: 3, label: "No Portão", icon: <Bell size={13} /> },
+            { step: 4, label: "Entregue", icon: <CheckCircle2 size={13} /> },
           ].map((s) => {
             const isDone = currentStep >= s.step;
             const isCurrent = currentStep === s.step;
@@ -312,8 +282,6 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: "12px",
-                    fontWeight: 900,
                     boxShadow: isCurrent ? "0 0 12px rgba(34,197,94,0.6)" : "none",
                   }}
                 >
@@ -352,12 +320,12 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#27272a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "18px" }}>
-              🏍️
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#27272a", display: "flex", alignItems: "center", justifyContent: "center", color: "#22c55e" }}>
+              <Bike size={20} />
             </div>
             <div>
               <div style={{ fontSize: "13px", fontWeight: 800, color: "#fff" }}>
-                {delivery.driver || "Entregador House Burger"}
+                {delivery.driver || `Entregador ${activeStore.shortName}`}
               </div>
               <div style={{ fontSize: "11px", color: isOnRoute ? "#22c55e" : "#a1a1aa", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
                 <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: isOnRoute ? "#22c55e" : "#71717a", display: "inline-block" }} />
@@ -367,7 +335,7 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
           </div>
 
           <a
-            href={`https://api.whatsapp.com/send?phone=55${STORE_COORDS.phone}&text=${encodeURIComponent(`Olá House Burger! Gostaria de falar sobre meu pedido #${delivery.order}.`)}`}
+            href={`https://api.whatsapp.com/send?phone=55${rawStorePhone}&text=${encodeURIComponent(`Olá ${activeStore.shortName}! Gostaria de falar sobre meu pedido #${delivery.order}.`)}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -408,7 +376,7 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
               </div>
               {delivery.reference && (
                 <div style={{ fontSize: "12px", color: "#e4e4e7", background: "#27272a", padding: "4px 8px", borderRadius: "6px", marginTop: "8px", display: "inline-block" }}>
-                  📍 Ref: {delivery.reference}
+                  Ref: {delivery.reference}
                 </div>
               )}
             </div>
@@ -444,7 +412,7 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
               </div>
             ) : (
               <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#f59e0b", fontSize: "12.5px", fontWeight: 700 }}>
-                ⚠️ Pagamento na entrega • Tenha o valor ou cartão em mãos
+                <AlertCircle size={16} /> Pagamento na entrega • Tenha o valor ou cartão em mãos
               </div>
             )}
           </div>
@@ -453,7 +421,7 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
         {/* Botão de Contato com a Loja */}
         <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
           <a
-            href={`https://api.whatsapp.com/send?phone=55${STORE_COORDS.phone}&text=${encodeURIComponent(`Olá House Burger! Gostaria de falar sobre meu pedido #${delivery.order}.`)}`}
+            href={`https://api.whatsapp.com/send?phone=55${rawStorePhone}&text=${encodeURIComponent(`Olá ${activeStore.shortName}! Gostaria de falar sobre meu pedido #${delivery.order}.`)}`}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -476,7 +444,7 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
           </a>
 
           <a
-            href={`tel:${STORE_COORDS.phone}`}
+            href={`tel:${rawStorePhone}`}
             style={{
               background: "#27272a",
               color: "#f4f4f5",

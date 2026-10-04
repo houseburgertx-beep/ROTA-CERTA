@@ -245,7 +245,7 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 letterSpacing: ".4px",
               }}
             >
-              {isDriver ? "🛵 Espaço Exclusivo do Entregador" : "🏪 Gestão do Restaurante"}
+              {isDriver ? "Espaço Exclusivo do Entregador" : "Gestão do Restaurante"}
             </span>
           </div>
           <p style={{ margin: 0, fontSize: "12px", color: "var(--text)", lineHeight: "1.4" }}>
@@ -354,7 +354,7 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 lineHeight: "1.4",
               }}
             >
-              ⚠️ {error}
+              {error}
             </div>
           )}
 
@@ -385,7 +385,7 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
             {loading ? (
               <span>Conectando ao Firebase…</span>
             ) : (
-              <span>{isDriver ? "Entrar como Motoboy 🛵" : "Entrar no Painel da Loja 🏪"}</span>
+              <span>{isDriver ? "Entrar como Motoboy" : "Entrar no Painel da Loja"}</span>
             )}
           </button>
         </form>
@@ -406,8 +406,8 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
             }}
           >
             {isDriver
-              ? "🏪 É gerente ou dono da loja? Acessar Portal da Loja / ADM →"
-              : "🛵 É entregador / motoboy? Acessar Portal do Motoboy →"}
+              ? "É gerente ou dono da loja? Acessar Portal da Loja / ADM"
+              : "É entregador / motoboy? Acessar Portal do Motoboy"}
           </button>
         </div>
 

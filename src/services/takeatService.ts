@@ -95,6 +95,7 @@ export interface TakeatAssignedDriver {
   buyerName?: string;
   buyerPhone?: string;
   neighborhood?: string;
+  attendancePassword?: string;
 }
 
 export interface TakeatBill {
@@ -549,16 +550,54 @@ export async function fetchTakeatDeliverySessions(options?: {
     console.warn(`[Takeat Raw] #${s.id} (Senha #${s.attendance_password}): status=${s.status}, delivery_by=${s.delivery_by}, driver=${JSON.stringify(s.driver)}, motoboy=${JSON.stringify(s.motoboy)}, waiter=${JSON.stringify(s.bills?.[0]?.waiter)}, details=${s.details}`);
   }
 
-  // Filtra apenas sessões que são de delivery ou possuem endereço de entrega ou taxa de entrega
-  return sessions.filter((s) => {
-    if (s.is_delivery === true || (s as unknown as { is_delivery: number }).is_delivery === 1) return true;
-    if (String(s.table?.table_type || "").toLowerCase() === "delivery") return true;
-    if (s.delivery_by || s.total_delivery_price || s.delivery_tax_price) return true;
-    const hasAddress = s.bills?.some(
-      (b) => b.buyer?.delivery_address?.street || b.buyer?.delivery_address?.neighborhood || b.buyer?.delivery_address?.city
-    );
-    return Boolean(hasAddress);
-  });
+  // Filtra apenas sessões que são de delivery real (rejeita mesas de salão/balcão)
+  return sessions.filter((s) => isTakeatSessionDelivery(s));
+}
+
+/**
+ * Valida se uma sessão ou cesta Takeat é estritamente um pedido de entrega delivery.
+ * Rejeita mesas de salão (table_type === 'table', 'salon', 'balcony' ou cliente 'Mesa X').
+ */
+export function isTakeatSessionDelivery(s: TakeatTableSession | Record<string, unknown>): boolean {
+  if (!s || typeof s !== "object") return false;
+  const raw = s as Record<string, unknown>;
+  const table = (raw.table || {}) as Record<string, unknown>;
+  const tableType = String(table.table_type || raw.table_type || "").toLowerCase();
+  const tableNum = Number(table.table_number || raw.table_number || 0);
+
+  // Rejeita mesas de salão (table_number > 0 e não delivery) ou pedidos de balcão
+  if (tableType === "table" || tableType === "salon" || tableType === "balcony") {
+    return false;
+  }
+  if (tableNum > 0 && tableType !== "delivery") {
+    return false;
+  }
+
+  // Rejeita clientes com nome de mesa
+  const buyer = (raw.buyer || (raw.bills as Array<{ buyer?: { name?: string } }>)?.[0]?.buyer) as { name?: string } | undefined;
+  const buyerName = String(buyer?.name || raw.buyer_name || "").toLowerCase().trim();
+  if (buyerName.startsWith("mesa ") || buyerName === "mesa") {
+    return false;
+  }
+
+  // É delivery se marcado explicitamente
+  if (raw.is_delivery === true || raw.is_delivery === 1) return true;
+  if (tableType === "delivery") return true;
+  if (raw.delivery_by || raw.total_delivery_price || raw.delivery_tax_price) return true;
+
+  // Ou se tiver endereço de entrega com rua
+  const bills = (raw.bills || []) as Array<{ buyer?: { delivery_address?: { street?: string; neighborhood?: string } } }>;
+  const hasRealStreet = bills.some(
+    (b) => Boolean(b.buyer?.delivery_address?.street || b.buyer?.delivery_address?.neighborhood)
+  );
+  if (hasRealStreet) return true;
+
+  const rawAddr = (raw.delivery_address || (raw.buyer as { delivery_address?: { street?: string } })?.delivery_address) as { street?: string } | undefined;
+  if (rawAddr?.street && !rawAddr.street.toLowerCase().includes("endereço takeat")) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -676,6 +715,11 @@ export async function fetchTakeatBaskets(apiKey?: string): Promise<{
       if (sId && motoboy && typeof motoboy === "object" && motoboy.name) {
         const deliveryTax = o.delivery_tax_price != null ? parseFloat(String(o.delivery_tax_price)) : undefined;
         const totalPrice = o.total_price != null ? parseFloat(String(o.total_price)) : undefined;
+        const rawPass = o.attendance_password != null
+          ? String(o.attendance_password).trim()
+          : (o.basket as Record<string, unknown> | undefined)?.attendance_password != null
+          ? String((o.basket as Record<string, unknown>).attendance_password).trim()
+          : undefined;
         map.set(sId, {
           id: Number(motoboy.id),
           name: String(motoboy.name).trim(),
@@ -683,6 +727,7 @@ export async function fetchTakeatBaskets(apiKey?: string): Promise<{
           deliveryFee: deliveryTax && !isNaN(deliveryTax) ? deliveryTax : undefined,
           status: o.status || o.delivery_status ? String(o.status || o.delivery_status) : undefined,
           totalPrice: totalPrice && !isNaN(totalPrice) ? totalPrice : undefined,
+          attendancePassword: rawPass,
         });
       }
     }
@@ -729,6 +774,7 @@ export async function fetchTakeatMotoboySessions(
             if (sId) {
               const deliveryTax = s.delivery_tax_price != null ? parseFloat(String(s.delivery_tax_price)) : undefined;
               const totalPrice = s.total_price != null ? parseFloat(String(s.total_price)) : undefined;
+              const rawPass = s.attendance_password != null ? String(s.attendance_password).trim() : undefined;
               map.set(sId, {
                 id: Number(m.id),
                 name: String(m.name).trim(),
@@ -741,6 +787,7 @@ export async function fetchTakeatMotoboySessions(
                 buyerName: s.buyer_name ? String(s.buyer_name).trim() : undefined,
                 buyerPhone: s.buyer_phone ? String(s.buyer_phone).trim() : undefined,
                 neighborhood: s.neighborhood ? String(s.neighborhood).trim() : undefined,
+                attendancePassword: rawPass,
               });
             }
           }
@@ -1101,18 +1148,26 @@ export function mapTakeatSessionToDelivery(
   const allNotes = `${String(rawSession.notes || "")} ${String(rawSession.client_notes || "")} ${String(rawSession.description || "")} ${String(rawBasket?.details || "")}`.toLowerCase();
   const paymentLower = paymentMethodRaw.toLowerCase();
 
+  // Verifica se o buyer tem telefone do iFood (0800) ou localizer com 6-10 dígitos
+  const buyerIfoodPhone = String(basketBuyer?.ifood_phone || "").trim();
+  const hasIfoodPhone = buyerIfoodPhone.length > 0 && !buyerIfoodPhone.startsWith("0800 705"); // 0800 705 xxx = Takeat/fallback, não iFood real
+  const realIfoodPhone = buyerIfoodPhone.startsWith("0800") && !buyerIfoodPhone.startsWith("0800 705");
+
+  // ÚNICA fonte confiável para identificar iFood: canal de vendas ou localizador numérico do buyer
   const isIfood =
     salesChannel.includes("ifood") ||
     ifoodSalesChannel.includes("ifood") ||
     Boolean(basketLocalizer && /^\d{6,10}$/.test(basketLocalizer)) ||
     paymentLower.includes("ifood") ||
     allNotes.includes("ifood") ||
+    Boolean(realIfoodPhone) ||
     session.bills?.some((b) =>
       b.order_baskets?.some((ob) => String(ob.channel || "").toLowerCase().includes("ifood"))
     ) ||
     session.payments?.some((p) =>
       String(p.payment_method?.name || (p as unknown as Record<string, string>).name || "").toLowerCase().includes("ifood")
     );
+
 
   // Extração precisa do Localizador iFood (8 dígitos, ex: "75523066")
   let ifoodLocalizer: string | undefined = undefined;
@@ -1156,11 +1211,37 @@ export function mapTakeatSessionToDelivery(
   // Código de pedido na plataforma (ex: "2864" para iFood #2864)
   const rawBasketSub = rawBasket?.basket as { basket_id?: string; ifood_id?: string } | undefined;
   const basketId = rawBasketSub?.basket_id || session.bills?.[0]?.order_baskets?.[0]?.basket_id;
-  const ifoodId =
-    basketId ||
-    (isIfood && session.attendance_password ? String(session.attendance_password) : undefined);
+  const ifoodId = isIfood ? basketId : undefined;
 
-  const pickupCode = session.attendance_password || undefined;
+  // Senha de atendimento / número do pedido sequencial da Takeat (loja ou iFood)
+  const rawAttPass =
+    session.attendance_password ||
+    assignedMotoboy?.attendancePassword ||
+    (rawBasket?.attendance_password as string | number) ||
+    (rawSession.attendance_password as string | number);
+  const attendancePassword =
+    rawAttPass != null && String(rawAttPass).trim() !== ""
+      ? String(rawAttPass).trim().replace(/^#+/, "")
+      : undefined;
+
+  // Código de retirada / senha da loja:
+  const pickupCode = attendancePassword || undefined;
+
+  // Identificador visual do pedido:
+  // 1. Senha / número sequencial da loja/cozinha (ex: #9, #17, #21)
+  // 2. ID do iFood se disponível
+  // 3. Localizador iFood
+  // 4. ID da sessão sem letras estranhas (ex: #62155127 em vez de #TK-62155127)
+  let cleanOrderNumber = "";
+  if (attendancePassword) {
+    cleanOrderNumber = `#${attendancePassword}`;
+  } else if (ifoodId) {
+    cleanOrderNumber = `#${ifoodId}`;
+  } else if (ifoodLocalizer) {
+    cleanOrderNumber = `#${ifoodLocalizer}`;
+  } else {
+    cleanOrderNumber = `#${session.id}`;
+  }
 
   // Preço e taxa: VALOR TOTAL DEVE INCLUIR A TAXA DE ENTREGA (total_delivery_price na Takeat)
   const rawDeliveryTax = parseFloat(
@@ -1265,7 +1346,7 @@ export function mapTakeatSessionToDelivery(
 
   const delivery: Delivery = {
     id: `takeat-${session.id}`,
-    order: pickupCode ? `#${pickupCode}` : `#TK-${session.id}`,
+    order: cleanOrderNumber,
     customer,
     phone,
     address: formattedAddress,
@@ -1322,17 +1403,20 @@ export function mapTakeatSessionToDelivery(
  * Sincroniza entregas da Takeat com a lista existente de entregas,
  * mesclando novos pedidos e atualizando status sem sobrescrever atribuições manuais.
  */
-export async function syncTakeatDeliveries(
-  existingDeliveries: Delivery[],
-  driversList: Driver[] = []
-): Promise<{
+export interface SyncTakeatDeliveriesResult {
   deliveries: Delivery[];
   addedCount: number;
   updatedCount: number;
   newDeliveries: Delivery[];
+  updatedDeliveries: Delivery[];
   /** IDs das entregas cujo motoboy foi atribuído/trocado nesta rodada */
   dispatchedDeliveryIds: string[];
-}> {
+}
+
+export async function syncTakeatDeliveries(
+  existingDeliveries: Delivery[],
+  driversList: Driver[] = []
+): Promise<SyncTakeatDeliveriesResult> {
   // Busca em paralelo sessões da API pública e os motoboys atribuídos da API PDV / Gestor
   const [sessionsRes, basketsRes, motoboySessionsRes] = await Promise.allSettled([
     fetchTakeatDeliverySessions(),
@@ -1367,14 +1451,18 @@ export async function syncTakeatDeliveries(
   }
 
   if (sessions.length === 0 && assignedMotoboyMap.size === 0 && basketsOrders.length === 0) {
-    return { deliveries: existingDeliveries, addedCount: 0, updatedCount: 0, newDeliveries: [], dispatchedDeliveryIds: [] };
+    return { deliveries: existingDeliveries, addedCount: 0, updatedCount: 0, newDeliveries: [], updatedDeliveries: [], dispatchedDeliveryIds: [] };
   }
 
   const isReliablePlatformId = (id?: string) =>
     Boolean(id && id.length > 6 && !/^#?\d{1,4}$/.test(id));
 
+  const safeExistingDeliveries = (existingDeliveries || []).filter(
+    (d): d is Delivery => Boolean(d && typeof d === "object" && d.id && typeof d.id === "string")
+  );
+
   const existingMap = new Map<string, Delivery>();
-  for (const d of existingDeliveries) {
+  for (const d of safeExistingDeliveries) {
     existingMap.set(d.id, d);
     if (isReliablePlatformId(d.platformOrderId)) {
       existingMap.set(d.platformOrderId!, d);
@@ -1385,7 +1473,14 @@ export async function syncTakeatDeliveries(
   let updatedCount = 0;
   const dispatchedDeliveryIds: string[] = [];
   const newDeliveries: Delivery[] = [];
-  const result: Delivery[] = [...existingDeliveries];
+  const updatedDeliveries: Delivery[] = [];
+  const result: Delivery[] = [...safeExistingDeliveries];
+
+  const markUpdated = (del: Delivery) => {
+    if (!updatedDeliveries.some((d) => d.id === del.id)) {
+      updatedDeliveries.push(del);
+    }
+  };
 
   // 1. Processa sessões do histórico / API pública
   for (const session of sessions) {
@@ -1428,13 +1523,12 @@ export async function syncTakeatDeliveries(
             current.driver.toLowerCase().includes("aguardando") ||
             current.driver.toLowerCase() === "merchant")
         ) {
-          // Detecta se um motoboy acabou de ser despachado (driver era genérico, agora tem nome real)
           const wasWaiting =
             !current.driver ||
             current.driver.toLowerCase().includes("aguardando") ||
             current.driver.toLowerCase().includes("sem motoboy") ||
             current.driver.toLowerCase() === "merchant";
-          if (wasWaiting) {
+          if (!dispatchedDeliveryIds.includes(current.id)) {
             dispatchedDeliveryIds.push(current.id);
           }
           current.driver = mapped.driver;
@@ -1444,6 +1538,20 @@ export async function syncTakeatDeliveries(
           if (wasWaiting && (current.status === "Aguardando" || current.status === "Pronta para sair")) {
             current.status = "Em rota";
           }
+          changed = true;
+        }
+
+        // Atualiza número do pedido se o atual contiver prefixo 'TK-' ou se houver um order mais limpo
+        if (
+          mapped.order &&
+          (current.order?.includes("TK-") ||
+            (mapped.pickupCode && current.order !== mapped.order && current.order.replace(/\D/g, "").length >= 7))
+        ) {
+          current.order = mapped.order;
+          changed = true;
+        }
+        if (mapped.pickupCode && mapped.pickupCode !== current.pickupCode) {
+          current.pickupCode = mapped.pickupCode;
           changed = true;
         }
 
@@ -1499,6 +1607,7 @@ export async function syncTakeatDeliveries(
         if (changed) {
           result[idx] = { ...current };
           updatedCount++;
+          markUpdated(result[idx]);
         }
       }
     } else {
@@ -1515,12 +1624,7 @@ export async function syncTakeatDeliveries(
   for (const bOrder of basketsOrders) {
     const sId = Number(bOrder.session_id || bOrder.table_session_id);
     if (!sId || processedSessionIds.has(sId)) continue;
-
-    const isDelivery =
-      bOrder.delivery_tax_price ||
-      bOrder.total_delivery_price ||
-      (bOrder.table as { table_type?: string })?.table_type === "delivery";
-    if (!isDelivery) continue;
+    if (!isTakeatSessionDelivery(bOrder as unknown as TakeatTableSession)) continue;
 
     const synthSession: TakeatTableSession = {
       id: sId,
@@ -1530,7 +1634,7 @@ export async function syncTakeatDeliveries(
       total_delivery_price: String(bOrder.total_delivery_price || bOrder.total_price || "0"),
       delivery_tax_price: String(bOrder.delivery_tax_price || "7.00"),
       attendance_password: bOrder.attendance_password != null ? String(bOrder.attendance_password) : null,
-      start_time: (bOrder.start_time || bOrder.created_at || new Date().toISOString()) as string,
+      start_time: (bOrder.start_time || bOrder.created_at || (bOrder.basket as Record<string, unknown> | undefined)?.start_time || new Date().toISOString()) as string,
       details: (bOrder.details || "") as string,
     };
     const assignedMotoboy = assignedMotoboyMap.get(sId);
@@ -1560,13 +1664,28 @@ export async function syncTakeatDeliveries(
             current.driver.toLowerCase().includes("aguardando") ||
             current.driver.toLowerCase().includes("sem motoboy") ||
             current.driver.toLowerCase() === "merchant";
-          if (wasWaiting) dispatchedDeliveryIds.push(current.id);
+          if (!dispatchedDeliveryIds.includes(current.id)) {
+            dispatchedDeliveryIds.push(current.id);
+          }
           current.driver = mapped.driver;
           current.driverId = mapped.driverId;
           if (mapped.driverPhone) current.driverPhone = mapped.driverPhone;
           if (wasWaiting && (current.status === "Aguardando" || current.status === "Pronta para sair")) {
             current.status = "Em rota";
           }
+          changed = true;
+        }
+        // Atualiza número do pedido se o atual contiver prefixo 'TK-' ou se houver um order mais limpo
+        if (
+          mapped.order &&
+          (current.order?.includes("TK-") ||
+            (mapped.pickupCode && current.order !== mapped.order && current.order.replace(/\D/g, "").length >= 7))
+        ) {
+          current.order = mapped.order;
+          changed = true;
+        }
+        if (mapped.pickupCode && mapped.pickupCode !== current.pickupCode) {
+          current.pickupCode = mapped.pickupCode;
           changed = true;
         }
         if (mapped.deliveryFee > 0 && Math.abs((current.deliveryFee || 0) - mapped.deliveryFee) > 0.01) {
@@ -1580,6 +1699,7 @@ export async function syncTakeatDeliveries(
         if (changed) {
           result[idx] = { ...current };
           updatedCount++;
+          markUpdated(result[idx]);
         }
       }
     } else {
@@ -1594,6 +1714,7 @@ export async function syncTakeatDeliveries(
   // 3. Reconciliação direta de todos os pedidos existentes com o mapa oficial de motoboys do Takeat
   for (let idx = 0; idx < result.length; idx++) {
     const current = result[idx];
+    if (!current || !current.id || typeof current.id !== "string") continue;
     let sessionId: number | undefined;
 
     if (current.id.startsWith("takeat-")) {
@@ -1602,7 +1723,7 @@ export async function syncTakeatDeliveries(
     }
 
     if (!sessionId && current.source === "takeat" && current.platformOrderId) {
-      const parsed = Number(current.platformOrderId.replace(/\D/g, ""));
+      const parsed = Number(String(current.platformOrderId).replace(/\D/g, ""));
       if (!isNaN(parsed) && parsed > 0) sessionId = parsed;
     }
 
@@ -1629,7 +1750,7 @@ export async function syncTakeatDeliveries(
             current.driver.toLowerCase().includes("aguardando") ||
             current.driver.toLowerCase().includes("sem motoboy") ||
             current.driver.toLowerCase() === "merchant";
-          if (wasWaiting && !dispatchedDeliveryIds.includes(current.id)) {
+          if (!dispatchedDeliveryIds.includes(current.id)) {
             dispatchedDeliveryIds.push(current.id);
           }
           current.driver = matched.driverName;
@@ -1639,6 +1760,18 @@ export async function syncTakeatDeliveries(
           if (wasWaiting && (current.status === "Aguardando" || current.status === "Pronta para sair")) {
             current.status = "Em rota";
           }
+          changed = true;
+        }
+      }
+
+      // Se o Takeat tiver senha de atendimento e o pedido atual estiver sem senha ou com TK-
+      if (assigned.attendancePassword) {
+        if (current.order?.includes("TK-") || (current.order.replace(/\D/g, "").length >= 7 && !current.ifoodLocalizer)) {
+          current.order = `#${assigned.attendancePassword}`;
+          changed = true;
+        }
+        if (!current.pickupCode || current.pickupCode !== assigned.attendancePassword) {
+          current.pickupCode = assigned.attendancePassword;
           changed = true;
         }
       }
@@ -1669,6 +1802,7 @@ export async function syncTakeatDeliveries(
       if (changed) {
         result[idx] = { ...current };
         updatedCount++;
+        markUpdated(result[idx]);
       }
     }
   }
@@ -1679,9 +1813,12 @@ export async function syncTakeatDeliveries(
     if (!existingMap.has(takeatId)) {
       const matched = matchTakeatDriver(assigned, driversList);
       const isFinished = assigned.status === "finished" || assigned.status === "completed";
+      const synthOrder = assigned.attendancePassword
+        ? `#${assigned.attendancePassword}`
+        : `#${sId}`;
       const synthDelivery: Delivery = {
         id: takeatId,
-        order: `#TK-${sId}`,
+        order: synthOrder,
         customer: assigned.buyerName || "Cliente Takeat",
         phone: assigned.buyerPhone || "",
         address: assigned.neighborhood ? `Bairro ${assigned.neighborhood}` : "Endereço Takeat",
@@ -1692,6 +1829,7 @@ export async function syncTakeatDeliveries(
         deliveryFee: assigned.deliveryFee || 7.0,
         payment: "Takeat Delivery",
         platform: "takeat",
+        pickupCode: assigned.attendancePassword || undefined,
         priority: "Normal",
         status: isFinished ? "Entregue" : "Em rota",
         driver: matched.driverName,
@@ -1730,7 +1868,15 @@ export async function syncTakeatDeliveries(
     } catch {}
   }
 
-  return { deliveries: result, addedCount, updatedCount, newDeliveries, dispatchedDeliveryIds };
+  const cleanResult = result.filter((d) => {
+    const cust = (d.customer || "").toLowerCase().trim();
+    const addr = (d.address || "").toLowerCase().trim();
+    if (cust.startsWith("mesa ") || cust === "mesa") return false;
+    if (addr === "endereço takeat, s/n" && (d.customer === "Cliente Takeat" || cust.startsWith("mesa"))) return false;
+    return true;
+  });
+
+  return { deliveries: cleanResult, addedCount, updatedCount, newDeliveries, updatedDeliveries, dispatchedDeliveryIds };
 }
 
 /**
