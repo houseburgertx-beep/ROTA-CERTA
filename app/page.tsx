@@ -63,7 +63,7 @@ import {
   optimizeDeliverySequence,
 } from "../src/services/routingService";
 import { MAP_TILE_PROVIDERS, type MapTileProvider } from "../src/services/mapProviders";
-import type { Delivery, DeliveryPriority, DeliveryStatus, Driver, GeoPoint, OrderItem, RouteResult, User } from "../src/types";
+import type { Delivery, DeliveryPriority, DeliveryStatus, Driver, GeoPoint, OrderItem, RouteResult, Shift, ShiftSwapRequest, User } from "../src/types";
 import { useAuth } from "../src/hooks/useAuth";
 import { getStoredUser, signOut } from "../src/services/authService";
 import { firebaseConfigured } from "../src/services/firebase";
@@ -140,7 +140,26 @@ import {
 import { getActiveStore, getStoreCacheKey, type StoreConfig } from "../src/services/storeService";
 import type { DeliveryRecord, DeliveryRecordStatus } from "../src/types/delivery";
 import { LoginView } from "../src/components/LoginView";
-import { playIfoodNotificationSound, unlockAudioOnFirstGesture } from "../src/services/soundService";
+import {
+  playIfoodNotificationSound,
+  playShiftReminderSound,
+  triggerShiftWebNotification,
+  unlockAudioOnFirstGesture,
+} from "../src/services/soundService";
+import { ShiftManagementView } from "../src/components/ShiftManagementView";
+import {
+  subscribeToShifts,
+  subscribeToShiftSwaps,
+  saveShift,
+  deleteShift,
+  checkInShift,
+  requestShiftSwap,
+  respondToShiftSwap,
+  approveShiftSwapAdmin,
+  replicateWeekShifts,
+  loadStoredShifts,
+  loadStoredSwaps,
+} from "../src/services/shiftService";
 
 type Status = DeliveryStatus;
 
@@ -298,10 +317,13 @@ function MobileDeliveryApp({
   onLogout: () => void;
   demoMode: boolean;
 }) {
+  const activeStoreConfig = useMemo(() => getActiveStore(), []);
   const isStore = currentUser.role === "admin";
   const [appMode, setAppMode] = useState<"motoboy" | "adm">(isStore ? "adm" : "motoboy");
-  const [activeTab, setActiveTab] = useState<"entregas" | "mapa" | "comanda" | "financeiro" | "adm" | "config">("entregas");
+  const [activeTab, setActiveTab] = useState<"entregas" | "mapa" | "comanda" | "escala" | "financeiro" | "adm" | "config">("entregas");
   const [drivers, setDrivers] = useState<Driver[]>(() => loadStoredDrivers());
+  const [shifts, setShifts] = useState<Shift[]>(() => loadStoredShifts());
+  const [swaps, setSwaps] = useState<ShiftSwapRequest[]>(() => loadStoredSwaps());
   const [selectedDriverId, setSelectedDriverId] = useState<string>(() => {
     const list = loadStoredDrivers();
     if (currentUser.role === "driver") {
@@ -465,6 +487,12 @@ function MobileDeliveryApp({
     const unsubDrivers = subscribeToDriversRTDB((list) => {
       setDrivers(list);
     });
+    const unsubShifts = subscribeToShifts((list) => {
+      setShifts(list);
+    });
+    const unsubSwaps = subscribeToShiftSwaps((list) => {
+      setSwaps(list);
+    });
     const unsubTakeat = subscribeToTakeatConfigRTDB((cfg) => {
       if (cfg && (cfg.apiKey || (cfg.email && cfg.password))) {
         setTakeatCredentials(cfg);
@@ -476,9 +504,52 @@ function MobileDeliveryApp({
     return () => {
       unsubDeliveries();
       unsubDrivers();
+      unsubShifts();
+      unsubSwaps();
       unsubTakeat();
     };
   }, []);
+
+  // Lembrete inteligente de início de plantão com alerta sonoro e notificação web nativa
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const notifiedKey = `rotacerta_notified_shift_${new Date().toISOString().slice(0, 10)}`;
+
+    const checkShiftReminder = () => {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const myTodayShift = shifts.find(
+        (s) =>
+          s.date === todayStr &&
+          (s.driverId === currentUser.id ||
+            (s.driverName && s.driverName.toLowerCase() === currentUser.name.toLowerCase()))
+      );
+
+      if (!myTodayShift || myTodayShift.status === "confirmado") return;
+
+      const alreadyNotified = sessionStorage.getItem(notifiedKey);
+      if (alreadyNotified === myTodayShift.id) return;
+
+      const [sh, sm] = myTodayShift.startTime.split(":").map(Number);
+      const now = new Date();
+      const shiftStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), sh, sm, 0);
+      const diffMinutes = Math.round((shiftStart.getTime() - now.getTime()) / (1000 * 60));
+
+      if (diffMinutes > 0 && diffMinutes <= 60) {
+        sessionStorage.setItem(notifiedKey, myTodayShift.id);
+        void playShiftReminderSound();
+        void triggerShiftWebNotification(
+          `Lembrete de Plantão 🛵 (${activeStoreConfig.shortName})`,
+          `Seu plantão começa em ${diffMinutes} min (às ${myTodayShift.startTime}). Toque para confirmar presença!`,
+          () => setActiveTab("escala")
+        );
+        notify(`⏰ Lembrete: Seu plantão começa em ${diffMinutes} min (${myTodayShift.startTime})!`);
+      }
+    };
+
+    checkShiftReminder();
+    const interval = setInterval(checkShiftReminder, 60000);
+    return () => clearInterval(interval);
+  }, [shifts, currentUser, activeStoreConfig.shortName]);
 
   // Se o dispositivo tiver credenciais locais (da loja), replica para o RTDB na nuvem
   useEffect(() => {
@@ -681,8 +752,6 @@ function MobileDeliveryApp({
     } catch {}
   }, [deliveries]);
 
-  const activeStoreConfig = useMemo(() => getActiveStore(), []);
-
   useEffect(() => {
     if (typeof document !== "undefined") {
       document.title = `${activeStoreConfig.name} — Rota Certa`;
@@ -713,6 +782,28 @@ function MobileDeliveryApp({
     }
     return drivers.find((d) => d.id === selectedDriverId) || drivers[0];
   }, [drivers, selectedDriverId, currentUser, activeStoreConfig]);
+
+  const pendingSwapsBadgeCount = useMemo(() => {
+    if (currentUser.role === "admin") {
+      return swaps.filter((sw) => sw.status === "pendente").length;
+    }
+    return swaps.filter(
+      (sw) =>
+        sw.status === "pendente" &&
+        sw.requestingDriverId !== currentUser.id &&
+        (!sw.targetDriverId || sw.targetDriverId === currentUser.id || sw.targetDriverId === "all")
+    ).length;
+  }, [swaps, currentUser]);
+
+  const todayDriverShift = useMemo(() => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    return shifts.find(
+      (s) =>
+        s.date === todayStr &&
+        (s.driverId === currentUser.id ||
+          (s.driverName && s.driverName.toLowerCase() === currentUser.name.toLowerCase()))
+    );
+  }, [shifts, currentUser]);
 
   // Função ESTRITA: O pedido pertence a este motoboy?
   const isDeliveryForThisDriver = (d: Delivery): boolean => {
@@ -1399,6 +1490,28 @@ function MobileDeliveryApp({
                 </div>
               </div>
 
+              {/* Lembrete de Presença / Check-in de Plantão do Dia */}
+              {todayDriverShift && todayDriverShift.status !== "confirmado" && (
+                <div className="shift-alert-strip">
+                  <div className="sas-left">
+                    <Calendar size={16} />
+                    <span>
+                      Você tem plantão hoje às <strong>{todayDriverShift.startTime}</strong> ({activeStoreConfig.shortName})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="sas-btn-checkin"
+                    onClick={async () => {
+                      await checkInShift(todayDriverShift.id);
+                      notify("Presença confirmada no plantão! Bom trabalho! 🛵");
+                    }}
+                  >
+                    <UserCheck size={14} /> Fazer Check-in
+                  </button>
+                </div>
+              )}
+
               {/* Motoboy selector in Motoboy mode (apenas quando ADM estiver pré-visualizando) */}
               {appMode === "motoboy" && currentUser.role === "admin" && drivers.length > 1 && (
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", overflowX: "auto", paddingBottom: "4px" }}>
@@ -1891,6 +2004,43 @@ function MobileDeliveryApp({
             </div>
           )}
 
+          {/* TAB ESCALA: PLANTÕES, TROCAS E LEMBRETES */}
+          {activeTab === "escala" && (
+            <ShiftManagementView
+              currentUser={currentUser}
+              drivers={drivers}
+              shifts={shifts}
+              swaps={swaps}
+              onSaveShift={saveShift}
+              onDeleteShift={deleteShift}
+              onCheckInShift={checkInShift}
+              onRequestSwap={async (params) => {
+                await requestShiftSwap({
+                  shift: params.shift,
+                  requestingDriver: { id: currentUser.id, name: currentUser.name },
+                  targetDriver: params.targetDriverId ? { id: params.targetDriverId, name: params.targetDriverName || "" } : undefined,
+                  reason: params.reason,
+                });
+              }}
+              onRespondSwap={async (swap, accept) => {
+                await respondToShiftSwap({
+                  swap,
+                  accepted: accept,
+                  responder: { id: currentUser.id, name: currentUser.name, phone: currentUser.phone },
+                });
+              }}
+              onApproveSwapAdmin={async (swap) => {
+                await approveShiftSwapAdmin({ swap, responderPhone: currentUser.phone });
+              }}
+              onReplicateWeek={async (targetMonday) => {
+                await replicateWeekShifts(shifts, targetMonday);
+              }}
+              onNotify={notify}
+              currentStoreName={activeStoreConfig.name}
+              currentStoreId={activeStoreConfig.id}
+            />
+          )}
+
           {/* TAB 4: FINANCEIRO (NOITE E MÊS) */}
           {activeTab === "financeiro" && (
             <FinancialTab
@@ -1983,14 +2133,19 @@ function MobileDeliveryApp({
 
         <button
           type="button"
-          className={activeTab === "comanda" ? "active" : ""}
-          onClick={() => setActiveTab("comanda")}
-          title="Ler comanda pela foto"
+          className={activeTab === "escala" ? "active" : ""}
+          onClick={() => setActiveTab("escala")}
+          title="Escala semanal de motoboys e trocas"
         >
           <div className="nav-icon-container">
-            <Camera size={20} />
+            <Calendar size={20} />
+            {pendingSwapsBadgeCount > 0 && (
+              <span className="nav-badge-pill" style={{ background: "#f59e0b" }}>
+                {pendingSwapsBadgeCount}
+              </span>
+            )}
           </div>
-          <span>Comanda</span>
+          <span>Escala</span>
         </button>
 
         <button
@@ -2005,7 +2160,19 @@ function MobileDeliveryApp({
           <span>{currentUser.role === "driver" ? "Ganhos" : "Financeiro"}</span>
         </button>
 
-        {currentUser.role === "admin" && (
+        {currentUser.role === "driver" ? (
+          <button
+            type="button"
+            className={activeTab === "comanda" ? "active" : ""}
+            onClick={() => setActiveTab("comanda")}
+            title="Ler comanda pela foto"
+          >
+            <div className="nav-icon-container">
+              <Camera size={20} />
+            </div>
+            <span>Comanda</span>
+          </button>
+        ) : (
           <button
             type="button"
             className={activeTab === "adm" || activeTab === "config" ? "active" : ""}

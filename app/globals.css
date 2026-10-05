@@ -1467,4 +1467,768 @@ body.text-scale-large,
   }
 }
 
+/* ========================================================= */
+/* MÓDULO DE ESCALA DE MOTOBOY & TROCA DE PLANTÃO            */
+/* ========================================================= */
+
+.shift-view-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 24px;
+}
+
+/* 1. Sub-navegação do Módulo */
+.shift-nav-header {
+  display: flex;
+  background: var(--card-bg, #1e222d);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.shift-nav-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted, #94a3b8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.shift-nav-btn.active {
+  background: var(--primary, #ea1d2c);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(234, 29, 44, 0.3);
+}
+
+.shift-nav-badge {
+  background: #f59e0b;
+  color: #000;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 99px;
+  margin-left: 2px;
+}
+
+.shift-pulse-dot {
+  width: 6px;
+  height: 6px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: pulse-dot 1.5s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(1.5); }
+}
+
+/* 2. Banner de Plantão Hoje */
+.shift-today-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.08));
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 14px;
+  padding: 14px 16px;
+  gap: 12px;
+}
+
+.stb-tag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #10b981;
+  letter-spacing: 0.5px;
+}
+
+.stb-time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--foreground, #f8fafc);
+  margin: 2px 0;
+}
+
+.stb-store {
+  font-size: 11px;
+  color: var(--muted, #94a3b8);
+}
+
+.stb-checkin-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  transition: transform 0.1s ease;
+}
+
+.stb-checkin-btn:active {
+  transform: scale(0.97);
+}
+
+.stb-confirmed {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+  padding: 6px 12px;
+  border-radius: 8px;
+}
+
+/* 3. Seletor de Semana */
+.shift-week-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card-bg, #1e222d);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+
+.sws-nav-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  color: var(--foreground, #f8fafc);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sws-label {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--foreground, #f8fafc);
+}
+
+.sws-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sws-btn-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--primary, #ea1d2c);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sws-btn-rep, .sws-btn-wpp {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  color: var(--foreground, #f8fafc);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sws-btn-wpp {
+  color: #25d366;
+}
+
+/* 4. Grade Semanal (Segunda a Domingo) */
+.shift-week-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shift-day-col {
+  background: var(--card-bg, #1e222d);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.shift-day-col.is-today {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.sdc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  margin-bottom: 8px;
+}
+
+.sdc-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--foreground, #f8fafc);
+}
+
+.shift-day-col.is-today .sdc-title {
+  color: #10b981;
+}
+
+.sdc-count {
+  font-size: 11px;
+  color: var(--muted, #94a3b8);
+}
+
+.sdc-shifts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sdc-empty {
+  font-size: 11px;
+  color: var(--muted, #64748b);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.sdc-shift-pill {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 10px;
+  flex: 1 1 calc(50% - 6px);
+  min-width: 140px;
+}
+
+.ssp-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ssp-driver {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--foreground, #f8fafc);
+}
+
+.ssp-delete {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 2px;
+  opacity: 0.6;
+}
+
+.ssp-delete:hover {
+  opacity: 1;
+}
+
+.ssp-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--muted, #94a3b8);
+}
+
+.ssp-status.confirmado {
+  color: #10b981;
+  font-weight: 700;
+}
+
+/* 5. Cards de Plantão (Minha Escala) */
+.shift-my-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.shift-section-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--foreground, #f8fafc);
+  margin: 0;
+}
+
+.shift-cards-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shift-card {
+  background: var(--card-bg, #1e222d);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shift-card.is-today {
+  border-color: #10b981;
+  box-shadow: 0 2px 12px rgba(16, 185, 129, 0.15);
+}
+
+.shift-card.is-past {
+  opacity: 0.6;
+}
+
+.sc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sc-date {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--foreground, #f8fafc);
+}
+
+.sc-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.sc-badge.confirmado {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.sc-badge.agendado {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.sc-time-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground, #cbd5e1);
+}
+
+.sc-type-pill {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.sc-notes {
+  font-size: 11px;
+  color: var(--muted, #94a3b8);
+  font-style: italic;
+}
+
+.sc-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sc-btn-checkin {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sc-btn-swap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  color: var(--foreground, #f8fafc);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* 6. Alertas e Trocas */
+.shift-alert-box {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sab-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f59e0b;
+}
+
+.sab-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sab-item {
+  background: var(--card-bg, #1e222d);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sab-desc {
+  font-size: 12px;
+  color: var(--foreground, #f8fafc);
+  line-height: 1.4;
+}
+
+.sab-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.sab-btn-accept {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sab-btn-reject {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  padding: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* 7. Lista de Trocas (Aba Trocas) */
+.swaps-cards-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.swap-card {
+  background: var(--card-bg, #1e222d);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.swap-card.pendente {
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.swap-card.aprovada {
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.swc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.swc-driver {
+  font-size: 13px;
+  color: var(--foreground, #f8fafc);
+}
+
+.swc-status-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.swc-status-badge.pendente {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.swc-status-badge.aprovada {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.swc-status-badge.aceita {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.swc-body {
+  font-size: 12px;
+  color: var(--muted, #cbd5e1);
+}
+
+.swc-reason {
+  margin-top: 4px;
+  font-style: italic;
+  font-size: 11px;
+}
+
+.swc-footer {
+  margin-top: 4px;
+}
+
+.swc-action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.swc-btn-admin-approve {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* 8. Modais de Escala */
+.shift-modal {
+  max-width: 480px;
+  width: 90%;
+}
+
+.shift-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.shift-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #94a3b8);
+}
+
+.shift-form input, .shift-form select, .shift-form textarea {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  color: var(--foreground, #f8fafc);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+}
+
+.shift-presets-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #94a3b8);
+}
+
+.presets-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.preset-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  color: var(--foreground, #cbd5e1);
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.preset-btn.active {
+  background: var(--primary, #ea1d2c);
+  color: #fff;
+  border-color: var(--primary, #ea1d2c);
+}
+
+.swap-modal-summary {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--foreground, #f8fafc);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.wpp-text-preview textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+  color: var(--foreground, #f8fafc);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.btn-whatsapp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #25d366;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-copy {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+  color: var(--foreground, #f8fafc);
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* 9. Faixa de Alerta no Topo da Lista de Entregas */
+.shift-alert-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.1));
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+
+.sas-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #10b981;
+}
+
+.sas-btn-checkin {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #10b981;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+
 

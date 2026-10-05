@@ -135,3 +135,46 @@ export interface DriverEarningsSummary {
   monthCount: number;
 }
 
+export type ShiftType = "almoco" | "jantar" | "integral" | "personalizado";
+export type ShiftStatus = "agendado" | "confirmado" | "em_andamento" | "concluido" | "falta" | "trocado";
+export type ShiftSwapStatus = "pendente" | "aceita" | "recusada" | "aprovada" | "cancelada";
+
+export interface Shift {
+  id: string;
+  driverId: string;
+  driverName: string;
+  driverPhone?: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // "18:00"
+  endTime: string; // "23:30"
+  shiftType: ShiftType;
+  storeId: string; // "houseburger" | "foodpark"
+  status: ShiftStatus;
+  checkedInAt?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ShiftSwapRequest {
+  id: string;
+  shiftId: string;
+  requestingDriverId: string;
+  requestingDriverName: string;
+  targetDriverId?: string; // específico ou undefined/"all" para qualquer um
+  targetDriverName?: string;
+  shiftDate: string;
+  shiftTime: string;
+  shiftType: ShiftType;
+  storeId: string;
+  status: ShiftSwapStatus;
+  reason?: string;
+  createdAt: string;
+  respondedAt?: string;
+  approvedAt?: string;
+}
+
+export interface ShiftConfig {
+  reminderMinutes: number;
+  autoApproveSwaps: boolean;
+}

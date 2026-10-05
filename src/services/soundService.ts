@@ -222,3 +222,100 @@ function playWebAudioFallback(): void {
     console.warn("Erro no Web Audio fallback:", e);
   }
 }
+
+// Som característico de lembrete de escala (acorde ascendente suave de sino)
+export function playShiftReminderSound(): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate([100, 50, 100, 50, 200]);
+      }
+    } catch {}
+
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) {
+        resolve(false);
+        return;
+      }
+      const ctx = new AudioCtx();
+      if (ctx.state === "suspended") {
+        void ctx.resume();
+      }
+
+      const now = ctx.currentTime;
+      // C5 (523Hz) -> E5 (659Hz) -> G5 (784Hz) -> C6 (1046Hz)
+      const chord = [
+        { freq: 523.25, time: 0.00, dur: 0.25 },
+        { freq: 659.25, time: 0.12, dur: 0.25 },
+        { freq: 783.99, time: 0.24, dur: 0.35 },
+        { freq: 1046.50, time: 0.36, dur: 0.65 },
+      ];
+
+      chord.forEach(({ freq, time, dur }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now + time);
+
+        gain.gain.setValueAtTime(0.001, now + time);
+        gain.gain.exponentialRampToValueAtTime(0.7, now + time + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + time + dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now + time);
+        osc.stop(now + time + dur);
+      });
+      resolve(true);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+// Dispara Notificação Web nativa (HTML5) no navegador / PWA
+export async function triggerShiftWebNotification(
+  title: string,
+  body: string,
+  onClick?: () => void
+): Promise<boolean> {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return false;
+  }
+
+  try {
+    let permission = Notification.permission;
+    if (permission === "default") {
+      permission = await Notification.requestPermission();
+    }
+    if (permission !== "granted") {
+      return false;
+    }
+
+    const options: NotificationOptions & { vibrate?: number[] } = {
+      body,
+      icon: "/favicon.ico",
+      badge: "/favicon.ico",
+      vibrate: [200, 100, 200],
+    };
+    const notif = new Notification(title, options as NotificationOptions);
+
+    if (onClick) {
+      notif.onclick = () => {
+        window.focus();
+        onClick();
+        notif.close();
+      };
+    }
+    return true;
+  } catch (err) {
+    console.warn("Erro ao exibir notificação web nativa:", err);
+    return false;
+  }
+}
+
