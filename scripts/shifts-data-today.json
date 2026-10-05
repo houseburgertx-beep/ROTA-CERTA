@@ -1,0 +1,93 @@
+{
+  "shift_2026-10-04_263244": {
+    "id": "shift_2026-10-04_263244",
+    "driverId": "drv-sErnkmVPQrXNDTGER1WWXBESZof2",
+    "driverName": "Amorim",
+    "driverPhone": "(73)988410811",
+    "date": "2026-10-04",
+    "startTime": "18:00",
+    "endTime": "23:59",
+    "shiftType": "jantar",
+    "storeId": "houseburger",
+    "status": "agendado",
+    "createdAt": "2026-10-05T01:23:28.904Z"
+  },
+  "shift_2026-10-04_203621": {
+    "id": "shift_2026-10-04_203621",
+    "driverId": "drv-Zb9p9bf3IgTGR2EddyLSPpfLQw72",
+    "driverName": "Mateus",
+    "driverPhone": "(73)999258918",
+    "date": "2026-10-04",
+    "startTime": "18:00",
+    "endTime": "23:59",
+    "shiftType": "jantar",
+    "storeId": "houseburger",
+    "status": "agendado",
+    "createdAt": "2026-10-05T01:23:28.905Z"
+  },
+  "shift_2026-10-04_323085": {
+    "id": "shift_2026-10-04_323085",
+    "driverId": "drv-bVDx0wWtlUhuH21MTzio9AZYPpz1",
+    "driverName": "Wesley",
+    "driverPhone": "(73)991485464",
+    "date": "2026-10-04",
+    "startTime": "18:00",
+    "endTime": "23:59",
+    "shiftType": "jantar",
+    "storeId": "houseburger",
+    "status": "agendado",
+    "createdAt": "2026-10-05T01:23:28.905Z"
+  },
+  "shift_2026-10-04_241373": {
+    "id": "shift_2026-10-04_241373",
+    "driverId": "drv-lh11BcJsdGQaGIwGALyIjfCRHkw2",
+    "driverName": "Jackson",
+    "driverPhone": "(73)998231985",
+    "date": "2026-10-04",
+    "startTime": "18:00",
+    "endTime": "23:59",
+    "shiftType": "jantar",
+    "storeId": "houseburger",
+    "status": "agendado",
+    "createdAt": "2026-10-05T01:23:28.905Z"
+  },
+  "shift_2026-10-04_302213": {
+    "id": "shift_2026-10-04_302213",
+    "driverId": "2IXE96y3Z1M1t888hCubJy9WihL2",
+    "driverName": "Silvino",
+    "driverPhone": "(73)999630003",
+    "date": "2026-10-04",
+    "startTime": "18:00",
+    "endTime": "23:59",
+    "shiftType": "jantar",
+    "storeId": "houseburger",
+    "status": "agendado",
+    "createdAt": "2026-10-05T01:23:28.905Z"
+  },
+  "shift_2026-10-04_266236": {
+    "id": "shift_2026-10-04_266236",
+    "driverId": "drv-wHRIQICDIqRDGWofuN7S8STHdBw2",
+    "driverName": "Derick",
+    "driverPhone": "(73)998068536",
+    "date": "2026-10-04",
+    "startTime": "18:00",
+    "endTime": "23:59",
+    "shiftType": "jantar",
+    "storeId": "houseburger",
+    "status": "agendado",
+    "createdAt": "2026-10-05T01:23:28.905Z"
+  },
+  "shift_2026-10-04_296016": {
+    "id": "shift_2026-10-04_296016",
+    "driverId": "drv-srhCpA6iQLQsfcEPBvH9w0S4xwD2",
+    "driverName": "Higor",
+    "driverPhone": "(73)999046424",
+    "date": "2026-10-04",
+    "startTime": "18:00",
+    "endTime": "23:59",
+    "shiftType": "jantar",
+    "storeId": "houseburger",
+    "status": "agendado",
+    "createdAt": "2026-10-05T01:23:28.905Z"
+  }
+}

@@ -1830,46 +1830,51 @@ body.text-scale-large,
   gap: 10px;
 }
 
-.shift-card {
+.shift-card-mini {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.shift-card.is-today {
-  border-color: #10b981;
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.12);
-}
-
-.shift-card.is-past {
-  opacity: 0.65;
-}
-
-.sc-top-row {
+  border-radius: 14px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
 }
 
-.sc-date-wrap {
+.shift-card-mini.is-today {
+  border-color: #10b981;
+  background: color-mix(in srgb, #10b981 3%, var(--surface));
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.1);
+}
+
+.shift-card-mini.is-past {
+  opacity: 0.6;
+}
+
+.scm-left {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.scm-title-row {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
-.sc-date-name {
+.scm-day-name {
   font-size: 13.5px;
   font-weight: 800;
   color: var(--ink);
 }
 
-.sc-badge-today {
+.scm-today-badge {
   font-size: 10px;
   font-weight: 800;
   color: #059669;
@@ -1878,118 +1883,100 @@ body.text-scale-large,
   border-radius: 99px;
 }
 
-.sc-status-pill {
+.scm-time-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.scm-shift-type {
+  font-size: 10.5px;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.scm-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.scm-status-pill {
   font-size: 10px;
   font-weight: 800;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: 7px;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
 }
 
-.sc-status-pill.confirmado {
-  background: rgba(16, 185, 129, 0.15);
+.scm-status-pill.confirmado {
+  background: rgba(16, 185, 129, 0.14);
   color: #059669;
 }
 
-.sc-status-pill.agendado {
+.scm-status-pill.agendado {
   background: var(--primary-soft);
   color: var(--primary);
 }
 
-.sc-info-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 12.5px;
-  color: var(--ink);
-}
-
-.sc-time-block {
+.scm-btn-checkin {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.sc-type-pill {
-  font-size: 10px;
-  font-weight: 700;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  color: var(--ink);
-  padding: 2px 7px;
-  border-radius: 6px;
-}
-
-.sc-store-pill {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--muted);
-  background: var(--surface-2);
-  padding: 2px 7px;
-  border-radius: 6px;
-}
-
-.sc-notes {
-  font-size: 11.5px;
-  color: var(--muted);
-  background: var(--surface-2);
-  padding: 6px 10px;
-  border-radius: 8px;
-}
-
-.sc-notes span {
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.sc-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 2px;
-}
-
-.sc-btn-checkin {
-  flex: 1;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
   background: #10b981;
   color: #fff;
   border: none;
-  border-radius: 10px;
-  font-size: 12px;
+  border-radius: 8px;
+  padding: 6px 11px;
+  font-size: 11.5px;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  transition: transform 0.1s ease;
 }
 
-.sc-btn-swap {
-  flex: 1;
-  height: 38px;
+.scm-btn-checkin:active {
+  transform: scale(0.96);
+}
+
+.scm-btn-swap {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
+  gap: 4px;
   background: var(--surface-2);
   border: 1px solid var(--line);
-  color: var(--ink);
-  border-radius: 10px;
-  font-size: 12px;
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11.5px;
   font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
-.sc-btn-swap:hover {
+.scm-btn-swap:hover {
   background: var(--surface);
   border-color: var(--primary);
   color: var(--primary);
+}
+
+/* Fallback legacy shift-card */
+.shift-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
 }
 
 /* 6. Grade Semanal (Agenda de Segunda a Domingo) */

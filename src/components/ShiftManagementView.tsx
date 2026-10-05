@@ -123,17 +123,19 @@ export function ShiftManagementView({
   const weekEndStr = weekDays[6].dateStr;
   const isCurrentWeek = weekDays.some((d) => d.isToday);
 
-  // Plantões do motoboy logado
+  // Plantões do motoboy logado (ordenados cronologicamente a partir de hoje)
+  const todayStr = toDateString(new Date());
   const myShifts = useMemo(() => {
-    return shifts.filter(
-      (s) =>
-        s.driverId === currentUser.id ||
-        (s.driverName && s.driverName.toLowerCase() === currentUser.name.toLowerCase())
-    );
+    return shifts
+      .filter(
+        (s) =>
+          s.driverId === currentUser.id ||
+          (s.driverName && s.driverName.toLowerCase() === currentUser.name.toLowerCase())
+      )
+      .sort((a, b) => a.date.localeCompare(b.date));
   }, [shifts, currentUser]);
 
   // Plantão de hoje do motoboy logado
-  const todayStr = toDateString(new Date());
   const myTodayShift = useMemo(() => {
     return myShifts.find((s) => s.date === todayStr);
   }, [myShifts, todayStr]);
@@ -176,14 +178,14 @@ export function ShiftManagementView({
 
   return (
     <div className="shift-view-container">
-      {/* 1. Sub-navegação Estilo Segmented Control */}
+      {/* 1. Sub-navegação Estilo Segmented Control Minimalista */}
       <div className="shift-nav-header">
         <button
           type="button"
           className={`shift-nav-btn ${subTab === "minha_escala" ? "active" : ""}`}
           onClick={() => setSubTab("minha_escala")}
         >
-          <CalendarCheck size={16} />
+          <CalendarCheck size={15} />
           <span>Minha Escala</span>
           {myTodayShift && <span className="shift-pulse-dot" title="Você tem plantão hoje!" />}
         </button>
@@ -193,7 +195,7 @@ export function ShiftManagementView({
           className={`shift-nav-btn ${subTab === "grade" ? "active" : ""}`}
           onClick={() => setSubTab("grade")}
         >
-          <Calendar size={16} />
+          <Calendar size={15} />
           <span>Grade Semanal</span>
         </button>
 
@@ -202,7 +204,7 @@ export function ShiftManagementView({
           className={`shift-nav-btn ${subTab === "trocas" ? "active" : ""}`}
           onClick={() => setSubTab("trocas")}
         >
-          <ArrowLeftRight size={16} />
+          <ArrowLeftRight size={15} />
           <span>Trocas</span>
           {(isAdmin ? pendingSwapsCount : pendingSwapsForMe.length) > 0 && (
             <span className="shift-nav-badge">
@@ -212,121 +214,15 @@ export function ShiftManagementView({
         </button>
       </div>
 
-      {/* 2. Banner de Plantão Hoje (para Motoboy logado) */}
-      {subTab === "minha_escala" && myTodayShift && (
-        <div className="shift-today-banner">
-          <div className="stb-left">
-            <div className="stb-tag">Plantão Hoje • {myTodayShift.shiftType === "almoco" ? "Almoço" : "Jantar"}</div>
-            <div className="stb-time">
-              <Clock size={18} />
-              <span>{myTodayShift.startTime} às {myTodayShift.endTime}</span>
-            </div>
-            <div className="stb-store">{currentStoreName}</div>
-          </div>
-          <div className="stb-right">
-            {myTodayShift.status === "confirmado" ? (
-              <span className="stb-confirmed">
-                <Check size={16} /> Presença Confirmada
-              </span>
-            ) : (
-              <button
-                type="button"
-                className="stb-checkin-btn"
-                onClick={async () => {
-                  setProcessingId(myTodayShift.id);
-                  try {
-                    await onCheckInShift(myTodayShift.id);
-                    onNotify("Presença confirmada no plantão! Bom trabalho! 🛵");
-                  } finally {
-                    setProcessingId(null);
-                  }
-                }}
-                disabled={processingId === myTodayShift.id}
-              >
-                <UserCheck size={16} />
-                <span>Confirmar Presença</span>
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 3. Seletor de Semana Elegante */}
-      <div className="shift-week-selector">
-        <div className="sws-left-controls">
-          <button type="button" className="sws-nav-btn" onClick={prevWeek} title="Semana anterior">
-            <ChevronLeft size={18} />
-          </button>
-          <div className="sws-label-box">
-            <span className="sws-label">
-              {weekDays[0].formattedDate} até {weekDays[6].formattedDate}
-            </span>
-            {isCurrentWeek && <span className="sws-current-badge">Semana Atual</span>}
-          </div>
-          <button type="button" className="sws-nav-btn" onClick={nextWeek} title="Próxima semana">
-            <ChevronRight size={18} />
-          </button>
-        </div>
-
-        {isAdmin && (
-          <div className="sws-actions">
-            <button
-              type="button"
-              className="sws-btn-add"
-              onClick={() => openAddShiftForDate()}
-              title="Adicionar novo plantão"
-            >
-              <CalendarPlus size={15} />
-              <span>Novo Plantão</span>
-            </button>
-            <button
-              type="button"
-              className="sws-btn-rep"
-              onClick={async () => {
-                if (currentWeekShifts.length === 0) {
-                  onNotify("Não há plantões nesta semana para replicar.");
-                  return;
-                }
-                const nextMon = new Date(currentMonday);
-                nextMon.setDate(nextMon.getDate() + 7);
-                const nextMonStr = toDateString(nextMon);
-                if (
-                  confirm(
-                    `Deseja replicar os ${currentWeekShifts.length} plantões desta semana para a próxima semana (${formatShiftDateBR(nextMonStr)})?`
-                  )
-                ) {
-                  await onReplicateWeek(nextMonStr);
-                  nextWeek();
-                  onNotify("Plantões replicados com sucesso para a próxima semana! 📋");
-                }
-              }}
-              title="Replicar esta semana para a próxima"
-            >
-              <Repeat size={15} />
-              <span className="sws-btn-text-desktop">Replicar</span>
-            </button>
-            <button
-              type="button"
-              className="sws-btn-wpp"
-              onClick={() => setWhatsAppModalOpen(true)}
-              title="Compartilhar escala formatada no WhatsApp"
-            >
-              <Share2 size={15} />
-              <span className="sws-btn-text-desktop">WhatsApp</span>
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* 4. ABA 1: MINHA ESCALA */}
+      {/* 2. ABA 1: MINHA ESCALA (MINIMALISTA) */}
       {subTab === "minha_escala" && (
         <div className="shift-my-list">
           {/* Se houver trocas solicitadas para mim */}
           {pendingSwapsForMe.length > 0 && (
             <div className="shift-alert-box">
               <div className="sab-title">
-                <AlertCircle size={16} />
-                <span>Você recebeu {pendingSwapsForMe.length} proposta(s) de troca de plantão:</span>
+                <AlertCircle size={15} />
+                <span>{pendingSwapsForMe.length} proposta(s) de troca para você:</span>
               </div>
               <div className="sab-list">
                 {pendingSwapsForMe.map((sw) => (
@@ -345,7 +241,7 @@ export function ShiftManagementView({
                           onNotify(`Você aceitou a troca com ${sw.requestingDriverName}! ✅`);
                         }}
                       >
-                        <Check size={14} /> Aceitar Troca
+                        <Check size={14} /> Aceitar
                       </button>
                       <button
                         type="button"
@@ -367,41 +263,23 @@ export function ShiftManagementView({
           {myShifts.length === 0 ? (
             <div className="shift-empty-card">
               <div className="sec-icon">
-                <CalendarCheck size={32} />
+                <CalendarCheck size={28} />
               </div>
               <h3>Você não tem plantões escalados</h3>
-              <p>
-                Nenhum plantão foi agendado para o seu usuário nesta semana. Você pode conferir a
-                escala geral da equipe ou aguardar a publicação da gerência.
-              </p>
+              <p>Nenhum turno agendado no seu nome para os próximos dias.</p>
               <div className="sec-actions">
                 <button
                   type="button"
                   className="primary"
                   onClick={() => setSubTab("grade")}
                 >
-                  <Users size={16} />
-                  <span>Ver Grade Semanal da Equipe</span>
+                  <Users size={15} />
+                  <span>Ver Grade Semanal da Loja</span>
                 </button>
-                {isAdmin && (
-                  <button
-                    type="button"
-                    className="text-btn"
-                    onClick={() => openAddShiftForDate()}
-                  >
-                    <CalendarPlus size={16} />
-                    <span>+ Adicionar Plantão</span>
-                  </button>
-                )}
               </div>
             </div>
           ) : (
             <div className="shift-cards-container">
-              <div className="scc-header">
-                <h3 className="shift-section-title">Meus Próximos Plantões</h3>
-                <span className="scc-count-pill">{myShifts.length} agendado(s)</span>
-              </div>
-
               <div className="shift-cards-grid">
                 {myShifts.map((s) => {
                   const isPast = s.date < todayStr;
@@ -410,62 +288,56 @@ export function ShiftManagementView({
                   return (
                     <div
                       key={s.id}
-                      className={`shift-card ${isToday ? "is-today" : ""} ${isPast ? "is-past" : ""}`}
+                      className={`shift-card-mini ${isToday ? "is-today" : ""} ${isPast ? "is-past" : ""}`}
                     >
-                      <div className="sc-top-row">
-                        <div className="sc-date-wrap">
-                          <span className="sc-date-name">{formatShiftDateBR(s.date)}</span>
-                          {isToday && <span className="sc-badge-today">Hoje 📍</span>}
+                      <div className="scm-left">
+                        <div className="scm-title-row">
+                          <span className="scm-day-name">{formatShiftDateBR(s.date)}</span>
+                          {isToday && <span className="scm-today-badge">Hoje 📍</span>}
                         </div>
-                        <span className={`sc-status-pill ${s.status}`}>
-                          {s.status === "confirmado" ? "✔ Confirmado" : "Escalado"}
-                        </span>
-                      </div>
-
-                      <div className="sc-info-row">
-                        <div className="sc-time-block">
-                          <Clock size={16} />
+                        <div className="scm-time-row">
+                          <Clock size={12} />
                           <span>{s.startTime} às {s.endTime}</span>
                         </div>
-                        <span className="sc-type-pill">
-                          {s.shiftType === "almoco"
-                            ? "☀️ Almoço"
-                            : s.shiftType === "jantar"
-                            ? "🌙 Jantar"
-                            : "⏰ Integral"}
-                        </span>
-                        <span className="sc-store-pill">{currentStoreName}</span>
                       </div>
 
-                      {s.notes && (
-                        <div className="sc-notes">
-                          <span>Obs:</span> {s.notes}
-                        </div>
-                      )}
-
-                      {!isPast && (
-                        <div className="sc-actions">
-                          {isToday && s.status !== "confirmado" && (
-                            <button
-                              type="button"
-                              className="sc-btn-checkin"
-                              onClick={async () => {
-                                await onCheckInShift(s.id);
-                                onNotify("Presença confirmada no plantão! Bom trabalho! 🛵");
-                              }}
-                            >
-                              <UserCheck size={14} /> Fazer Check-in
-                            </button>
-                          )}
+                      <div className="scm-right">
+                        {isToday && s.status !== "confirmado" ? (
                           <button
                             type="button"
-                            className="sc-btn-swap"
-                            onClick={() => setSwapTargetShift(s)}
+                            className="scm-btn-checkin"
+                            onClick={async () => {
+                              setProcessingId(s.id);
+                              try {
+                                await onCheckInShift(s.id);
+                                onNotify("Presença confirmada no plantão! Bom trabalho! 🛵");
+                              } finally {
+                                setProcessingId(null);
+                              }
+                            }}
+                            disabled={processingId === s.id}
                           >
-                            <ArrowLeftRight size={14} /> Solicitar Troca
+                            <UserCheck size={13} />
+                            <span>Confirmar Presença</span>
                           </button>
-                        </div>
-                      )}
+                        ) : (
+                          <span className={`scm-status-pill ${s.status}`}>
+                            {s.status === "confirmado" ? "✔ Confirmado" : "Escalado"}
+                          </span>
+                        )}
+
+                        {!isPast && (
+                          <button
+                            type="button"
+                            className="scm-btn-swap"
+                            onClick={() => setSwapTargetShift(s)}
+                            title="Trocar este plantão"
+                          >
+                            <ArrowLeftRight size={12} />
+                            <span>Trocar</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -475,131 +347,197 @@ export function ShiftManagementView({
         </div>
       )}
 
-      {/* 5. ABA 2: GRADE SEMANAL */}
+      {/* 3. ABA 2: GRADE SEMANAL (COM SELETOR DE SEMANA) */}
       {subTab === "grade" && (
-        <div className="shift-week-grid">
-          {weekDays.map((day) => {
-            const dayShifts = currentWeekShifts.filter((s) => s.date === day.dateStr);
+        <div className="shift-grade-wrapper">
+          {/* Seletor de Semana */}
+          <div className="shift-week-selector">
+            <div className="sws-left-controls">
+              <button type="button" className="sws-nav-btn" onClick={prevWeek} title="Semana anterior">
+                <ChevronLeft size={16} />
+              </button>
+              <div className="sws-label-box">
+                <span className="sws-label">
+                  {weekDays[0].formattedDate} até {weekDays[6].formattedDate}
+                </span>
+                {isCurrentWeek && <span className="sws-current-badge">Semana Atual</span>}
+              </div>
+              <button type="button" className="sws-nav-btn" onClick={nextWeek} title="Próxima semana">
+                <ChevronRight size={16} />
+              </button>
+            </div>
 
-            return (
-              <div
-                key={day.dateStr}
-                className={`shift-day-col ${day.isToday ? "is-today" : ""}`}
-              >
-                <div className="sdc-header">
-                  <div className="sdc-header-left">
-                    <span className="sdc-day-title">{day.dayName}</span>
-                    <span className="sdc-date-pill">{day.formattedDate}</span>
-                    {day.isToday && <span className="sdc-today-pill">Hoje 📍</span>}
-                  </div>
+            {isAdmin && (
+              <div className="sws-actions">
+                <button
+                  type="button"
+                  className="sws-btn-add"
+                  onClick={() => openAddShiftForDate()}
+                  title="Adicionar novo plantão"
+                >
+                  <CalendarPlus size={14} />
+                  <span>+ Plantão</span>
+                </button>
+                <button
+                  type="button"
+                  className="sws-btn-rep"
+                  onClick={async () => {
+                    if (currentWeekShifts.length === 0) {
+                      onNotify("Não há plantões nesta semana para replicar.");
+                      return;
+                    }
+                    const nextMon = new Date(currentMonday);
+                    nextMon.setDate(nextMon.getDate() + 7);
+                    const nextMonStr = toDateString(nextMon);
+                    if (
+                      confirm(
+                        `Deseja replicar os ${currentWeekShifts.length} plantões desta semana para a próxima semana (${formatShiftDateBR(nextMonStr)})?`
+                      )
+                    ) {
+                      await onReplicateWeek(nextMonStr);
+                      nextWeek();
+                      onNotify("Plantões replicados com sucesso para a próxima semana! 📋");
+                    }
+                  }}
+                  title="Replicar esta semana para a próxima"
+                >
+                  <Repeat size={14} />
+                  <span className="sws-btn-text-desktop">Replicar</span>
+                </button>
+                <button
+                  type="button"
+                  className="sws-btn-wpp"
+                  onClick={() => setWhatsAppModalOpen(true)}
+                  title="Compartilhar escala no WhatsApp"
+                >
+                  <Share2 size={14} />
+                  <span className="sws-btn-text-desktop">WhatsApp</span>
+                </button>
+              </div>
+            )}
+          </div>
 
-                  <div className="sdc-header-right">
-                    <span className="sdc-count-pill">
-                      {dayShifts.length === 0
-                        ? "Folga geral"
-                        : `${dayShifts.length} ${dayShifts.length === 1 ? "motoboy" : "motoboys"}`}
-                    </span>
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        className="sdc-btn-add-inline"
-                        onClick={() => openAddShiftForDate(day.dateStr)}
-                        title={`Escalar motoboy para ${day.dayName}`}
-                      >
-                        <Plus size={14} />
-                        <span>Escalar</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
+          <div className="shift-week-grid">
+            {weekDays.map((day) => {
+              const dayShifts = currentWeekShifts.filter((s) => s.date === day.dateStr);
 
-                <div className="sdc-shifts-list">
-                  {dayShifts.length === 0 ? (
-                    <div className="sdc-empty-box">
-                      <span>Nenhum plantonista escalado</span>
+              return (
+                <div
+                  key={day.dateStr}
+                  className={`shift-day-col ${day.isToday ? "is-today" : ""}`}
+                >
+                  <div className="sdc-header">
+                    <div className="sdc-header-left">
+                      <span className="sdc-day-title">{day.dayName}</span>
+                      <span className="sdc-date-pill">{day.formattedDate}</span>
+                      {day.isToday && <span className="sdc-today-pill">Hoje 📍</span>}
+                    </div>
+
+                    <div className="sdc-header-right">
+                      <span className="sdc-count-pill">
+                        {dayShifts.length === 0
+                          ? "Folga geral"
+                          : `${dayShifts.length} ${dayShifts.length === 1 ? "motoboy" : "motoboys"}`}
+                      </span>
                       {isAdmin && (
                         <button
                           type="button"
-                          className="sdc-empty-link"
+                          className="sdc-btn-add-inline"
                           onClick={() => openAddShiftForDate(day.dateStr)}
+                          title={`Escalar motoboy para ${day.dayName}`}
                         >
-                          + Adicionar plantão
+                          <Plus size={13} />
+                          <span>Escalar</span>
                         </button>
                       )}
                     </div>
-                  ) : (
-                    dayShifts.map((s) => {
-                      const isMe =
-                        s.driverId === currentUser.id ||
-                        (s.driverName && s.driverName.toLowerCase() === currentUser.name.toLowerCase());
+                  </div>
 
-                      return (
-                        <div
-                          key={s.id}
-                          className={`sdc-shift-pill ${isMe ? "is-me" : ""}`}
-                        >
-                          <div className="ssp-left">
-                            <div className="ssp-avatar">
-                              {s.driverName.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="ssp-info">
-                              <span className="ssp-driver">
-                                {s.driverName} {isMe && <strong className="ssp-me-tag">(Você)</strong>}
-                              </span>
-                              <div className="ssp-meta">
-                                <span className="ssp-time">
-                                  <Clock size={12} /> {s.startTime} - {s.endTime}
+                  <div className="sdc-shifts-list">
+                    {dayShifts.length === 0 ? (
+                      <div className="sdc-empty-box">
+                        <span>Sem plantonistas agendados</span>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            className="sdc-empty-link"
+                            onClick={() => openAddShiftForDate(day.dateStr)}
+                          >
+                            + Adicionar
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      dayShifts.map((s) => {
+                        const isMe =
+                          s.driverId === currentUser.id ||
+                          (s.driverName && s.driverName.toLowerCase() === currentUser.name.toLowerCase());
+
+                        return (
+                          <div
+                            key={s.id}
+                            className={`sdc-shift-pill ${isMe ? "is-me" : ""}`}
+                          >
+                            <div className="ssp-left">
+                              <div className="ssp-avatar">
+                                {s.driverName.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="ssp-info">
+                                <span className="ssp-driver">
+                                  {s.driverName} {isMe && <strong className="ssp-me-tag">(Você)</strong>}
                                 </span>
-                                <span className={`ssp-status ${s.status}`}>
-                                  {s.status === "confirmado" ? "✔ Presente" : "Escalado"}
-                                </span>
+                                <div className="ssp-meta">
+                                  <span className="ssp-time">
+                                    <Clock size={11} /> {s.startTime} - {s.endTime}
+                                  </span>
+                                  <span className={`ssp-status ${s.status}`}>
+                                    {s.status === "confirmado" ? "✔ Presente" : "Escalado"}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          {isAdmin && (
-                            <button
-                              type="button"
-                              className="ssp-delete"
-                              onClick={() => {
-                                if (confirm(`Remover o plantão de ${s.driverName} em ${day.formattedDate}?`)) {
-                                  onDeleteShift(s.id);
-                                }
-                              }}
-                              title="Remover plantão"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })
-                  )}
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                className="ssp-delete"
+                                onClick={() => {
+                                  if (confirm(`Remover o plantão de ${s.driverName} em ${day.formattedDate}?`)) {
+                                    onDeleteShift(s.id);
+                                  }
+                                }}
+                                title="Remover plantão"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* 6. ABA 3: TROCAS DE ESCALA */}
+      {/* 4. ABA 3: TROCAS DE ESCALA */}
       {subTab === "trocas" && (
         <div className="shift-swaps-list">
           <div className="scc-header">
-            <h3 className="shift-section-title">Solicitações de Troca de Plantão</h3>
+            <h3 className="shift-section-title">Solicitações de Troca</h3>
             <span className="scc-count-pill">{swaps.length} registrada(s)</span>
           </div>
 
           {swaps.length === 0 ? (
             <div className="shift-empty-card">
               <div className="sec-icon">
-                <ArrowLeftRight size={32} />
+                <ArrowLeftRight size={28} />
               </div>
               <h3>Nenhuma troca pendente</h3>
-              <p>
-                Quando um motoboy precisar passar o plantão para outro colega, o pedido ficará
-                visível aqui para aceite ou aprovação da equipe.
-              </p>
+              <p>Quando alguém pedir troca de plantão, ela aparecerá aqui.</p>
             </div>
           ) : (
             <div className="swaps-cards-grid">
@@ -617,7 +555,7 @@ export function ShiftManagementView({
                         <strong>{sw.requestingDriverName}</strong>
                         <span className="swc-arrow">➔</span>
                         <span className="swc-target">
-                          {sw.targetDriverName || "Aberto para a Equipe"}
+                          {sw.targetDriverName || "Aberto p/ Todos"}
                         </span>
                       </div>
                       <span className={`swc-status-badge ${sw.status}`}>
@@ -687,7 +625,7 @@ export function ShiftManagementView({
         </div>
       )}
 
-      {/* 7. MODAIS DE APOIO */}
+      {/* 5. MODAIS */}
       {isNewShiftModalOpen && (
         <NewShiftModal
           drivers={drivers}
@@ -850,7 +788,7 @@ function NewShiftModal({
                   className={`preset-btn ${shiftType === "jantar" ? "active" : ""}`}
                   onClick={() => handleTypePreset("jantar")}
                 >
-                  🌙 Jantar
+                  🌙 Noturno
                 </button>
                 <button
                   type="button"
