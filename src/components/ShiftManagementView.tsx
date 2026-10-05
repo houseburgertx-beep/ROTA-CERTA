@@ -10,7 +10,7 @@ import {
   ChevronRight,
   Clock,
   Copy,
-  MessageSquare,
+  Plus,
   Repeat,
   Share2,
   Trash2,
@@ -84,24 +84,35 @@ export function ShiftManagementView({
   // Semana ativa (segunda-feira inicial)
   const [currentMonday, setCurrentMonday] = useState<Date>(() => getMonday(new Date()));
   const [isNewShiftModalOpen, setIsNewShiftModalOpen] = useState(false);
+  const [newShiftPreselectedDate, setNewShiftPreselectedDate] = useState<string | null>(null);
   const [swapTargetShift, setSwapTargetShift] = useState<Shift | null>(null);
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   // Dias da semana atual (Segunda a Domingo)
   const weekDays = useMemo(() => {
-    const days: { dateStr: string; label: string; dateObj: Date; isToday: boolean }[] = [];
+    const days: { dateStr: string; dayName: string; formattedDate: string; isToday: boolean }[] = [];
     const todayStr = toDateString(new Date());
+
+    const dayNames = [
+      "Segunda-feira",
+      "Terça-feira",
+      "Quarta-feira",
+      "Quinta-feira",
+      "Sexta-feira",
+      "Sábado",
+      "Domingo",
+    ];
 
     for (let i = 0; i < 7; i++) {
       const d = new Date(currentMonday);
       d.setDate(d.getDate() + i);
       const dateStr = toDateString(d);
-      const dayNames = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+      const formattedDate = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
       days.push({
         dateStr,
-        label: `${dayNames[i]} ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`,
-        dateObj: d,
+        dayName: dayNames[i],
+        formattedDate,
         isToday: dateStr === todayStr,
       });
     }
@@ -110,6 +121,7 @@ export function ShiftManagementView({
 
   const weekStartStr = weekDays[0].dateStr;
   const weekEndStr = weekDays[6].dateStr;
+  const isCurrentWeek = weekDays.some((d) => d.isToday);
 
   // Plantões do motoboy logado
   const myShifts = useMemo(() => {
@@ -157,9 +169,14 @@ export function ShiftManagementView({
     return shifts.filter((s) => s.date >= weekStartStr && s.date <= weekEndStr);
   }, [shifts, weekStartStr, weekEndStr]);
 
+  const openAddShiftForDate = (dateStr?: string) => {
+    setNewShiftPreselectedDate(dateStr || todayStr);
+    setIsNewShiftModalOpen(true);
+  };
+
   return (
     <div className="shift-view-container">
-      {/* Sub-navegação do Módulo de Escala */}
+      {/* 1. Sub-navegação Estilo Segmented Control */}
       <div className="shift-nav-header">
         <button
           type="button"
@@ -195,20 +212,21 @@ export function ShiftManagementView({
         </button>
       </div>
 
-      {/* Banner de Plantão Hoje (para Motoboy) */}
+      {/* 2. Banner de Plantão Hoje (para Motoboy logado) */}
       {subTab === "minha_escala" && myTodayShift && (
         <div className="shift-today-banner">
           <div className="stb-left">
-            <div className="stb-tag">Hoje • {myTodayShift.shiftType === "almoco" ? "Almoço" : "Jantar"}</div>
+            <div className="stb-tag">Plantão Hoje • {myTodayShift.shiftType === "almoco" ? "Almoço" : "Jantar"}</div>
             <div className="stb-time">
-              <Clock size={16} /> {myTodayShift.startTime} às {myTodayShift.endTime}
+              <Clock size={18} />
+              <span>{myTodayShift.startTime} às {myTodayShift.endTime}</span>
             </div>
             <div className="stb-store">{currentStoreName}</div>
           </div>
           <div className="stb-right">
             {myTodayShift.status === "confirmado" ? (
               <span className="stb-confirmed">
-                <Check size={14} /> Presença Confirmada
+                <Check size={16} /> Presença Confirmada
               </span>
             ) : (
               <button
@@ -218,7 +236,7 @@ export function ShiftManagementView({
                   setProcessingId(myTodayShift.id);
                   try {
                     await onCheckInShift(myTodayShift.id);
-                    onNotify("Check-in realizado com sucesso! Bom plantão! 🛵");
+                    onNotify("Presença confirmada no plantão! Bom trabalho! 🛵");
                   } finally {
                     setProcessingId(null);
                   }
@@ -233,29 +251,33 @@ export function ShiftManagementView({
         </div>
       )}
 
-      {/* Controles da Semana */}
+      {/* 3. Seletor de Semana Elegante */}
       <div className="shift-week-selector">
-        <button type="button" className="sws-nav-btn" onClick={prevWeek} title="Semana anterior">
-          <ChevronLeft size={18} />
-        </button>
-        <span className="sws-label">
-          {formatShiftDateBR(weekStartStr).split("(")[1]?.replace(")", "") || ""} até{" "}
-          {formatShiftDateBR(weekEndStr).split("(")[1]?.replace(")", "") || ""}
-        </span>
-        <button type="button" className="sws-nav-btn" onClick={nextWeek} title="Próxima semana">
-          <ChevronRight size={18} />
-        </button>
+        <div className="sws-left-controls">
+          <button type="button" className="sws-nav-btn" onClick={prevWeek} title="Semana anterior">
+            <ChevronLeft size={18} />
+          </button>
+          <div className="sws-label-box">
+            <span className="sws-label">
+              {weekDays[0].formattedDate} até {weekDays[6].formattedDate}
+            </span>
+            {isCurrentWeek && <span className="sws-current-badge">Semana Atual</span>}
+          </div>
+          <button type="button" className="sws-nav-btn" onClick={nextWeek} title="Próxima semana">
+            <ChevronRight size={18} />
+          </button>
+        </div>
 
         {isAdmin && (
           <div className="sws-actions">
             <button
               type="button"
               className="sws-btn-add"
-              onClick={() => setIsNewShiftModalOpen(true)}
+              onClick={() => openAddShiftForDate()}
               title="Adicionar novo plantão"
             >
-              <CalendarPlus size={16} />
-              <span>Plantão</span>
+              <CalendarPlus size={15} />
+              <span>Novo Plantão</span>
             </button>
             <button
               type="button"
@@ -280,21 +302,23 @@ export function ShiftManagementView({
               }}
               title="Replicar esta semana para a próxima"
             >
-              <Repeat size={16} />
+              <Repeat size={15} />
+              <span className="sws-btn-text-desktop">Replicar</span>
             </button>
             <button
               type="button"
               className="sws-btn-wpp"
               onClick={() => setWhatsAppModalOpen(true)}
-              title="Compartilhar escala no WhatsApp"
+              title="Compartilhar escala formatada no WhatsApp"
             >
-              <Share2 size={16} />
+              <Share2 size={15} />
+              <span className="sws-btn-text-desktop">WhatsApp</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* 1. ABA MINHA ESCALA */}
+      {/* 4. ABA 1: MINHA ESCALA */}
       {subTab === "minha_escala" && (
         <div className="shift-my-list">
           {/* Se houver trocas solicitadas para mim */}
@@ -302,13 +326,13 @@ export function ShiftManagementView({
             <div className="shift-alert-box">
               <div className="sab-title">
                 <AlertCircle size={16} />
-                <span>Você recebeu {pendingSwapsForMe.length} solicitação(ões) de troca de plantão:</span>
+                <span>Você recebeu {pendingSwapsForMe.length} proposta(s) de troca de plantão:</span>
               </div>
               <div className="sab-list">
                 {pendingSwapsForMe.map((sw) => (
                   <div key={sw.id} className="sab-item">
                     <div className="sab-desc">
-                      <strong>{sw.requestingDriverName}</strong> quer trocar o plantão de{" "}
+                      <strong>{sw.requestingDriverName}</strong> quer passar o plantão de{" "}
                       <strong>{formatShiftDateBR(sw.shiftDate)}</strong> ({sw.shiftTime}).
                       {sw.reason && <em> Motivo: "{sw.reason}"</em>}
                     </div>
@@ -321,7 +345,7 @@ export function ShiftManagementView({
                           onNotify(`Você aceitou a troca com ${sw.requestingDriverName}! ✅`);
                         }}
                       >
-                        <Check size={14} /> Aceitar
+                        <Check size={14} /> Aceitar Troca
                       </button>
                       <button
                         type="button"
@@ -340,71 +364,118 @@ export function ShiftManagementView({
             </div>
           )}
 
-          <h3 className="shift-section-title">Meus Próximos Plantões</h3>
-
           {myShifts.length === 0 ? (
-            <div className="shift-empty-state">
-              <Calendar size={36} />
-              <p>Você não tem plantões escalados no momento.</p>
-              <span className="ses-sub">Avisos e escalas da gerência aparecerão aqui.</span>
+            <div className="shift-empty-card">
+              <div className="sec-icon">
+                <CalendarCheck size={32} />
+              </div>
+              <h3>Você não tem plantões escalados</h3>
+              <p>
+                Nenhum plantão foi agendado para o seu usuário nesta semana. Você pode conferir a
+                escala geral da equipe ou aguardar a publicação da gerência.
+              </p>
+              <div className="sec-actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => setSubTab("grade")}
+                >
+                  <Users size={16} />
+                  <span>Ver Grade Semanal da Equipe</span>
+                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    className="text-btn"
+                    onClick={() => openAddShiftForDate()}
+                  >
+                    <CalendarPlus size={16} />
+                    <span>+ Adicionar Plantão</span>
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
-            <div className="shift-cards-grid">
-              {myShifts.map((s) => {
-                const isPast = s.date < todayStr;
-                const isToday = s.date === todayStr;
+            <div className="shift-cards-container">
+              <div className="scc-header">
+                <h3 className="shift-section-title">Meus Próximos Plantões</h3>
+                <span className="scc-count-pill">{myShifts.length} agendado(s)</span>
+              </div>
 
-                return (
-                  <div
-                    key={s.id}
-                    className={`shift-card ${isToday ? "is-today" : ""} ${isPast ? "is-past" : ""}`}
-                  >
-                    <div className="sc-header">
-                      <div className="sc-date">{formatShiftDateBR(s.date)}</div>
-                      <span className={`sc-badge ${s.status}`}>
-                        {s.status === "confirmado" ? "Confirmado" : s.status === "agendado" ? "Escalado" : s.status}
-                      </span>
-                    </div>
+              <div className="shift-cards-grid">
+                {myShifts.map((s) => {
+                  const isPast = s.date < todayStr;
+                  const isToday = s.date === todayStr;
 
-                    <div className="sc-time-row">
-                      <Clock size={16} />
-                      <span>{s.startTime} às {s.endTime}</span>
-                      <span className="sc-type-pill">
-                        {s.shiftType === "almoco" ? "Almoço" : s.shiftType === "jantar" ? "Jantar" : "Turno"}
-                      </span>
-                    </div>
+                  return (
+                    <div
+                      key={s.id}
+                      className={`shift-card ${isToday ? "is-today" : ""} ${isPast ? "is-past" : ""}`}
+                    >
+                      <div className="sc-top-row">
+                        <div className="sc-date-wrap">
+                          <span className="sc-date-name">{formatShiftDateBR(s.date)}</span>
+                          {isToday && <span className="sc-badge-today">Hoje 📍</span>}
+                        </div>
+                        <span className={`sc-status-pill ${s.status}`}>
+                          {s.status === "confirmado" ? "✔ Confirmado" : "Escalado"}
+                        </span>
+                      </div>
 
-                    {s.notes && <div className="sc-notes">Obs: {s.notes}</div>}
+                      <div className="sc-info-row">
+                        <div className="sc-time-block">
+                          <Clock size={16} />
+                          <span>{s.startTime} às {s.endTime}</span>
+                        </div>
+                        <span className="sc-type-pill">
+                          {s.shiftType === "almoco"
+                            ? "☀️ Almoço"
+                            : s.shiftType === "jantar"
+                            ? "🌙 Jantar"
+                            : "⏰ Integral"}
+                        </span>
+                        <span className="sc-store-pill">{currentStoreName}</span>
+                      </div>
 
-                    {!isPast && (
-                      <div className="sc-actions">
-                        {isToday && s.status !== "confirmado" && (
+                      {s.notes && (
+                        <div className="sc-notes">
+                          <span>Obs:</span> {s.notes}
+                        </div>
+                      )}
+
+                      {!isPast && (
+                        <div className="sc-actions">
+                          {isToday && s.status !== "confirmado" && (
+                            <button
+                              type="button"
+                              className="sc-btn-checkin"
+                              onClick={async () => {
+                                await onCheckInShift(s.id);
+                                onNotify("Presença confirmada no plantão! Bom trabalho! 🛵");
+                              }}
+                            >
+                              <UserCheck size={14} /> Fazer Check-in
+                            </button>
+                          )}
                           <button
                             type="button"
-                            className="sc-btn-checkin"
-                            onClick={() => onCheckInShift(s.id)}
+                            className="sc-btn-swap"
+                            onClick={() => setSwapTargetShift(s)}
                           >
-                            <UserCheck size={14} /> Check-in
+                            <ArrowLeftRight size={14} /> Solicitar Troca
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          className="sc-btn-swap"
-                          onClick={() => setSwapTargetShift(s)}
-                        >
-                          <ArrowLeftRight size={14} /> Solicitar Troca
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
       )}
 
-      {/* 2. ABA GRADE SEMANAL */}
+      {/* 5. ABA 2: GRADE SEMANAL */}
       {subTab === "grade" && (
         <div className="shift-week-grid">
           {weekDays.map((day) => {
@@ -416,45 +487,93 @@ export function ShiftManagementView({
                 className={`shift-day-col ${day.isToday ? "is-today" : ""}`}
               >
                 <div className="sdc-header">
-                  <span className="sdc-title">{day.label}</span>
-                  <span className="sdc-count">
-                    {dayShifts.length} {dayShifts.length === 1 ? "motoboy" : "motoboys"}
-                  </span>
+                  <div className="sdc-header-left">
+                    <span className="sdc-day-title">{day.dayName}</span>
+                    <span className="sdc-date-pill">{day.formattedDate}</span>
+                    {day.isToday && <span className="sdc-today-pill">Hoje 📍</span>}
+                  </div>
+
+                  <div className="sdc-header-right">
+                    <span className="sdc-count-pill">
+                      {dayShifts.length === 0
+                        ? "Folga geral"
+                        : `${dayShifts.length} ${dayShifts.length === 1 ? "motoboy" : "motoboys"}`}
+                    </span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        className="sdc-btn-add-inline"
+                        onClick={() => openAddShiftForDate(day.dateStr)}
+                        title={`Escalar motoboy para ${day.dayName}`}
+                      >
+                        <Plus size={14} />
+                        <span>Escalar</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="sdc-shifts-list">
                   {dayShifts.length === 0 ? (
-                    <div className="sdc-empty">Sem escala</div>
+                    <div className="sdc-empty-box">
+                      <span>Nenhum plantonista escalado</span>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          className="sdc-empty-link"
+                          onClick={() => openAddShiftForDate(day.dateStr)}
+                        >
+                          + Adicionar plantão
+                        </button>
+                      )}
+                    </div>
                   ) : (
-                    dayShifts.map((s) => (
-                      <div key={s.id} className="sdc-shift-pill">
-                        <div className="ssp-top">
-                          <span className="ssp-driver">{s.driverName}</span>
+                    dayShifts.map((s) => {
+                      const isMe =
+                        s.driverId === currentUser.id ||
+                        (s.driverName && s.driverName.toLowerCase() === currentUser.name.toLowerCase());
+
+                      return (
+                        <div
+                          key={s.id}
+                          className={`sdc-shift-pill ${isMe ? "is-me" : ""}`}
+                        >
+                          <div className="ssp-left">
+                            <div className="ssp-avatar">
+                              {s.driverName.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="ssp-info">
+                              <span className="ssp-driver">
+                                {s.driverName} {isMe && <strong className="ssp-me-tag">(Você)</strong>}
+                              </span>
+                              <div className="ssp-meta">
+                                <span className="ssp-time">
+                                  <Clock size={12} /> {s.startTime} - {s.endTime}
+                                </span>
+                                <span className={`ssp-status ${s.status}`}>
+                                  {s.status === "confirmado" ? "✔ Presente" : "Escalado"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
                           {isAdmin && (
                             <button
                               type="button"
                               className="ssp-delete"
                               onClick={() => {
-                                if (confirm(`Remover plantão de ${s.driverName}?`)) {
+                                if (confirm(`Remover o plantão de ${s.driverName} em ${day.formattedDate}?`)) {
                                   onDeleteShift(s.id);
                                 }
                               }}
                               title="Remover plantão"
                             >
-                              <Trash2 size={12} />
+                              <Trash2 size={13} />
                             </button>
                           )}
                         </div>
-                        <div className="ssp-bottom">
-                          <span className="ssp-time">
-                            {s.startTime} - {s.endTime}
-                          </span>
-                          <span className={`ssp-status ${s.status}`}>
-                            {s.status === "confirmado" ? "✔ Chegou" : s.status}
-                          </span>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -463,18 +582,24 @@ export function ShiftManagementView({
         </div>
       )}
 
-      {/* 3. ABA TROCAS DE ESCALA */}
+      {/* 6. ABA 3: TROCAS DE ESCALA */}
       {subTab === "trocas" && (
         <div className="shift-swaps-list">
-          <h3 className="shift-section-title">Solicitações de Troca de Plantão</h3>
+          <div className="scc-header">
+            <h3 className="shift-section-title">Solicitações de Troca de Plantão</h3>
+            <span className="scc-count-pill">{swaps.length} registrada(s)</span>
+          </div>
 
           {swaps.length === 0 ? (
-            <div className="shift-empty-state">
-              <ArrowLeftRight size={36} />
-              <p>Nenhuma solicitação de troca registrada.</p>
-              <span className="ses-sub">
-                Quando um motoboy solicitar troca de horário, o pedido aparecerá aqui.
-              </span>
+            <div className="shift-empty-card">
+              <div className="sec-icon">
+                <ArrowLeftRight size={32} />
+              </div>
+              <h3>Nenhuma troca pendente</h3>
+              <p>
+                Quando um motoboy precisar passar o plantão para outro colega, o pedido ficará
+                visível aqui para aceite ou aprovação da equipe.
+              </p>
             </div>
           ) : (
             <div className="swaps-cards-grid">
@@ -488,24 +613,29 @@ export function ShiftManagementView({
                 return (
                   <div key={sw.id} className={`swap-card ${sw.status}`}>
                     <div className="swc-header">
-                      <span className="swc-driver">
+                      <div className="swc-drivers-flow">
                         <strong>{sw.requestingDriverName}</strong>
-                        {sw.targetDriverName ? ` ➔ ${sw.targetDriverName}` : " ➔ Aberto p/ Qualquer Colega"}
-                      </span>
+                        <span className="swc-arrow">➔</span>
+                        <span className="swc-target">
+                          {sw.targetDriverName || "Aberto para a Equipe"}
+                        </span>
+                      </div>
                       <span className={`swc-status-badge ${sw.status}`}>
                         {sw.status === "aprovada"
-                          ? "Aprovada"
+                          ? "✔ Aprovada"
                           : sw.status === "pendente"
                           ? "Pendente"
                           : sw.status === "aceita"
-                          ? "Aguardando Gestor"
+                          ? "Aguardando Loja"
+                          : sw.status === "recusada"
+                          ? "Recusada"
                           : sw.status}
                       </span>
                     </div>
 
                     <div className="swc-body">
                       <div className="swc-info">
-                        📅 <strong>{formatShiftDateBR(sw.shiftDate)}</strong> ({sw.shiftTime})
+                        📅 <strong>{formatShiftDateBR(sw.shiftDate)}</strong> • {sw.shiftTime}
                       </div>
                       {sw.reason && <div className="swc-reason">Motivo: "{sw.reason}"</div>}
                     </div>
@@ -518,7 +648,7 @@ export function ShiftManagementView({
                             className="swc-btn-accept"
                             onClick={async () => {
                               await onRespondSwap(sw, true);
-                              onNotify("Troca aceita com sucesso!");
+                              onNotify("Troca aceita com sucesso! ✅");
                             }}
                           >
                             <Check size={14} /> Aceitar Troca
@@ -542,7 +672,7 @@ export function ShiftManagementView({
                           className="swc-btn-admin-approve"
                           onClick={async () => {
                             await onApproveSwapAdmin(sw);
-                            onNotify("Troca aprovada pelo gestor!");
+                            onNotify("Troca aprovada pelo gestor da loja!");
                           }}
                         >
                           <UserCheck size={14} /> Aprovar Troca Oficialmente
@@ -557,22 +687,25 @@ export function ShiftManagementView({
         </div>
       )}
 
-      {/* MODAL: NOVO PLANTÃO (ADMIN) */}
+      {/* 7. MODAIS DE APOIO */}
       {isNewShiftModalOpen && (
         <NewShiftModal
           drivers={drivers}
-          defaultDate={todayStr}
+          defaultDate={newShiftPreselectedDate || todayStr}
           currentStoreId={currentStoreId}
-          onClose={() => setIsNewShiftModalOpen(false)}
+          onClose={() => {
+            setIsNewShiftModalOpen(false);
+            setNewShiftPreselectedDate(null);
+          }}
           onSave={async (shift) => {
             await onSaveShift(shift);
             setIsNewShiftModalOpen(false);
+            setNewShiftPreselectedDate(null);
             onNotify(`Plantão de ${shift.driverName} agendado! 📅`);
           }}
         />
       )}
 
-      {/* MODAL: SOLICITAR TROCA (MOTOBOY) */}
       {swapTargetShift && (
         <RequestSwapModal
           shift={swapTargetShift}
@@ -592,7 +725,6 @@ export function ShiftManagementView({
         />
       )}
 
-      {/* MODAL: COMPARTILHAR WHATSAPP */}
       {whatsAppModalOpen && (
         <WhatsAppScheduleModal
           shifts={currentWeekShifts}
@@ -668,62 +800,70 @@ function NewShiftModal({
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content shift-modal">
-        <div className="modal-header">
-          <h3>Adicionar Plantão na Escala</h3>
-          <button type="button" onClick={onClose} className="btn-close">
-            <X size={18} />
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: "480px" }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <span className="modal-kicker">
+              <Calendar size={13} /> Escala da Loja
+            </span>
+            <h2>Adicionar Plantão</h2>
+            <p>Selecione o motoboy e o horário do plantão.</p>
+          </div>
+          <button type="button" onClick={onClose} title="Fechar">
+            <X size={16} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="shift-form">
-          <label>
-            <span>Motoboy:</span>
-            <select value={driverId} onChange={(e) => setDriverId(e.target.value)} required>
-              {drivers.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name} {d.phone ? `(${d.phone})` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
+        <form onSubmit={handleSubmit} style={{ padding: "18px 20px" }}>
+          <div className="form-grid">
+            <label className="full">
+              Motoboy
+              <select value={driverId} onChange={(e) => setDriverId(e.target.value)} required>
+                {drivers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} {d.phone ? `(${d.phone})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label>
-            <span>Data:</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-          </label>
+            <label className="full">
+              Data do Plantão
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+            </label>
 
-          <div className="shift-presets-row">
-            <span>Atalho de Turno:</span>
-            <div className="presets-buttons">
-              <button
-                type="button"
-                className={`preset-btn ${shiftType === "almoco" ? "active" : ""}`}
-                onClick={() => handleTypePreset("almoco")}
-              >
-                ☀️ Almoço (11h-15h)
-              </button>
-              <button
-                type="button"
-                className={`preset-btn ${shiftType === "jantar" ? "active" : ""}`}
-                onClick={() => handleTypePreset("jantar")}
-              >
-                🌙 Jantar (18h-23h30)
-              </button>
-              <button
-                type="button"
-                className={`preset-btn ${shiftType === "integral" ? "active" : ""}`}
-                onClick={() => handleTypePreset("integral")}
-              >
-                ⏰ Integral
-              </button>
+            <div className="full">
+              <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--muted)", display: "block", marginBottom: "6px" }}>
+                Atalho de Turno
+              </span>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                <button
+                  type="button"
+                  className={`preset-btn ${shiftType === "almoco" ? "active" : ""}`}
+                  onClick={() => handleTypePreset("almoco")}
+                >
+                  ☀️ Almoço
+                </button>
+                <button
+                  type="button"
+                  className={`preset-btn ${shiftType === "jantar" ? "active" : ""}`}
+                  onClick={() => handleTypePreset("jantar")}
+                >
+                  🌙 Jantar
+                </button>
+                <button
+                  type="button"
+                  className={`preset-btn ${shiftType === "integral" ? "active" : ""}`}
+                  onClick={() => handleTypePreset("integral")}
+                >
+                  ⏰ Integral
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="form-row-2">
             <label>
-              <span>Início:</span>
+              Início
               <input
                 type="time"
                 value={startTime}
@@ -731,8 +871,9 @@ function NewShiftModal({
                 required
               />
             </label>
+
             <label>
-              <span>Fim:</span>
+              Término
               <input
                 type="time"
                 value={endTime}
@@ -740,23 +881,23 @@ function NewShiftModal({
                 required
               />
             </label>
+
+            <label className="full">
+              Observação (Opcional)
+              <input
+                type="text"
+                placeholder="Ex: Reforço no salão, primeiro turno..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </label>
           </div>
 
-          <label>
-            <span>Observação (opcional):</span>
-            <input
-              type="text"
-              placeholder="Ex: Fica de apoio no salão"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </label>
-
           <div className="modal-actions">
-            <button type="button" onClick={onClose} className="btn-cancel">
+            <button type="button" onClick={onClose} className="text-btn" style={{ padding: "10px 16px" }}>
               Cancelar
             </button>
-            <button type="submit" className="btn-save">
+            <button type="submit" className="primary">
               Salvar Plantão
             </button>
           </div>
@@ -781,54 +922,62 @@ function RequestSwapModal({
   const [reason, setReason] = useState("");
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content shift-modal">
-        <div className="modal-header">
-          <h3>Solicitar Troca de Plantão</h3>
-          <button type="button" onClick={onClose} className="btn-close">
-            <X size={18} />
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: "480px" }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <span className="modal-kicker">
+              <ArrowLeftRight size={13} /> Troca de Plantão
+            </span>
+            <h2>Solicitar Troca</h2>
+            <p>Passe seu plantão para outro motoboy da equipe.</p>
+          </div>
+          <button type="button" onClick={onClose} title="Fechar">
+            <X size={16} />
           </button>
         </div>
 
-        <div className="swap-modal-summary">
-          <div>
-            Plantão: <strong>{formatShiftDateBR(shift.date)}</strong>
+        <div style={{ padding: "18px 20px" }}>
+          <div className="swap-modal-summary">
+            <div>
+              Plantão: <strong>{formatShiftDateBR(shift.date)}</strong>
+            </div>
+            <div>
+              Horário: <strong>{shift.startTime} às {shift.endTime}</strong>
+            </div>
           </div>
-          <div>
-            Horário: <strong>{shift.startTime} às {shift.endTime}</strong>
+
+          <div className="form-grid" style={{ marginTop: "14px" }}>
+            <label className="full">
+              Passar plantão para quem?
+              <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+                <option value="all">📢 Qualquer Motoboy (Aberto para todos)</option>
+                {drivers.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    👤 {d.name} {d.phone ? `(${d.phone})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="full">
+              Motivo da troca (opcional)
+              <input
+                type="text"
+                placeholder="Ex: Consulta médica, imprevisto pessoal..."
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              />
+            </label>
           </div>
-        </div>
-
-        <div className="shift-form">
-          <label>
-            <span>Trocar com quem?</span>
-            <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-              <option value="all">📢 Qualquer Motoboy (Aberto para o grupo)</option>
-              {drivers.map((d) => (
-                <option key={d.id} value={d.id}>
-                  👤 {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            <span>Motivo da troca (opcional):</span>
-            <input
-              type="text"
-              placeholder="Ex: Consulta médica, imprevisto pessoal..."
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </label>
 
           <div className="modal-actions">
-            <button type="button" onClick={onClose} className="btn-cancel">
+            <button type="button" onClick={onClose} className="text-btn" style={{ padding: "10px 16px" }}>
               Cancelar
             </button>
             <button
               type="button"
-              className="btn-save"
+              className="primary"
               onClick={() => onConfirm(targetId === "all" ? undefined : targetId, reason)}
             >
               Enviar Solicitação
@@ -872,26 +1021,34 @@ function WhatsAppScheduleModal({
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content shift-modal">
-        <div className="modal-header">
-          <h3>Escala Formatada para WhatsApp</h3>
-          <button type="button" onClick={onClose} className="btn-close">
-            <X size={18} />
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: "520px" }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <div>
+            <span className="modal-kicker">
+              <Share2 size={13} /> Exportação
+            </span>
+            <h2>Escala para WhatsApp</h2>
+            <p>Texto formatado pronto para enviar no grupo da equipe.</p>
+          </div>
+          <button type="button" onClick={onClose} title="Fechar">
+            <X size={16} />
           </button>
         </div>
 
-        <div className="wpp-text-preview">
-          <textarea readOnly value={text} rows={12} />
-        </div>
+        <div style={{ padding: "18px 20px" }}>
+          <div className="wpp-text-preview">
+            <textarea readOnly value={text} rows={12} />
+          </div>
 
-        <div className="modal-actions">
-          <button type="button" onClick={copyToClipboard} className="btn-copy">
-            <Copy size={16} /> Copiar Texto
-          </button>
-          <button type="button" onClick={openWhatsApp} className="btn-whatsapp">
-            <Share2 size={16} /> Abrir WhatsApp
-          </button>
+          <div className="modal-actions">
+            <button type="button" onClick={copyToClipboard} className="text-btn" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Copy size={16} /> Copiar Texto
+            </button>
+            <button type="button" onClick={openWhatsApp} className="primary" style={{ background: "#25d366", borderColor: "#25d366" }}>
+              <Share2 size={16} /> Abrir WhatsApp
+            </button>
+          </div>
         </div>
       </div>
     </div>
