@@ -37,6 +37,7 @@ interface ShiftManagementViewProps {
   }) => Promise<void>;
   onRespondSwap: (swap: ShiftSwapRequest, accept: boolean) => Promise<void>;
   onApproveSwapAdmin: (swap: ShiftSwapRequest) => Promise<void>;
+  onCancelSwap: (swapId: string) => Promise<void>;
   onReplicateWeek: (targetMonday: string) => Promise<void>;
   onNotify: (msg: string) => void;
   currentStoreName: string;
@@ -60,6 +61,18 @@ function toDateString(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+function cleanId(id?: string | null): string {
+  if (!id) return "";
+  return String(id).replace(/^drv-/, "").trim().toLowerCase();
+}
+
+function matchDriverName(n1?: string | null, n2?: string | null): boolean {
+  if (!n1 || !n2) return false;
+  const a = n1.trim().toLowerCase();
+  const b = n2.trim().toLowerCase();
+  return a === b || a.includes(b) || b.includes(a);
+}
+
 export function ShiftManagementView({
   currentUser,
   drivers,
@@ -71,6 +84,7 @@ export function ShiftManagementView({
   onRequestSwap,
   onRespondSwap,
   onApproveSwapAdmin,
+  onCancelSwap,
   onReplicateWeek,
   onNotify,
   currentStoreName,
@@ -127,11 +141,11 @@ export function ShiftManagementView({
   const todayStr = toDateString(new Date());
   const myShifts = useMemo(() => {
     return shifts
-      .filter(
-        (s) =>
-          s.driverId === currentUser.id ||
-          (s.driverName && s.driverName.toLowerCase() === currentUser.name.toLowerCase())
-      )
+      .filter((s) => {
+        const isMyId = cleanId(s.driverId) === cleanId(currentUser.id);
+        const isMyName = matchDriverName(s.driverName, currentUser.name);
+        return isMyId || isMyName;
+      })
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [shifts, currentUser]);
 
@@ -140,15 +154,24 @@ export function ShiftManagementView({
     return myShifts.find((s) => s.date === todayStr);
   }, [myShifts, todayStr]);
 
-  // Trocas pendentes onde o motoboy é o destinatário (ou qualquer motoboy)
+  // Trocas pendentes onde o motoboy é o destinatário (ou abertas para todos da equipe)
   const pendingSwapsForMe = useMemo(() => {
-    return swaps.filter(
-      (sw) =>
-        sw.status === "pendente" &&
-        sw.requestingDriverId !== currentUser.id &&
-        (!sw.targetDriverId || sw.targetDriverId === currentUser.id || sw.targetDriverId === "all")
-    );
-  }, [swaps, currentUser.id]);
+    return swaps.filter((sw) => {
+      if (sw.status !== "pendente") return false;
+      const isMine =
+        cleanId(sw.requestingDriverId) === cleanId(currentUser.id) ||
+        matchDriverName(sw.requestingDriverName, currentUser.name);
+      if (isMine && !isAdmin) return false;
+
+      const isTargetMe =
+        !sw.targetDriverId ||
+        sw.targetDriverId === "all" ||
+        cleanId(sw.targetDriverId) === cleanId(currentUser.id) ||
+        matchDriverName(sw.targetDriverName, currentUser.name);
+
+      return isTargetMe || isAdmin;
+    });
+  }, [swaps, currentUser, isAdmin]);
 
   // Total de trocas pendentes gerais (para o admin)
   const pendingSwapsCount = useMemo(() => {
@@ -284,6 +307,9 @@ export function ShiftManagementView({
                 {myShifts.map((s) => {
                   const isPast = s.date < todayStr;
                   const isToday = s.date === todayStr;
+                  const pendingSwapForShift = swaps.find(
+                    (sw) => sw.shiftId === s.id && sw.status === "pendente"
+                  );
 
                   return (
                     <div
@@ -327,20 +353,99 @@ export function ShiftManagementView({
                         )}
 
                         {!isPast && (
-                          <button
-                            type="button"
-                            className="scm-btn-swap"
-                            onClick={() => setSwapTargetShift(s)}
-                            title="Trocar este plantão"
-                          >
-                            <ArrowLeftRight size={12} />
-                            <span>Trocar</span>
-                          </button>
+                          pendingSwapForShift ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span className="scm-swap-pending-badge">Troca Solicitada</span>
+                              <button
+                                type="button"
+                                className="scm-btn-cancel-swap"
+                                onClick={async () => {
+                                  if (confirm("Deseja cancelar a solicitação de troca deste plantão?")) {
+                                    await onCancelSwap(pendingSwapForShift.id);
+                                    onNotify("Solicitação de troca cancelada.");
+                                  }
+                                }}
+                                title="Cancelar solicitação de troca"
+                              >
+                                <Trash2 size={12} />
+                                <span>Cancelar</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="scm-btn-swap"
+                              onClick={() => setSwapTargetShift(s)}
+                              title="Trocar este plantão"
+                            >
+                              <ArrowLeftRight size={12} />
+                              <span>Trocar</span>
+                            </button>
+                          )
                         )}
                       </div>
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Plantões Disponíveis da Equipe (para pegar com 1 clique) */}
+          {pendingSwapsForMe.length > 0 && (
+            <div className="available-swaps-section">
+              <div className="ass-head">
+                <div className="ass-title">
+                  <ArrowLeftRight size={14} />
+                  <h4>Plantões Disponíveis para Pegar ({pendingSwapsForMe.length})</h4>
+                </div>
+                <span className="ass-sub">Colegas querendo passar plantão</span>
+              </div>
+              <div className="ass-cards-list">
+                {pendingSwapsForMe.map((sw) => (
+                  <div key={sw.id} className="ass-card">
+                    <div className="ass-card-main">
+                      <div className="ass-driver-info">
+                        <span>De: <strong>{sw.requestingDriverName}</strong></span>
+                        <span className="ass-target">
+                          {sw.targetDriverName ? `Para você` : `Aberto para a equipe`}
+                        </span>
+                      </div>
+                      <div className="ass-shift-info">
+                        <Calendar size={12} />
+                        <strong>{formatShiftDateBR(sw.shiftDate)}</strong>
+                        <span>•</span>
+                        <Clock size={12} />
+                        <span>{sw.shiftTime}</span>
+                      </div>
+                      {sw.reason && <div className="ass-reason">Motivo: "{sw.reason}"</div>}
+                    </div>
+                    <div className="ass-actions">
+                      <button
+                        type="button"
+                        className="ass-btn-accept"
+                        onClick={async () => {
+                          await onRespondSwap(sw, true);
+                          onNotify("Plantão aceito com sucesso! Adicionado à sua escala.");
+                        }}
+                      >
+                        <Check size={14} /> Pegar Plantão
+                      </button>
+                      {sw.targetDriverId && (
+                        <button
+                          type="button"
+                          className="ass-btn-reject"
+                          onClick={async () => {
+                            await onRespondSwap(sw, false);
+                            onNotify("Solicitação recusada.");
+                          }}
+                        >
+                          <X size={14} /> Recusar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -470,8 +575,19 @@ export function ShiftManagementView({
                     ) : (
                       dayShifts.map((s) => {
                         const isMe =
-                          s.driverId === currentUser.id ||
-                          (s.driverName && s.driverName.toLowerCase() === currentUser.name.toLowerCase());
+                          cleanId(s.driverId) === cleanId(currentUser.id) ||
+                          matchDriverName(s.driverName, currentUser.name);
+
+                        const pendingSwap = swaps.find((sw) => sw.shiftId === s.id && sw.status === "pendente");
+
+                        const canTakeThisShift =
+                          pendingSwap &&
+                          (!isMe || isAdmin) &&
+                          (!pendingSwap.targetDriverId ||
+                            pendingSwap.targetDriverId === "all" ||
+                            cleanId(pendingSwap.targetDriverId) === cleanId(currentUser.id) ||
+                            matchDriverName(pendingSwap.targetDriverName, currentUser.name) ||
+                            isAdmin);
 
                         return (
                           <div
@@ -490,27 +606,89 @@ export function ShiftManagementView({
                                   <span className="ssp-time">
                                     <Clock size={11} /> {s.startTime} - {s.endTime}
                                   </span>
-                                  <span className={`ssp-status ${s.status}`}>
-                                    {s.status === "confirmado" ? "Presente" : "Escalado"}
-                                  </span>
+                                  {pendingSwap ? (
+                                    <span className="ssp-status" style={{ background: "rgba(245, 158, 11, 0.12)", color: "#d97706" }}>
+                                      Troca Aberta
+                                    </span>
+                                  ) : (
+                                    <span className={`ssp-status ${s.status}`}>
+                                      {s.status === "confirmado" ? "Presente" : "Escalado"}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
 
-                            {isAdmin && (
-                              <button
-                                type="button"
-                                className="ssp-delete"
-                                onClick={() => {
-                                  if (confirm(`Remover o plantão de ${s.driverName} em ${day.formattedDate}?`)) {
-                                    onDeleteShift(s.id);
-                                  }
-                                }}
-                                title="Remover plantão"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            )}
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              {canTakeThisShift && (
+                                <button
+                                  type="button"
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                    background: "#10b981",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    padding: "4px 8px",
+                                    fontSize: "11px",
+                                    fontWeight: "700",
+                                    cursor: "pointer",
+                                  }}
+                                  onClick={async () => {
+                                    await onRespondSwap(pendingSwap, true);
+                                    onNotify("Plantão aceito! Agora está na sua escala.");
+                                  }}
+                                  title="Pegar este plantão"
+                                >
+                                  <Check size={11} /> Pegar
+                                </button>
+                              )}
+
+                              {isMe && pendingSwap && (
+                                <button
+                                  type="button"
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                    background: "rgba(239, 68, 68, 0.08)",
+                                    color: "#dc2626",
+                                    border: "1px solid rgba(239, 68, 68, 0.2)",
+                                    borderRadius: "6px",
+                                    padding: "4px 7px",
+                                    fontSize: "10.5px",
+                                    fontWeight: "600",
+                                    cursor: "pointer",
+                                  }}
+                                  onClick={async () => {
+                                    if (confirm("Cancelar pedido de troca deste plantão?")) {
+                                      await onCancelSwap(pendingSwap.id);
+                                      onNotify("Troca cancelada.");
+                                    }
+                                  }}
+                                  title="Cancelar pedido de troca"
+                                >
+                                  <Trash2 size={10} /> Cancelar
+                                </button>
+                              )}
+
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  className="ssp-delete"
+                                  onClick={() => {
+                                    if (confirm(`Remover o plantão de ${s.driverName} em ${day.formattedDate}?`)) {
+                                      onDeleteShift(s.id);
+                                    }
+                                  }}
+                                  title="Remover plantão"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         );
                       })
@@ -542,11 +720,21 @@ export function ShiftManagementView({
           ) : (
             <div className="swaps-cards-grid">
               {swaps.map((sw) => {
-                const isMine = sw.requestingDriverId === currentUser.id;
+                const isMine =
+                  cleanId(sw.requestingDriverId) === cleanId(currentUser.id) ||
+                  matchDriverName(sw.requestingDriverName, currentUser.name);
+
+                const isTargetMe =
+                  !sw.targetDriverId ||
+                  sw.targetDriverId === "all" ||
+                  cleanId(sw.targetDriverId) === cleanId(currentUser.id) ||
+                  matchDriverName(sw.targetDriverName, currentUser.name);
+
                 const canAccept =
-                  sw.status === "pendente" &&
-                  !isMine &&
-                  (!sw.targetDriverId || sw.targetDriverId === currentUser.id || sw.targetDriverId === "all");
+                  sw.status === "pendente" && (!isMine || isAdmin) && (isTargetMe || isAdmin);
+
+                const canCancel = (isMine || isAdmin) && sw.status === "pendente";
+                const canDeleteHistory = isAdmin && sw.status !== "pendente";
 
                 return (
                   <div key={sw.id} className={`swap-card ${sw.status}`}>
@@ -567,6 +755,8 @@ export function ShiftManagementView({
                           ? "Aguardando Loja"
                           : sw.status === "recusada"
                           ? "Recusada"
+                          : sw.status === "cancelada"
+                          ? "Cancelada"
                           : sw.status}
                       </span>
                     </div>
@@ -580,6 +770,7 @@ export function ShiftManagementView({
                     </div>
 
                     <div className="swc-footer">
+                      {/* Botão de Aceitar / Recusar para o outro motoboy ou equipe */}
                       {canAccept && (
                         <div className="swc-action-buttons">
                           <button
@@ -587,28 +778,66 @@ export function ShiftManagementView({
                             className="swc-btn-accept"
                             onClick={async () => {
                               await onRespondSwap(sw, true);
-                              onNotify("Troca aceita com sucesso.");
+                              onNotify("Troca aceita com sucesso! O plantão foi transferido.");
                             }}
                           >
                             <Check size={14} /> Aceitar Troca
                           </button>
-                          <button
-                            type="button"
-                            className="swc-btn-reject"
-                            onClick={async () => {
-                              await onRespondSwap(sw, false);
-                              onNotify("Troca recusada.");
-                            }}
-                          >
-                            <X size={14} /> Recusar
-                          </button>
+                          {sw.targetDriverId && (
+                            <button
+                              type="button"
+                              className="swc-btn-reject"
+                              onClick={async () => {
+                                await onRespondSwap(sw, false);
+                                onNotify("Troca recusada.");
+                              }}
+                            >
+                              <X size={14} /> Recusar
+                            </button>
+                          )}
                         </div>
                       )}
 
-                      {isAdmin && sw.status === "aceita" && (
+                      {/* Botão de Cancelar / Excluir solicitação para quem pediu ou admin */}
+                      {canCancel && (
+                        <button
+                          type="button"
+                          className="swc-btn-cancel"
+                          style={{ marginTop: canAccept ? "8px" : "0" }}
+                          onClick={async () => {
+                            if (confirm("Deseja cancelar esta solicitação de troca?")) {
+                              await onCancelSwap(sw.id);
+                              onNotify("Solicitação de troca excluída.");
+                            }
+                          }}
+                        >
+                          <Trash2 size={13} /> Cancelar Solicitação
+                        </button>
+                      )}
+
+                      {/* Excluir registro do histórico (Admin) */}
+                      {canDeleteHistory && (
+                        <button
+                          type="button"
+                          className="swc-btn-delete-history"
+                          style={{ marginTop: "6px" }}
+                          onClick={async () => {
+                            if (confirm("Excluir este registro do histórico de trocas?")) {
+                              await onCancelSwap(sw.id);
+                              onNotify("Registro removido.");
+                            }
+                          }}
+                        >
+                          <Trash2 size={13} /> Excluir Registro
+                        </button>
+                      )}
+
+                      {/* Aprovação do Admin */}
+                      {isAdmin && (sw.status === "aceita" || (sw.status === "pendente" && sw.targetDriverId)) && (
                         <button
                           type="button"
                           className="swc-btn-admin-approve"
+                          style={{ marginTop: "8px" }}
                           onClick={async () => {
                             await onApproveSwapAdmin(sw);
                             onNotify("Troca aprovada pelo gestor.");
@@ -648,7 +877,8 @@ export function ShiftManagementView({
       {swapTargetShift && (
         <RequestSwapModal
           shift={swapTargetShift}
-          drivers={drivers.filter((d) => d.id !== currentUser.id && d.active !== false)}
+          drivers={drivers}
+          currentUser={currentUser}
           onClose={() => setSwapTargetShift(null)}
           onConfirm={async (targetDriverId, reason) => {
             const target = drivers.find((d) => d.id === targetDriverId);
@@ -695,7 +925,20 @@ function NewShiftModal({
   onClose: () => void;
   onSave: (shift: Shift) => Promise<void>;
 }) {
-  const [driverId, setDriverId] = useState(drivers[0]?.id || "");
+  const cleanDrivers = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Driver[] = [];
+    for (const d of drivers) {
+      if (d.active === false) continue;
+      const dName = (d.name || "").trim().toLowerCase();
+      if (!dName || seen.has(dName)) continue;
+      seen.add(dName);
+      list.push(d);
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [drivers]);
+
+  const [driverId, setDriverId] = useState(cleanDrivers[0]?.id || "");
   const [date, setDate] = useState(defaultDate);
   const [shiftType, setShiftType] = useState<ShiftType>("jantar");
   const [startTime, setStartTime] = useState("18:00");
@@ -718,7 +961,7 @@ function NewShiftModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const d = drivers.find((x) => x.id === driverId);
+    const d = cleanDrivers.find((x) => x.id === driverId) || drivers.find((x) => x.id === driverId);
     if (!d) return;
 
     const newShift: Shift = {
@@ -759,7 +1002,7 @@ function NewShiftModal({
             <label className="full">
               Motoboy
               <select value={driverId} onChange={(e) => setDriverId(e.target.value)} required>
-                {drivers.map((d) => (
+                {cleanDrivers.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name} {d.phone ? `(${d.phone})` : ""}
                   </option>
@@ -849,17 +1092,50 @@ function NewShiftModal({
 function RequestSwapModal({
   shift,
   drivers,
+  currentUser,
   onClose,
   onConfirm,
 }: {
   shift: Shift;
   drivers: Driver[];
+  currentUser: User;
   onClose: () => void;
   onConfirm: (targetDriverId?: string, reason?: string) => Promise<void>;
 }) {
   const [targetId, setTargetId] = useState<string>("all");
   const [reason, setReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Lista limpa e 100% desduplicada de motoboys para receber o plantão
+  const cleanDrivers = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Driver[] = [];
+    const ownerId = cleanId(shift.driverId);
+    const ownerName = (shift.driverName || "").trim().toLowerCase();
+    const currentUserId = cleanId(currentUser.id);
+    const currentUserName = (currentUser.name || "").trim().toLowerCase();
+
+    for (const d of drivers) {
+      if (d.active === false) continue;
+      const dId = cleanId(d.id);
+      const dName = (d.name || "").trim().toLowerCase();
+      if (!dName) continue;
+
+      // Exclui o motoboy dono atual deste plantão
+      if (ownerId && dId === ownerId) continue;
+      if (ownerName && (dName === ownerName || dName.includes(ownerName) || ownerName.includes(dName))) continue;
+
+      // Exclui quem está solicitando se for o mesmo usuário logado
+      if (currentUserId && dId === currentUserId) continue;
+      if (currentUserName && (dName === currentUserName || dName.includes(currentUserName) || currentUserName.includes(dName))) continue;
+
+      // Deduplica por nome para não ter nomes duplicados
+      if (seen.has(dName)) continue;
+      seen.add(dName);
+      list.push(d);
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+  }, [drivers, shift, currentUser]);
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -895,7 +1171,7 @@ function RequestSwapModal({
               Passar plantão para
               <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
                 <option value="all">Qualquer motoboy da equipe</option>
-                {drivers.map((d) => (
+                {cleanDrivers.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name} {d.phone ? `(${d.phone})` : ""}
                   </option>

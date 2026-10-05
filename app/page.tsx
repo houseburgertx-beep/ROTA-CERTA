@@ -156,6 +156,7 @@ import {
   requestShiftSwap,
   respondToShiftSwap,
   approveShiftSwapAdmin,
+  cancelShiftSwap,
   replicateWeekShifts,
   loadStoredShifts,
   loadStoredSwaps,
@@ -2017,7 +2018,10 @@ function MobileDeliveryApp({
               onRequestSwap={async (params) => {
                 await requestShiftSwap({
                   shift: params.shift,
-                  requestingDriver: { id: currentUser.id, name: currentUser.name },
+                  requestingDriver: {
+                    id: params.shift.driverId || currentUser.id,
+                    name: params.shift.driverName || currentUser.name,
+                  },
                   targetDriver: params.targetDriverId ? { id: params.targetDriverId, name: params.targetDriverName || "" } : undefined,
                   reason: params.reason,
                 });
@@ -2031,6 +2035,9 @@ function MobileDeliveryApp({
               }}
               onApproveSwapAdmin={async (swap) => {
                 await approveShiftSwapAdmin({ swap, responderPhone: currentUser.phone });
+              }}
+              onCancelSwap={async (swapId) => {
+                await cancelShiftSwap(swapId);
               }}
               onReplicateWeek={async (targetMonday) => {
                 await replicateWeekShifts(shifts, targetMonday);

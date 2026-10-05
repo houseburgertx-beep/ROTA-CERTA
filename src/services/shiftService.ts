@@ -347,6 +347,16 @@ export async function approveShiftSwapAdmin(params: {
   }
 }
 
+export async function cancelShiftSwap(swapId: string): Promise<void> {
+  const current = loadStoredSwaps().filter((s) => s.id !== swapId);
+  saveStoredSwaps(current);
+
+  if (rtdb) {
+    const swapRef = ref(rtdb, `${getRtdbPath("shift_swaps")}/${swapId}`);
+    await remove(swapRef);
+  }
+}
+
 async function transferShift(params: {
   shiftId: string;
   newDriver: { id: string; name: string; phone?: string };

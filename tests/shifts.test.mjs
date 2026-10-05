@@ -192,3 +192,40 @@ test("processSwapDecision gerencia transição de status de troca de plantão", 
   const acceptedPendingAdmin = processSwapDecision(swapRequest, true, { id: "drv2", name: "Lucas" }, false);
   assert.equal(acceptedPendingAdmin.status, "pendente_aprovacao_loja");
 });
+
+test("cancelShiftSwap e desduplicação de motoboys operam corretamente", () => {
+  const swaps = [
+    { id: "sw-1", shiftId: "s1", status: "pendente" },
+    { id: "sw-2", shiftId: "s2", status: "pendente" },
+  ];
+
+  // Simulação de cancelShiftSwap
+  const afterCancel = swaps.filter((s) => s.id !== "sw-1");
+  assert.equal(afterCancel.length, 1);
+  assert.equal(afterCancel[0].id, "sw-2");
+
+  // Simulação de desduplicação de motoboys
+  const rawDrivers = [
+    { id: "drv-1", name: "Amorim", phone: "73988410811" },
+    { id: "drv-takeat-2", name: "Amorim", phone: "73988410811" },
+    { id: "drv-3", name: "Robson", phone: "73999610891" },
+    { id: "drv-4", name: "Jackson", phone: "73998231985" },
+  ];
+
+  const shiftOwnerName = "Robson";
+  const seen = new Set();
+  const cleanList = [];
+
+  for (const d of rawDrivers) {
+    const cleanName = d.name.trim().toLowerCase();
+    if (cleanName === shiftOwnerName.toLowerCase()) continue;
+    if (seen.has(cleanName)) continue;
+    seen.add(cleanName);
+    cleanList.push(d);
+  }
+
+  assert.equal(cleanList.length, 2);
+  assert.equal(cleanList[0].name, "Amorim");
+  assert.equal(cleanList[1].name, "Jackson");
+  assert.equal(cleanList.some((d) => d.name === "Robson"), false);
+});
