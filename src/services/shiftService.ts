@@ -398,7 +398,7 @@ export function generateWhatsAppScheduleText(
   endDate: string,
   storeName: string
 ): string {
-  const title = `🛵 *ESCALA DE MOTOBOYS - ${storeName.toUpperCase()}*\n📅 *Período:* ${formatShiftDateBR(startDate)} até ${formatShiftDateBR(endDate)}\n\n`;
+  const title = `*ESCALA DE MOTOBOYS - ${storeName.toUpperCase()}*\n*Período:* ${formatShiftDateBR(startDate)} até ${formatShiftDateBR(endDate)}\n\n`;
 
   // Agrupa os plantões por data
   const byDate = new Map<string, Shift[]>();
@@ -417,21 +417,20 @@ export function generateWhatsAppScheduleText(
   let text = title;
   for (const d of sortedDates) {
     text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `📍 *${formatShiftDateBR(d).toUpperCase()}*\n`;
+    text += `*${formatShiftDateBR(d).toUpperCase()}*\n`;
     const dayShifts = byDate.get(d)!.sort((a, b) => a.startTime.localeCompare(b.startTime));
 
     for (const s of dayShifts) {
-      const typeEmoji = s.shiftType === "almoco" ? "☀️" : s.shiftType === "jantar" ? "🌙" : "⏰";
-      const statusIcon = s.status === "confirmado" ? "✅" : "⏳";
-      text += `${typeEmoji} *${s.startTime} às ${s.endTime}* | ${statusIcon} ${s.driverName}\n`;
+      const typeStr = s.shiftType === "almoco" ? "Almoço" : s.shiftType === "jantar" ? "Noite" : "Integral";
+      text += `• *${s.startTime} às ${s.endTime}* (${typeStr}) - ${s.driverName}\n`;
     }
     text += `\n`;
   }
 
   text += `━━━━━━━━━━━━━━━━━━━━━\n`;
-  text += `⚠️ *Regras de Troca de Plantão:*\n`;
-  text += `• Solicite a troca diretamente pelo app Rota Certa.\n`;
-  text += `• Não falte sem aviso prévio. Bom trabalho a todos! 🚀\n`;
+  text += `*Orientações:*\n`;
+  text += `• Trocas de plantão devem ser solicitadas no app Rota Certa.\n`;
+  text += `• Em caso de imprevisto, comunique a coordenação com antecedência.\n`;
 
   return text;
 }

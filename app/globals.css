@@ -2459,13 +2459,32 @@ body.text-scale-large,
 .swap-modal-summary {
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 12px 14px;
-  font-size: 12.5px;
-  color: var(--ink);
+  border-radius: 14px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+}
+
+.sms-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.sms-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sms-value {
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 13px;
 }
 
 .wpp-text-preview textarea {

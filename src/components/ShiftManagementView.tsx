@@ -187,7 +187,7 @@ export function ShiftManagementView({
         >
           <CalendarCheck size={15} />
           <span>Minha Escala</span>
-          {myTodayShift && <span className="shift-pulse-dot" title="Você tem plantão hoje!" />}
+          {myTodayShift && <span className="shift-pulse-dot" title="Plantão ativo hoje" />}
         </button>
 
         <button
@@ -214,7 +214,7 @@ export function ShiftManagementView({
         </button>
       </div>
 
-      {/* 2. ABA 1: MINHA ESCALA (MINIMALISTA) */}
+      {/* 2. ABA 1: MINHA ESCALA (MINIMALISTA E DIRETA) */}
       {subTab === "minha_escala" && (
         <div className="shift-my-list">
           {/* Se houver trocas solicitadas para mim */}
@@ -228,7 +228,7 @@ export function ShiftManagementView({
                 {pendingSwapsForMe.map((sw) => (
                   <div key={sw.id} className="sab-item">
                     <div className="sab-desc">
-                      <strong>{sw.requestingDriverName}</strong> quer passar o plantão de{" "}
+                      <strong>{sw.requestingDriverName}</strong> solicitou passar o plantão de{" "}
                       <strong>{formatShiftDateBR(sw.shiftDate)}</strong> ({sw.shiftTime}).
                       {sw.reason && <em> Motivo: "{sw.reason}"</em>}
                     </div>
@@ -238,7 +238,7 @@ export function ShiftManagementView({
                         className="sab-btn-accept"
                         onClick={async () => {
                           await onRespondSwap(sw, true);
-                          onNotify(`Você aceitou a troca com ${sw.requestingDriverName}! ✅`);
+                          onNotify(`Você aceitou a troca com ${sw.requestingDriverName}.`);
                         }}
                       >
                         <Check size={14} /> Aceitar
@@ -248,7 +248,7 @@ export function ShiftManagementView({
                         className="sab-btn-reject"
                         onClick={async () => {
                           await onRespondSwap(sw, false);
-                          onNotify(`Troca recusada.`);
+                          onNotify("Troca recusada.");
                         }}
                       >
                         <X size={14} /> Recusar
@@ -293,7 +293,7 @@ export function ShiftManagementView({
                       <div className="scm-left">
                         <div className="scm-title-row">
                           <span className="scm-day-name">{formatShiftDateBR(s.date)}</span>
-                          {isToday && <span className="scm-today-badge">Hoje 📍</span>}
+                          {isToday && <span className="scm-today-badge">Hoje</span>}
                         </div>
                         <div className="scm-time-row">
                           <Clock size={12} />
@@ -310,7 +310,7 @@ export function ShiftManagementView({
                               setProcessingId(s.id);
                               try {
                                 await onCheckInShift(s.id);
-                                onNotify("Presença confirmada no plantão! Bom trabalho! 🛵");
+                                onNotify("Presença confirmada no plantão.");
                               } finally {
                                 setProcessingId(null);
                               }
@@ -322,7 +322,7 @@ export function ShiftManagementView({
                           </button>
                         ) : (
                           <span className={`scm-status-pill ${s.status}`}>
-                            {s.status === "confirmado" ? "✔ Confirmado" : "Escalado"}
+                            {s.status === "confirmado" ? "Confirmado" : "Escalado"}
                           </span>
                         )}
 
@@ -396,7 +396,7 @@ export function ShiftManagementView({
                     ) {
                       await onReplicateWeek(nextMonStr);
                       nextWeek();
-                      onNotify("Plantões replicados com sucesso para a próxima semana! 📋");
+                      onNotify("Plantões replicados com sucesso para a próxima semana.");
                     }
                   }}
                   title="Replicar esta semana para a próxima"
@@ -430,7 +430,7 @@ export function ShiftManagementView({
                     <div className="sdc-header-left">
                       <span className="sdc-day-title">{day.dayName}</span>
                       <span className="sdc-date-pill">{day.formattedDate}</span>
-                      {day.isToday && <span className="sdc-today-pill">Hoje 📍</span>}
+                      {day.isToday && <span className="sdc-today-pill">Hoje</span>}
                     </div>
 
                     <div className="sdc-header-right">
@@ -491,7 +491,7 @@ export function ShiftManagementView({
                                     <Clock size={11} /> {s.startTime} - {s.endTime}
                                   </span>
                                   <span className={`ssp-status ${s.status}`}>
-                                    {s.status === "confirmado" ? "✔ Presente" : "Escalado"}
+                                    {s.status === "confirmado" ? "Presente" : "Escalado"}
                                   </span>
                                 </div>
                               </div>
@@ -553,14 +553,14 @@ export function ShiftManagementView({
                     <div className="swc-header">
                       <div className="swc-drivers-flow">
                         <strong>{sw.requestingDriverName}</strong>
-                        <span className="swc-arrow">➔</span>
+                        <ArrowLeftRight size={12} className="swc-arrow" />
                         <span className="swc-target">
-                          {sw.targetDriverName || "Aberto p/ Todos"}
+                          {sw.targetDriverName || "Aberto para a equipe"}
                         </span>
                       </div>
                       <span className={`swc-status-badge ${sw.status}`}>
                         {sw.status === "aprovada"
-                          ? "✔ Aprovada"
+                          ? "Aprovada"
                           : sw.status === "pendente"
                           ? "Pendente"
                           : sw.status === "aceita"
@@ -573,7 +573,8 @@ export function ShiftManagementView({
 
                     <div className="swc-body">
                       <div className="swc-info">
-                        📅 <strong>{formatShiftDateBR(sw.shiftDate)}</strong> • {sw.shiftTime}
+                        <Calendar size={13} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px" }} />
+                        <strong>{formatShiftDateBR(sw.shiftDate)}</strong> • {sw.shiftTime}
                       </div>
                       {sw.reason && <div className="swc-reason">Motivo: "{sw.reason}"</div>}
                     </div>
@@ -586,7 +587,7 @@ export function ShiftManagementView({
                             className="swc-btn-accept"
                             onClick={async () => {
                               await onRespondSwap(sw, true);
-                              onNotify("Troca aceita com sucesso! ✅");
+                              onNotify("Troca aceita com sucesso.");
                             }}
                           >
                             <Check size={14} /> Aceitar Troca
@@ -610,7 +611,7 @@ export function ShiftManagementView({
                           className="swc-btn-admin-approve"
                           onClick={async () => {
                             await onApproveSwapAdmin(sw);
-                            onNotify("Troca aprovada pelo gestor da loja!");
+                            onNotify("Troca aprovada pelo gestor.");
                           }}
                         >
                           <UserCheck size={14} /> Aprovar Troca Oficialmente
@@ -639,7 +640,7 @@ export function ShiftManagementView({
             await onSaveShift(shift);
             setIsNewShiftModalOpen(false);
             setNewShiftPreselectedDate(null);
-            onNotify(`Plantão de ${shift.driverName} agendado! 📅`);
+            onNotify(`Plantão de ${shift.driverName} agendado.`);
           }}
         />
       )}
@@ -658,7 +659,7 @@ export function ShiftManagementView({
               reason,
             });
             setSwapTargetShift(null);
-            onNotify("Solicitação de troca enviada aos colegas! 🔄");
+            onNotify("Solicitação de troca enviada.");
           }}
         />
       )}
@@ -678,7 +679,7 @@ export function ShiftManagementView({
 }
 
 // ==========================================
-// SUB-MODAIS DE APOIO
+// SUB-MODAIS DE APOIO (CLEAN & EMOJI-FREE)
 // ==========================================
 
 function NewShiftModal({
@@ -739,14 +740,14 @@ function NewShiftModal({
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: "480px" }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: "460px" }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
             <span className="modal-kicker">
-              <Calendar size={13} /> Escala da Loja
+              <Calendar size={13} /> Escala
             </span>
             <h2>Adicionar Plantão</h2>
-            <p>Selecione o motoboy e o horário do plantão.</p>
+            <p>Selecione o motoboy e o horário do turno.</p>
           </div>
           <button type="button" onClick={onClose} title="Fechar">
             <X size={16} />
@@ -773,7 +774,7 @@ function NewShiftModal({
 
             <div className="full">
               <span style={{ fontSize: "10px", fontWeight: "700", color: "var(--muted)", display: "block", marginBottom: "6px" }}>
-                Atalho de Turno
+                Horário Padrão
               </span>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
                 <button
@@ -781,21 +782,21 @@ function NewShiftModal({
                   className={`preset-btn ${shiftType === "almoco" ? "active" : ""}`}
                   onClick={() => handleTypePreset("almoco")}
                 >
-                  ☀️ Almoço
+                  Almoço (11h-15h)
                 </button>
                 <button
                   type="button"
                   className={`preset-btn ${shiftType === "jantar" ? "active" : ""}`}
                   onClick={() => handleTypePreset("jantar")}
                 >
-                  🌙 Noturno
+                  Noite (18h-23h30)
                 </button>
                 <button
                   type="button"
                   className={`preset-btn ${shiftType === "integral" ? "active" : ""}`}
                   onClick={() => handleTypePreset("integral")}
                 >
-                  ⏰ Integral
+                  Integral
                 </button>
               </div>
             </div>
@@ -824,18 +825,18 @@ function NewShiftModal({
               Observação (Opcional)
               <input
                 type="text"
-                placeholder="Ex: Reforço no salão, primeiro turno..."
+                placeholder="Ex: Apoio no salão, primeiro turno..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
               />
             </label>
           </div>
 
-          <div className="modal-actions">
-            <button type="button" onClick={onClose} className="text-btn" style={{ padding: "10px 16px" }}>
+          <div className="modal-actions" style={{ marginTop: "18px" }}>
+            <button type="button" onClick={onClose} className="text-btn" style={{ padding: "10px 16px", borderRadius: "12px" }}>
               Cancelar
             </button>
-            <button type="submit" className="primary">
+            <button type="submit" className="primary" style={{ borderRadius: "12px", minWidth: "140px" }}>
               Salvar Plantão
             </button>
           </div>
@@ -858,17 +859,18 @@ function RequestSwapModal({
 }) {
   const [targetId, setTargetId] = useState<string>("all");
   const [reason, setReason] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: "480px" }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: "460px" }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
             <span className="modal-kicker">
               <ArrowLeftRight size={13} /> Troca de Plantão
             </span>
             <h2>Solicitar Troca</h2>
-            <p>Passe seu plantão para outro motoboy da equipe.</p>
+            <p>Selecione um colega ou disponibilize para a equipe.</p>
           </div>
           <button type="button" onClick={onClose} title="Fechar">
             <X size={16} />
@@ -876,47 +878,65 @@ function RequestSwapModal({
         </div>
 
         <div style={{ padding: "18px 20px" }}>
+          {/* Card Resumo do Plantão */}
           <div className="swap-modal-summary">
-            <div>
-              Plantão: <strong>{formatShiftDateBR(shift.date)}</strong>
+            <div className="sms-row">
+              <span className="sms-label">Plantão</span>
+              <span className="sms-value">{formatShiftDateBR(shift.date)}</span>
             </div>
-            <div>
-              Horário: <strong>{shift.startTime} às {shift.endTime}</strong>
+            <div className="sms-row">
+              <span className="sms-label">Horário</span>
+              <span className="sms-value">{shift.startTime} às {shift.endTime}</span>
             </div>
           </div>
 
           <div className="form-grid" style={{ marginTop: "14px" }}>
             <label className="full">
-              Passar plantão para quem?
+              Passar plantão para
               <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-                <option value="all">📢 Qualquer Motoboy (Aberto para todos)</option>
+                <option value="all">Qualquer motoboy da equipe</option>
                 {drivers.map((d) => (
                   <option key={d.id} value={d.id}>
-                    👤 {d.name} {d.phone ? `(${d.phone})` : ""}
+                    {d.name} {d.phone ? `(${d.phone})` : ""}
                   </option>
                 ))}
               </select>
             </label>
 
             <label className="full">
-              Motivo da troca (opcional)
+              Motivo (opcional)
               <input
                 type="text"
-                placeholder="Ex: Consulta médica, imprevisto pessoal..."
+                placeholder="Informe o motivo da solicitação..."
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />
             </label>
           </div>
 
-          <div className="modal-actions">
-            <button type="button" onClick={onClose} className="text-btn" style={{ padding: "10px 16px" }}>
+          <div className="modal-actions" style={{ marginTop: "20px" }}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-btn"
+              style={{ padding: "10px 16px", borderRadius: "12px" }}
+              disabled={isSubmitting}
+            >
               Cancelar
             </button>
             <button
               type="button"
               className="primary"
-              onClick={() => onConfirm(targetId === "all" ? undefined : targetId, reason)}
+              style={{ borderRadius: "12px", minWidth: "150px" }}
+              disabled={isSubmitting}
+              onClick={async () => {
+                setIsSubmitting(true);
+                try {
+                  await onConfirm(targetId === "all" ? undefined : targetId, reason);
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
             >
               Enviar Solicitação
             </button>
@@ -949,7 +969,7 @@ function WhatsAppScheduleModal({
   const copyToClipboard = () => {
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(text);
-      onNotify("Escala copiada! Cole agora no grupo do WhatsApp. 📋");
+      onNotify("Escala copiada para a área de transferência.");
     }
   };
 
@@ -979,12 +999,12 @@ function WhatsAppScheduleModal({
             <textarea readOnly value={text} rows={12} />
           </div>
 
-          <div className="modal-actions">
-            <button type="button" onClick={copyToClipboard} className="text-btn" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <Copy size={16} /> Copiar Texto
+          <div className="modal-actions" style={{ marginTop: "16px" }}>
+            <button type="button" onClick={copyToClipboard} className="text-btn" style={{ display: "flex", alignItems: "center", gap: "6px", borderRadius: "12px" }}>
+              <Copy size={15} /> Copiar Texto
             </button>
-            <button type="button" onClick={openWhatsApp} className="primary" style={{ background: "#25d366", borderColor: "#25d366" }}>
-              <Share2 size={16} /> Abrir WhatsApp
+            <button type="button" onClick={openWhatsApp} className="primary" style={{ background: "#25d366", borderColor: "#25d366", borderRadius: "12px" }}>
+              <Share2 size={15} /> Abrir WhatsApp
             </button>
           </div>
         </div>
