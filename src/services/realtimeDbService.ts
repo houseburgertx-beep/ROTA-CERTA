@@ -310,6 +310,66 @@ export async function batchSaveDeliveriesRTDB(deliveries: Delivery[]): Promise<v
   }
 }
 
+/**
+ * Arquiva com segurança entregas finalizadas (Entregue ou Cancelado) com mais de X dias,
+ * movendo-as para o nó 'deliveries_archive' do RTDB e limpando da lista ativa.
+ * Preserva 100% dos dados para relatórios e histórico sem sobrecarregar a sincronização ao vivo.
+ */
+export async function archiveOldDeliveriesRTDB(cutoffDays = 3): Promise<{ archivedCount: number }> {
+  if (!rtdb) return { archivedCount: 0 };
+  const deliveriesPath = getRtdbPath("deliveries");
+  const archivePath = getRtdbPath("deliveries_archive");
+
+  try {
+    const snapshot = await get(ref(rtdb, deliveriesPath));
+    if (!snapshot.exists()) return { archivedCount: 0 };
+
+    const data = snapshot.val() as Record<string, Delivery>;
+    const now = Date.now();
+    const cutoffMs = cutoffDays * 24 * 60 * 60 * 1000;
+    const updates: Record<string, unknown> = {};
+    let count = 0;
+
+    for (const [id, del] of Object.entries(data)) {
+      const stLower = String(del.status || "").toLowerCase();
+      const isDone = stLower === "entregue" || stLower.includes("cancel");
+      const createdTime = del.createdAt ? new Date(del.createdAt).getTime() : 0;
+      const isOld = createdTime > 0 && now - createdTime > cutoffMs;
+
+      if (isDone && isOld) {
+        updates[`${archivePath}/${id}`] = cleanForRTDB(del);
+        updates[`${deliveriesPath}/${id}`] = null;
+        count++;
+      }
+    }
+
+    if (count > 0) {
+      await update(ref(rtdb), updates);
+    }
+
+    return { archivedCount: count };
+  } catch (err) {
+    console.warn("Erro ao arquivar pedidos antigos no RTDB:", err);
+    return { archivedCount: 0 };
+  }
+}
+
+/**
+ * Consulta entregas arquivadas (para auditoria, relatórios históricos ou estatísticas passadas).
+ */
+export async function fetchArchivedDeliveriesRTDB(): Promise<Delivery[]> {
+  if (!rtdb) return [];
+  try {
+    const archivePath = getRtdbPath("deliveries_archive");
+    const snapshot = await get(ref(rtdb, archivePath));
+    if (!snapshot.exists()) return [];
+    return normalizeDeliveries(snapshot.val() as Record<string, Delivery>);
+  } catch (err) {
+    console.warn("Erro ao buscar entregas arquivadas do RTDB:", err);
+    return [];
+  }
+}
+
 // ==========================================
 // MOTOBOYS (DRIVERS)
 // ==========================================

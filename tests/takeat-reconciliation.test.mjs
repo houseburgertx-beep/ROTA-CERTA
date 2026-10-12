@@ -238,3 +238,93 @@ test("Formatação de exibição de pedidos de loja e iFood", () => {
   );
 });
 
+test("isValidIfoodLocalizer valida estritamente 6 a 8 dígitos e rejeita telefones/CPFs", () => {
+  function isValidIfoodLocalizer(code) {
+    if (!code) return false;
+    const clean = String(code).replace(/\D/g, "");
+    if (clean.length < 6 || clean.length > 8) return false;
+    if (clean.startsWith("0800") || clean.startsWith("739") || clean.startsWith("00")) return false;
+    return true;
+  }
+
+  // Válidos: 6 a 8 dígitos legítimos
+  assert.equal(isValidIfoodLocalizer("75523066"), true);
+  assert.equal(isValidIfoodLocalizer("84729103"), true);
+  assert.equal(isValidIfoodLocalizer("123456"), true);
+  assert.equal(isValidIfoodLocalizer("1234567"), true);
+
+  // Inválidos: Telefones celulares com DDD 73 (11 dígitos) como na imagem do usuário
+  assert.equal(isValidIfoodLocalizer("+55 73 99964-3417"), false);
+  assert.equal(isValidIfoodLocalizer("73999643417"), false);
+  assert.equal(isValidIfoodLocalizer("73988112233"), false);
+
+  // Inválidos: Telefones 0800 ou Takeat (11 dígitos)
+  assert.equal(isValidIfoodLocalizer("08007051234"), false);
+  assert.equal(isValidIfoodLocalizer("0800 123 4567"), false);
+
+  // Inválidos: Curtos demais, longos demais, nulos
+  assert.equal(isValidIfoodLocalizer(""), false);
+  assert.equal(isValidIfoodLocalizer(null), false);
+  assert.equal(isValidIfoodLocalizer(undefined), false);
+  assert.equal(isValidIfoodLocalizer("12345"), false);
+  assert.equal(isValidIfoodLocalizer("123456789"), false);
+  assert.equal(isValidIfoodLocalizer("00123456"), false);
+});
+
+test("Filtro de notificações de novos pedidos ignora histórico e ordens entregues", () => {
+  const now = Date.now();
+  const twoHoursMs = 2 * 60 * 60 * 1000;
+  const prevIds = new Set(["deliv-old-1"]);
+
+  const deliveries = [
+    // 1. Pedido antigo entregue do histórico (ex: os 101 pedidos do motoboy)
+    {
+      id: "deliv-hist-1",
+      status: "Entregue",
+      createdAt: new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      driver: "Guilherme"
+    },
+    // 2. Pedido já conhecido no snapshot anterior
+    {
+      id: "deliv-old-1",
+      status: "Pronta para sair",
+      createdAt: new Date(now - 10 * 60 * 1000).toISOString(),
+      driver: "Guilherme"
+    },
+    // 3. Pedido cancelado
+    {
+      id: "deliv-canc-1",
+      status: "cancelada",
+      createdAt: new Date(now - 5 * 60 * 1000).toISOString(),
+      driver: "Guilherme"
+    },
+    // 4. Pedido antigo não entregue (> 2 horas)
+    {
+      id: "deliv-stale-1",
+      status: "Pronta para sair",
+      createdAt: new Date(now - 3 * 60 * 60 * 1000).toISOString(),
+      driver: "Guilherme"
+    },
+    // 5. Pedido GENUINAMENTE NOVO ATIVO
+    {
+      id: "deliv-new-1",
+      status: "Pronta para sair",
+      createdAt: new Date(now - 2 * 60 * 1000).toISOString(),
+      driver: "Guilherme"
+    }
+  ];
+
+  const newForMe = deliveries.filter((d) => {
+    if (prevIds.has(d.id)) return false;
+    const stLower = String(d.status || "").toLowerCase();
+    if (stLower === "entregue" || stLower.includes("cancel")) return false;
+    const createdAtMs = d.createdAt ? new Date(d.createdAt).getTime() : 0;
+    if (createdAtMs > 0 && now - createdAtMs > twoHoursMs) return false;
+    return d.driver === "Guilherme";
+  });
+
+  assert.equal(newForMe.length, 1);
+  assert.equal(newForMe[0].id, "deliv-new-1");
+});
+
+

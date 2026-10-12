@@ -1080,6 +1080,17 @@ export function matchTakeatDriver(
   }
 }
 
+export function isValidIfoodLocalizer(code?: string | null): boolean {
+  if (!code) return false;
+  const clean = String(code).replace(/\D/g, "");
+  // Localizadores legítimos do iFood possuem entre 6 e 8 dígitos (quase sempre exatamente 8).
+  // Números com 10 ou 11 dígitos são telefones com DDD ou CPFs e NUNCA devem ser aceitos como localizador.
+  if (clean.length < 6 || clean.length > 8) return false;
+  // Rejeita se for claramente um prefixo de telefone local como 739... ou 0800...
+  if (clean.startsWith("0800") || clean.startsWith("739") || clean.startsWith("00")) return false;
+  return true;
+}
+
 /**
  * Converte uma sessão de comanda Takeat em um objeto Delivery do Rota Certa.
  */
@@ -1168,11 +1179,10 @@ export function mapTakeatSessionToDelivery(
       String(p.payment_method?.name || (p as unknown as Record<string, string>).name || "").toLowerCase().includes("ifood")
     );
 
-
-  // Extração precisa do Localizador iFood (8 dígitos, ex: "75523066")
+  // Extração precisa do Localizador iFood (estritamente 6 a 8 dígitos, ex: "75523066")
   let ifoodLocalizer: string | undefined = undefined;
-  if (basketLocalizer && /^\d{6,10}$/.test(basketLocalizer)) {
-    ifoodLocalizer = basketLocalizer;
+  if (basketLocalizer && isValidIfoodLocalizer(basketLocalizer)) {
+    ifoodLocalizer = basketLocalizer.replace(/\D/g, "");
   } else {
     const locatorCandidates = [
       rawBasket?.localizer,
@@ -1185,8 +1195,8 @@ export function mapTakeatSessionToDelivery(
       rawSession.ifood_locator,
     ];
     for (const c of locatorCandidates) {
-      if (c && /^\d{6,10}$/.test(String(c).trim())) {
-        ifoodLocalizer = String(c).trim();
+      if (c && isValidIfoodLocalizer(String(c))) {
+        ifoodLocalizer = String(c).replace(/\D/g, "");
         break;
       }
     }
@@ -1194,16 +1204,16 @@ export function mapTakeatSessionToDelivery(
 
   if (!ifoodLocalizer) {
     const textSearch = `${String(rawSession.notes || "")} ${String(rawSession.details || "")} ${String(rawBasket?.details || "")}`;
-    const match = textSearch.match(/(?:localizador|locator)[\s.:#-]+([0-9]{6,10})/i);
-    if (match) {
+    const match = textSearch.match(/(?:localizador|locator)[\s.:#-]+([0-9]{6,8})/i);
+    if (match && isValidIfoodLocalizer(match[1])) {
       ifoodLocalizer = match[1];
     }
   }
 
-  // Se ifood_document tiver de 6 a 9 dígitos (não 11 que é CPF)
+  // Se ifood_document tiver de 6 a 8 dígitos (não 10 ou 11 que é telefone ou CPF)
   if (!ifoodLocalizer && session.ifood_document) {
     const cleanDoc = String(session.ifood_document).replace(/\D/g, "");
-    if (cleanDoc.length >= 6 && cleanDoc.length <= 9) {
+    if (isValidIfoodLocalizer(cleanDoc)) {
       ifoodLocalizer = cleanDoc;
     }
   }

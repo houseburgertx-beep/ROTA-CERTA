@@ -215,8 +215,8 @@ export function parseComandaText(text: string): ParsedReceiptData {
   const coleta = g(/(?:c[oó]digo\s*de\s*coleta|coleta)[\s.:#-]+([0-9]{4,6})/i);
   if (coleta) out.pickupCode = coleta;
 
-  const localizador = g(/(?:localizador(?:\s*ifood)?|c[oó]digo\s*localizador)[\s.:#-]+([0-9]{6,10})/i);
-  if (localizador) out.ifoodLocalizer = localizador;
+  const localizador = g(/(?:localizador(?:\s*ifood)?|c[oó]digo\s*localizador)[\s.:#-]+([0-9]{6,8})/i);
+  if (localizador && !localizador.startsWith("0800") && !localizador.startsWith("739")) out.ifoodLocalizer = localizador;
 
   // 9. TAXA DE ENTREGA
   const taxaRaw =

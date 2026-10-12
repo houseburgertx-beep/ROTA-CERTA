@@ -50,12 +50,16 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
   useEffect(() => {
     if (!mapContainerRef.current || !delivery || typeof window === "undefined") return;
 
-    const L = require("leaflet");
+    let isMounted = true;
+    void import("leaflet").then((leafletModule) => {
+      if (!isMounted || !mapContainerRef.current) return;
+      // Suporta ESM e CommonJS do Leaflet
+      const L = (leafletModule.default || leafletModule) as any;
 
-    const destLat = delivery.latitude || activeStore.latitude;
-    const destLng = delivery.longitude || activeStore.longitude;
-    const driverLat = delivery.driver_latitude ?? delivery.driverLocation?.latitude;
-    const driverLng = delivery.driver_longitude ?? delivery.driverLocation?.longitude;
+      const destLat = delivery.latitude || activeStore.latitude;
+      const destLng = delivery.longitude || activeStore.longitude;
+      const driverLat = delivery.driver_latitude ?? delivery.driverLocation?.latitude;
+      const driverLng = delivery.driver_longitude ?? delivery.driverLocation?.longitude;
 
     if (!mapInstanceRef.current) {
       const map = L.map(mapContainerRef.current, {
@@ -133,6 +137,11 @@ export function CustomerTrackingView({ deliveryId }: CustomerTrackingViewProps) 
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
       } catch (e) {}
     }
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [delivery, activeStore]);
 
   // Se estiver carregando

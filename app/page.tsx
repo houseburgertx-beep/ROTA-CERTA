@@ -81,6 +81,7 @@ import {
   subscribeToDrivers,
 } from "../src/services/driverService";
 import {
+  archiveOldDeliveriesRTDB,
   batchSaveDeliveriesRTDB,
   deleteDeliveryRTDB,
   deleteDriverRTDB,
@@ -470,19 +471,48 @@ function MobileDeliveryApp({
     }
   }, [currentUser, drivers]);
 
+  const deliveriesRef = useRef(deliveries);
+  deliveriesRef.current = deliveries;
+  const driversRef = useRef(drivers);
+  driversRef.current = drivers;
+  const isInitialDeliveriesLoadRef = useRef(true);
+  const isDeliveryForThisDriverRef = useRef<(d: Delivery) => boolean>(() => false);
+
   // Sincronização em tempo real do Firebase Realtime Database
   useEffect(() => {
     const unsubDeliveries = subscribeToDeliveriesRTDB((items) => {
-      // Notifica com som e vibração se um novo pedido atribuído ao motoboy logado chegou
+      if (isInitialDeliveriesLoadRef.current) {
+        // Primeira carga: popula estado sem disparar alertas sonoros ou toasts de histórico
+        isInitialDeliveriesLoadRef.current = false;
+        deliveriesRef.current = items;
+        setDeliveries(items);
+        return;
+      }
+
+      // Notifica com som e vibração APENAS se um novo pedido ATIVO atribuído ao motoboy logado chegou
       if (currentUser.role === "driver") {
         const prevItems = deliveriesRef.current || [];
         const prevIds = new Set(prevItems.map((d) => d.id));
-        const newForMe = items.filter((d) => !prevIds.has(d.id) && isDeliveryForThisDriver(d));
+        const now = Date.now();
+        const twoHoursMs = 2 * 60 * 60 * 1000;
+
+        const newForMe = items.filter((d) => {
+          if (prevIds.has(d.id)) return false;
+          // Ignora pedidos já finalizados ou cancelados
+          const statusLower = String(d.status || "").toLowerCase();
+          if (statusLower === "entregue" || statusLower.includes("cancel")) return false;
+          // Ignora pedidos antigos (mais de 2 horas)
+          const createdAtMs = d.createdAt ? new Date(d.createdAt).getTime() : 0;
+          if (createdAtMs > 0 && now - createdAtMs > twoHoursMs) return false;
+          return isDeliveryForThisDriverRef.current ? isDeliveryForThisDriverRef.current(d) : false;
+        });
+
         if (newForMe.length > 0) {
           playNewOrderAlert();
           notify(`${newForMe.length} novo(s) pedido(s) atribuído(s) a você!`);
         }
       }
+      deliveriesRef.current = items;
       setDeliveries(items);
     });
     const unsubDrivers = subscribeToDriversRTDB((list) => {
@@ -564,9 +594,7 @@ function MobileDeliveryApp({
     }
   }, []);
 
-  const deliveriesRef = useRef(deliveries);
   deliveriesRef.current = deliveries;
-  const driversRef = useRef(drivers);
   driversRef.current = drivers;
 
   // Desbloqueia pipeline de áudio móvel no primeiro gesto do usuário
@@ -591,12 +619,21 @@ function MobileDeliveryApp({
 
   const playNewOrderAlert = playIfoodSoundAlert;
 
-  // Polling automático da Takeat a cada 8 segundos quando configurado
+  // Polling automático da Takeat a cada 8 segundos quando configurado (Apenas Loja/Admin)
+  // Motoboys recebem pedidos instantaneamente via push do Firebase RTDB sem gastar bateria/4G
   useEffect(() => {
+    if (currentUser.role !== "admin") return;
     if (!takeatAutoSync || !isTakeatConfigured()) return;
 
+    let syncCount = 0;
     const runSync = async () => {
       try {
+        // A cada ~500 ciclos (cerca de 1 hora), executa arquivamento preventivo de entregas antigas (>3 dias)
+        syncCount++;
+        if (syncCount % 450 === 1) {
+          void archiveOldDeliveriesRTDB(3);
+        }
+
         const res = await syncTakeatDeliveries(deliveriesRef.current, driversRef.current);
         const hasChanges = res.addedCount > 0 || res.updatedCount > 0;
 
@@ -639,8 +676,9 @@ function MobileDeliveryApp({
     return () => clearInterval(interval);
   }, [takeatAutoSync, isTakeatConnected]);
 
-  // Atualização automática ao reabrir o app ou focar na tela
+  // Atualização automática ao reabrir o app ou focar na tela (Apenas Loja/Admin)
   useEffect(() => {
+    if (currentUser.role !== "admin") return;
     if (!isTakeatConfigured()) return;
 
     const handleFocusOrVisible = () => {
@@ -901,6 +939,7 @@ function MobileDeliveryApp({
 
     return false;
   };
+  isDeliveryForThisDriverRef.current = isDeliveryForThisDriver;
 
   // Financial stats for the current view
   const financialStats = useMemo(() => {
@@ -4354,6 +4393,44 @@ function NewDeliveryModal({
 // -------------------------------------------------------------
 // COMPONENTE: Modal Confirmação de Entrega Própria iFood
 // -------------------------------------------------------------
+function copyToClipboardReliable(text: string): boolean {
+  if (!text) return false;
+  let copied = false;
+  // 1. Cópia síncrona com elemento textarea no DOM (essencial no mobile antes do window.open desfocar a tela)
+  try {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-9999px";
+    textArea.style.top = "-9999px";
+    textArea.setAttribute("readonly", "");
+    document.body.appendChild(textArea);
+    textArea.select();
+    textArea.setSelectionRange(0, text.length);
+    copied = document.execCommand("copy");
+    document.body.removeChild(textArea);
+  } catch {
+    copied = false;
+  }
+
+  // 2. Garante cópia com a API moderna do navegador
+  try {
+    if (navigator?.clipboard?.writeText) {
+      void navigator.clipboard.writeText(text);
+      copied = true;
+    }
+  } catch {}
+
+  // 3. Feedback tátil / vibração no celular Android/iOS
+  try {
+    if (typeof navigator !== "undefined" && navigator.vibrate) {
+      navigator.vibrate([40, 30, 40]);
+    }
+  } catch {}
+
+  return copied;
+}
+
 function IfoodConfirmationModal({
   delivery,
   close,
@@ -4363,21 +4440,29 @@ function IfoodConfirmationModal({
   close: () => void;
   onConfirmSuccess: (deliveryId: string, localizer: string) => void;
 }) {
-  const [localizer, setLocalizer] = useState(delivery.ifoodLocalizer || "");
+  const [localizer, setLocalizer] = useState(() => {
+    const raw = (delivery.ifoodLocalizer || "").trim();
+    const clean = raw.replace(/\D/g, "");
+    // Se tiver mais de 8 dígitos ou começar com prefixo de telefone (739, 0800), rejeita como localizador
+    if (clean.length > 8 || clean.startsWith("0800") || clean.startsWith("739") || clean.length < 6) {
+      return "";
+    }
+    return clean;
+  });
   const [copied, setCopied] = useState(false);
 
-  const cleanLocalizer = localizer.replace(/\D/g, "");
+  const cleanLocalizer = localizer.replace(/\D/g, "").slice(0, 8);
 
   const handleCopy = () => {
     if (!cleanLocalizer) return;
-    void navigator.clipboard.writeText(cleanLocalizer);
+    copyToClipboardReliable(cleanLocalizer);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
 
   const handleOpenIfood = () => {
     if (cleanLocalizer) {
-      void navigator.clipboard.writeText(cleanLocalizer);
+      copyToClipboardReliable(cleanLocalizer);
       setCopied(true);
     }
     window.open(
@@ -4496,9 +4581,12 @@ function IfoodConfirmationModal({
               <input
                 type="text"
                 value={localizer}
-                onChange={(e) => setLocalizer(e.target.value)}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
+                  setLocalizer(digits);
+                }}
                 placeholder="Ex: 84729103"
-                maxLength={14}
+                maxLength={8}
                 style={{
                   flex: 1,
                   height: "46px",
