@@ -47,12 +47,18 @@ export function isSameShiftOrToday(dateStr?: string): boolean {
 }
 
 /**
- * Retorna se a data pertence ao mês e ano atuais.
+/**
+ * Retorna se a data pertence ao mês e ano atuais ou a um mês específico (YYYY-MM).
  */
-export function isCurrentMonth(dateStr?: string): boolean {
+export function isCurrentMonth(dateStr?: string, targetYearMonth?: string): boolean {
   if (!dateStr) return true;
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return true;
+
+  if (targetYearMonth && targetYearMonth !== "all") {
+    const ym = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    return ym === targetYearMonth;
+  }
 
   const now = new Date();
   return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
@@ -65,6 +71,7 @@ export function calculateFinancialStats(
   deliveries: DeliveryItemForFinance[],
   driverNameFilter?: string,
   driverIdFilter?: string,
+  targetYearMonth?: string,
 ): FinancialStats {
   const filterNorm = driverNameFilter ? driverNameFilter.toLowerCase().trim() : undefined;
   const idNorm = driverIdFilter ? driverIdFilter.toLowerCase().trim() : undefined;
@@ -73,7 +80,12 @@ export function calculateFinancialStats(
     ? deliveries.filter((d) => {
         if (idNorm && d.driverId) {
           const dId = d.driverId.toLowerCase().trim();
-          if (dId === idNorm || dId === `drv-${idNorm}` || `drv-${dId}` === idNorm) {
+          if (
+            dId === idNorm ||
+            dId === `drv-${idNorm}` ||
+            `drv-${dId}` === idNorm ||
+            (idNorm.startsWith("drv-") && dId === idNorm.slice(4))
+          ) {
             return true;
           }
         }
@@ -102,7 +114,7 @@ export function calculateFinancialStats(
       nightCount += 1;
     }
 
-    if (isCurrentMonth(dateRef)) {
+    if (targetYearMonth === "all" || isCurrentMonth(dateRef, targetYearMonth)) {
       monthTotal += fee;
       monthCount += 1;
     }
@@ -125,9 +137,10 @@ export function calculateFinancialStats(
 export function getDriversEarningsSummary(
   drivers: Driver[],
   deliveries: DeliveryItemForFinance[],
+  targetYearMonth?: string,
 ): DriverEarningsSummary[] {
   return drivers.map((driver) => {
-    const stats = calculateFinancialStats(deliveries, driver.name, driver.id);
+    const stats = calculateFinancialStats(deliveries, driver.name, driver.id, targetYearMonth);
     return {
       driverId: driver.id,
       driverName: driver.name,

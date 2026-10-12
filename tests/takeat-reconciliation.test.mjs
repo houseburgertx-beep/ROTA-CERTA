@@ -327,4 +327,87 @@ test("Filtro de notificações de novos pedidos ignora histórico e ordens entre
   assert.equal(newForMe[0].id, "deliv-new-1");
 });
 
+test("Cálculo financeiro suporta meses passados e histórico total", () => {
+  const deliveries = [
+    {
+      id: "deliv-sep-1",
+      order: "#101",
+      deliveryFee: 10.0,
+      status: "Entregue",
+      driver: "Guilherme",
+      driverId: "drv-gui",
+      createdAt: "2026-09-15T20:00:00.000Z",
+    },
+    {
+      id: "deliv-sep-2",
+      order: "#102",
+      deliveryFee: 15.0,
+      status: "Entregue",
+      driver: "Guilherme",
+      driverId: "drv-gui",
+      createdAt: "2026-09-28T21:00:00.000Z",
+    },
+    {
+      id: "deliv-oct-1",
+      order: "#103",
+      deliveryFee: 8.0,
+      status: "Entregue",
+      driver: "Guilherme",
+      driverId: "drv-gui",
+      createdAt: "2026-10-02T19:30:00.000Z",
+    },
+    {
+      id: "deliv-oct-2",
+      order: "#104",
+      deliveryFee: 12.0,
+      status: "Entregue",
+      driver: "Amorim",
+      driverId: "drv-amo",
+      createdAt: "2026-10-05T20:00:00.000Z",
+    },
+  ];
+
+  function calcByMonth(list, drvName, targetMonth) {
+    const delivered = list.filter(
+      (d) =>
+        (d.status.toLowerCase() === "entregue" || d.status.toLowerCase() === "delivered") &&
+        (!drvName || d.driver.toLowerCase() === drvName.toLowerCase())
+    );
+
+    const filtered = delivered.filter((d) => {
+      if (targetMonth === "all") return true;
+      return (d.createdAt || d.deliveredAt || "").startsWith(targetMonth);
+    });
+
+    const totalFee = filtered.reduce((acc, d) => acc + (Number(d.deliveryFee) || 0), 0);
+    return {
+      totalFee,
+      totalOrders: filtered.length,
+      avgFee: filtered.length > 0 ? totalFee / filtered.length : 0,
+    };
+  }
+
+  // Setembro de 2026 para Guilherme
+  const sepGui = calcByMonth(deliveries, "Guilherme", "2026-09");
+  assert.equal(sepGui.totalOrders, 2);
+  assert.equal(sepGui.totalFee, 25.0);
+  assert.equal(sepGui.avgFee, 12.5);
+
+  // Outubro de 2026 para Guilherme
+  const octGui = calcByMonth(deliveries, "Guilherme", "2026-10");
+  assert.equal(octGui.totalOrders, 1);
+  assert.equal(octGui.totalFee, 8.0);
+
+  // Todos os meses (Histórico Geral) para Guilherme
+  const allGui = calcByMonth(deliveries, "Guilherme", "all");
+  assert.equal(allGui.totalOrders, 3);
+  assert.equal(allGui.totalFee, 33.0);
+  assert.equal(allGui.avgFee, 11.0);
+
+  // Histórico Geral de todos os motoboys
+  const allTotal = calcByMonth(deliveries, null, "all");
+  assert.equal(allTotal.totalOrders, 4);
+  assert.equal(allTotal.totalFee, 45.0);
+});
+
 

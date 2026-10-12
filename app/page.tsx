@@ -628,11 +628,6 @@ function MobileDeliveryApp({
     let syncCount = 0;
     const runSync = async () => {
       try {
-        // A cada ~500 ciclos (cerca de 1 hora), executa arquivamento preventivo de entregas antigas (>3 dias)
-        syncCount++;
-        if (syncCount % 450 === 1) {
-          void archiveOldDeliveriesRTDB(3);
-        }
 
         const res = await syncTakeatDeliveries(deliveriesRef.current, driversRef.current);
         const hasChanges = res.addedCount > 0 || res.updatedCount > 0;
@@ -2094,7 +2089,18 @@ function MobileDeliveryApp({
                 currentUser.role === "driver"
                   ? deliveries.filter(isDeliveryForThisDriver)
                   : appMode === "motoboy" && activeDriver
-                  ? deliveries.filter((d) => d.driverId === activeDriver.id || d.driver === activeDriver.name)
+                  ? deliveries.filter((d) => {
+                      const dName = (d.driver || "").toLowerCase().trim();
+                      const actName = (activeDriver.name || "").toLowerCase().trim();
+                      const dId = (d.driverId || "").toLowerCase().trim();
+                      const actId = (activeDriver.id || "").toLowerCase().trim();
+                      return (
+                        (dId && (dId === actId || `drv-${dId}` === actId || dId === `drv-${actId}`)) ||
+                        dName === actName ||
+                        (actName && dName.includes(actName)) ||
+                        (dName && actName.includes(dName))
+                      );
+                    })
                   : deliveries
               }
               drivers={drivers}
@@ -4761,18 +4767,61 @@ function FinancialTab({
   const completedList = useMemo(() => {
     return deliveries.filter((d) => {
       const s = (d.status || "").toLowerCase().trim();
-      const isDone = s === "entregue" || s === "delivered" || s === "concluída";
-      if (!isDone) return false;
-      if (appMode === "motoboy" && activeDriver) {
-        const dName = (d.driver || "").toLowerCase().trim();
-        const activeName = (activeDriver.name || "").toLowerCase().trim();
-        if (d.driverId && activeDriver.id && d.driverId !== activeDriver.id && dName !== activeName) {
-          return false;
+      return s === "entregue" || s === "delivered" || s === "concluída";
+    });
+  }, [deliveries]);
+
+  // Lista dinâmica de todos os meses disponíveis com entregas concluídas
+  const availableMonths = useMemo(() => {
+    const monthNames = [
+      "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+      "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ];
+    const map = new Map<string, string>();
+    const now = new Date();
+    const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    map.set(currentYm, `${monthNames[now.getMonth()]} de ${now.getFullYear()} (Atual)`);
+
+    for (const d of completedList) {
+      const raw = d.createdAt || d.deliveredAt;
+      if (raw) {
+        const dt = new Date(raw);
+        if (!isNaN(dt.getTime())) {
+          const ym = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+          if (!map.has(ym)) {
+            map.set(ym, `${monthNames[dt.getMonth()]} de ${dt.getFullYear()}`);
+          }
         }
       }
-      return true;
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [completedList]);
+
+  const [selectedMonth, setSelectedMonth] = useState<string>("all");
+
+  const displayList = useMemo(() => {
+    if (selectedMonth === "all") return completedList;
+    return completedList.filter((d) => {
+      const raw = d.createdAt || d.deliveredAt;
+      if (!raw) return false;
+      const dt = new Date(raw);
+      if (isNaN(dt.getTime())) return false;
+      const ym = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      return ym === selectedMonth;
     });
-  }, [deliveries, appMode, activeDriver]);
+  }, [completedList, selectedMonth]);
+
+  const selectedPeriodStats = useMemo(() => {
+    let totalFee = 0;
+    let totalOrders = 0;
+    for (const d of displayList) {
+      const fee = Number(d.deliveryFee) || (activeDriver?.defaultFee ? Number(activeDriver.defaultFee) : 7.0);
+      totalFee += fee;
+      totalOrders += 1;
+    }
+    const avgFee = totalOrders > 0 ? totalFee / totalOrders : 0;
+    return { totalFee, totalOrders, avgFee };
+  }, [displayList, activeDriver]);
 
   interface DayGroup {
     dateKey: string;
@@ -4808,7 +4857,7 @@ function FinancialTab({
 
     const weekDays = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
-    for (const d of completedList) {
+    for (const d of displayList) {
       let parsedDate: Date | null = null;
       const raw = d.createdAt || d.deliveredAt;
       if (raw) {
@@ -4870,7 +4919,7 @@ function FinancialTab({
     }
 
     return groups;
-  }, [completedList, activeDriver]);
+  }, [displayList, activeDriver]);
 
   return (
     <div className="finance-screen-container">
@@ -4896,33 +4945,71 @@ function FinancialTab({
       <div className="finance-metrics-grid">
         <div className="finance-metric-card highlight">
           <div className="finance-metric-kicker">
-            <CircleDollarSign size={13} style={{ color: "var(--primary)" }} /> Acumulado do Mês
+            <CircleDollarSign size={13} style={{ color: "var(--primary)" }} /> {
+              selectedMonth === "all"
+                ? "Total Histórico Geral"
+                : availableMonths.find(([ym]) => ym === selectedMonth)?.[1]?.replace(" (Atual)", "") || "Total do Mês"
+            }
           </div>
-          <div className="finance-metric-val">{money(stats.monthTotal)}</div>
-          <div className="finance-metric-sub">{stats.monthCount} entregas no mês</div>
+          <div className="finance-metric-val">{money(selectedPeriodStats.totalFee)}</div>
+          <div className="finance-metric-sub">{selectedPeriodStats.totalOrders} entrega(s) concluída(s)</div>
         </div>
 
         <div className="finance-metric-card success-tint">
           <div className="finance-metric-kicker">
             <Bike size={13} style={{ color: "var(--success)" }} /> Taxa Média
           </div>
-          <div className="finance-metric-val">{money(stats.avgFee)}</div>
-          <div className="finance-metric-sub">por corrida realizada</div>
+          <div className="finance-metric-val">{money(selectedPeriodStats.avgFee)}</div>
+          <div className="finance-metric-sub">por corrida no período</div>
         </div>
       </div>
 
       {/* Extrato / Histórico Separado por Dia */}
       <div className="finance-statement-section">
-        <div className="finance-statement-header">
+        <div className="finance-statement-header" style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <b>Extrato das Corridas</b>
             <span style={{ display: "block", fontSize: "11px", color: "var(--muted)", fontWeight: 500, marginTop: "2px" }}>
-              {completedList.length} corrida(s) • {groupedByDay.length} dia(s)
+              {displayList.length} corrida(s) • {groupedByDay.length} dia(s) exibido(s)
             </span>
           </div>
 
-          {/* Toggle Minimalista: Por Corridas vs Totais por Dia */}
-          {groupedByDay.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            {/* Seletor de Meses & Histórico Passado */}
+            {availableMonths.length > 0 && (
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                style={{
+                  height: "32px",
+                  padding: "0 10px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--line)",
+                  background: "var(--surface)",
+                  color: "var(--ink)",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              >
+                <option value="all">📅 Todos os Meses ({completedList.length} corridas)</option>
+                {availableMonths.map(([ym, label]) => {
+                  const mCount = completedList.filter((d) => {
+                    const raw = d.createdAt || d.deliveredAt;
+                    return raw && raw.startsWith(ym);
+                  }).length;
+                  return (
+                    <option key={ym} value={ym}>
+                      {label} ({mCount} corridas)
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+
+            {/* Toggle Minimalista: Por Corridas vs Totais por Dia */}
+            {groupedByDay.length > 0 && (
             <div style={{ display: "flex", background: "var(--surface-2)", padding: "3px", borderRadius: "10px", border: "1px solid var(--line)", gap: "2px" }}>
               <button
                 type="button"
@@ -4961,6 +5048,7 @@ function FinancialTab({
             </div>
           )}
         </div>
+      </div>
 
         {completedList.length === 0 ? (
           <div style={{ padding: "36px 16px", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
