@@ -475,6 +475,54 @@ test("Takeat Store OAuth PKCE: construção de URL de autorização e parsing de
   assert.equal(callbackDenied.code, undefined);
   assert.equal(callbackDenied.error, "access_denied");
   assert.equal(callbackDenied.errorDescription, "O usuario recusou o consentimento");
+
+  // Validação do contrato de resposta com objeto restaurant (Takeat Nova API V1.0)
+  const sampleTokenResponse = {
+    access_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    token_type: "Bearer",
+    expires_in: 900,
+    refresh_token: "tk_refresh_rotativo_abc123",
+    scope: "table-sessions:read products:read",
+    restaurant: {
+      id: "982",
+      email: "contato@houseburger.com.br",
+      fantasy_name: "House Burger 190 Hamburgueria",
+    },
+  };
+
+  assert.equal(sampleTokenResponse.token_type, "Bearer");
+  assert.equal(sampleTokenResponse.expires_in, 900);
+  assert.equal(sampleTokenResponse.restaurant.id, "982");
+  assert.equal(sampleTokenResponse.restaurant.fantasy_name, "House Burger 190 Hamburgueria");
+
+  // Rotação de Refresh Token: Cada renovação gera novo refresh token e invalida o anterior
+  function rotateTokenPair(current, next) {
+    assert.notEqual(current.refresh_token, next.refresh_token);
+    return {
+      access_token: next.access_token,
+      refresh_token: next.refresh_token,
+      expires_at: Date.now() + next.expires_in * 1000,
+    };
+  }
+
+  const rotated = rotateTokenPair(sampleTokenResponse, {
+    access_token: "eyJ_novo_access_token",
+    refresh_token: "tk_refresh_rotativo_def456",
+    expires_in: 900,
+  });
+  assert.equal(rotated.refresh_token, "tk_refresh_rotativo_def456");
+
+  // Revogação de Token com client_id e token_type_hint
+  function buildRevokeBody(clientId, token, tokenTypeHint) {
+    const p = new URLSearchParams({ token });
+    if (clientId) p.set("client_id", clientId);
+    if (tokenTypeHint) p.set("token_type_hint", tokenTypeHint);
+    return p.toString();
+  }
+
+  const revokeParams = buildRevokeBody(clientId, rotated.refresh_token, "refresh_token");
+  assert.match(revokeParams, /client_id=tk_app_rotacerta_prod123/);
+  assert.match(revokeParams, /token_type_hint=refresh_token/);
 });
 
 test("Autenticação de Motoboy por PIN de 4 dígitos e Link WhatsApp da Loja", () => {

@@ -530,10 +530,18 @@ export async function getUserProfileRTDB(uid: string): Promise<User | null> {
 // ==========================================
 
 export interface TakeatConfigRTDB {
-  authMethod: "credentials" | "apikey";
+  authMethod: "credentials" | "apikey" | "oauth";
   email?: string;
   password?: string;
   apiKey?: string;
+  clientId?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  scopes?: string;
+  restaurantId?: string;
+  restaurantName?: string;
+  restaurantEmail?: string;
   updatedAt?: string;
 }
 

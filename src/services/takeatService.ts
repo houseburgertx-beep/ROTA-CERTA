@@ -155,10 +155,18 @@ export interface TakeatTableSession {
 }
 
 export interface TakeatCredentials {
-  authMethod: "credentials" | "apikey";
+  authMethod: "credentials" | "apikey" | "oauth";
   email?: string;
   password?: string;
   apiKey?: string;
+  clientId?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  scopes?: string;
+  restaurantId?: string;
+  restaurantName?: string;
+  restaurantEmail?: string;
 }
 
 const getTakeatKeyStorage = () => getStoreCacheKey("rotacerta_takeat_key");
@@ -244,6 +252,9 @@ export function clearTakeatCredentials(): void {
  */
 export function isTakeatConfigured(): boolean {
   const creds = getTakeatCredentials();
+  if (creds.authMethod === "oauth") {
+    return Boolean(creds.accessToken || creds.refreshToken);
+  }
   if (creds.authMethod === "credentials") {
     return Boolean(creds.email && creds.password);
   }
@@ -422,12 +433,45 @@ export async function authenticateTakeat(apiKeyOverride?: string): Promise<strin
 
   const creds = getTakeatCredentials();
 
-  // 1. Método Login e Senha (recomendado e solicitado pelo usuário)
+  // 1. Método OAuth 2.0 PKCE (Takeat Store)
+  if (creds.authMethod === "oauth" || creds.accessToken) {
+    if (creds.accessToken && creds.expiresAt && Date.now() < creds.expiresAt - 60000) {
+      cachedToken = { token: creds.accessToken, expiresAt: creds.expiresAt };
+      return creds.accessToken;
+    }
+
+    if (creds.refreshToken && creds.clientId) {
+      const { refreshTakeatToken } = await import("./takeatOAuthService");
+      const newTokens = await refreshTakeatToken({
+        clientId: creds.clientId,
+        refreshToken: creds.refreshToken,
+      });
+
+      const updatedCreds: TakeatCredentials = {
+        ...creds,
+        authMethod: "oauth",
+        accessToken: newTokens.access_token,
+        refreshToken: newTokens.refresh_token,
+        expiresAt: Date.now() + newTokens.expires_in * 1000,
+        scopes: newTokens.scope || creds.scopes,
+        restaurantId: newTokens.restaurant?.id || creds.restaurantId,
+        restaurantName: newTokens.restaurant?.fantasy_name || creds.restaurantName,
+        restaurantEmail: newTokens.restaurant?.email || creds.restaurantEmail,
+      };
+
+      saveTakeatCredentials(updatedCreds);
+      const expiresAt = updatedCreds.expiresAt || (Date.now() + 900 * 1000);
+      cachedToken = { token: newTokens.access_token, expiresAt };
+      return newTokens.access_token;
+    }
+  }
+
+  // 2. Método Login e Senha (recomendado para uso direto pelo restaurante)
   if (creds.authMethod === "credentials" && creds.email && creds.password) {
     return await loginTakeatWithPassword(creds.email, creds.password);
   }
 
-  // 2. Método API Key OAuth
+  // 3. Método API Key OAuth
   const apiKey = (apiKeyOverride || creds.apiKey || getTakeatApiKey()).trim();
   if (apiKey) {
     const params = new URLSearchParams();

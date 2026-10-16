@@ -139,7 +139,21 @@ import {
   authenticateTakeat,
   type TakeatCredentials,
 } from "../src/services/takeatService";
-import { getActiveStore, getStoreCacheKey, getStoreMotoboyLoginUrl, type StoreConfig } from "../src/services/storeService";
+import {
+  handleTakeatOAuthCallback,
+  startTakeatOAuthFlow,
+  DEFAULT_TAKEAT_CLIENT_ID,
+} from "../src/services/takeatOAuthService";
+import {
+  getActiveStore,
+  getActiveStoreId,
+  getStoreCacheKey,
+  getStoreMotoboyLoginUrl,
+  registerDynamicStore,
+  setActiveStore,
+  type StoreConfig,
+} from "../src/services/storeService";
+import { signInAsStoreDirect } from "../src/services/authService";
 import type { DeliveryRecord, DeliveryRecordStatus } from "../src/types/delivery";
 import { LoginView } from "../src/components/LoginView";
 import {
@@ -276,6 +290,56 @@ export default function Home() {
       setCurrentUser(session.profile);
     }
   }, [session.profile]);
+
+  // Processa retorno da Takeat Store via OAuth 2.0 PKCE na inicialização
+  useEffect(() => {
+    let mounted = true;
+    void handleTakeatOAuthCallback().then(async (res) => {
+      if (!mounted || !res.handled) return;
+
+      if (res.success && res.tokens) {
+        const restId = res.restaurant?.id || "loja";
+        const cleanStoreId = `takeat-${restId}`;
+        const storeName = res.restaurant?.fantasy_name || `Restaurante Takeat ${restId}`;
+
+        // Registra a nova loja dinamicamente com isolamento completo
+        registerDynamicStore({
+          id: cleanStoreId,
+          name: storeName,
+          companyId: cleanStoreId,
+          defaultTakeatEmail: res.restaurant?.email || "",
+        });
+        setActiveStore(cleanStoreId);
+
+        // Salva as credenciais OAuth da loja
+        const creds: TakeatCredentials = {
+          authMethod: "oauth",
+          clientId: DEFAULT_TAKEAT_CLIENT_ID,
+          accessToken: res.tokens.access_token,
+          refreshToken: res.tokens.refresh_token,
+          expiresAt: Date.now() + res.tokens.expires_in * 1000,
+          scopes: res.tokens.scope,
+          restaurantId: res.restaurant?.id,
+          restaurantName: res.restaurant?.fantasy_name,
+          restaurantEmail: res.restaurant?.email,
+        };
+        saveTakeatCredentials(creds);
+
+        // Conecta e loga o administrador da loja automaticamente
+        const user = await signInAsStoreDirect(cleanStoreId, storeName);
+        if (mounted) {
+          setCurrentUser(user);
+          alert(`🎉 Restaurante "${storeName}" conectado com sucesso via Takeat Store!`);
+        }
+      } else if (res.error) {
+        alert(res.error);
+      }
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Se for acesso direto do cliente via link do WhatsApp, exibe a tela de rastreio ao vivo
   if (rastreioId) {
@@ -5317,8 +5381,11 @@ function AdminDriversTab({
     }
   };
 
-  const [authMethod, setAuthMethod] = useState<"credentials" | "apikey">(
-    takeatCreds.authMethod || "credentials",
+  const [authMethod, setAuthMethod] = useState<"oauth" | "credentials" | "apikey">(
+    takeatCreds.authMethod || "oauth",
+  );
+  const [oauthClientId, setOauthClientId] = useState(
+    takeatCreds.clientId || DEFAULT_TAKEAT_CLIENT_ID,
   );
   const [email, setEmail] = useState(takeatCreds.email || "");
   const [password, setPassword] = useState(takeatCreds.password || "");
@@ -5327,6 +5394,16 @@ function AdminDriversTab({
   const [showApiKey, setShowApiKey] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [syncingTakeatMotoboys, setSyncingTakeatMotoboys] = useState(false);
+
+  const handleConnectWithOAuth = async () => {
+    try {
+      await startTakeatOAuthFlow({
+        clientId: oauthClientId.trim() || DEFAULT_TAKEAT_CLIENT_ID,
+      });
+    } catch {
+      notify("Erro ao iniciar fluxo OAuth da Takeat Store.");
+    }
+  };
 
   const handleSyncTakeatMotoboys = async () => {
     setSyncingTakeatMotoboys(true);
@@ -5430,10 +5507,19 @@ function AdminDriversTab({
         {isConnected && (
           <div className="takeat-connected-box">
             <div>
-              <span style={{ fontSize: "10px", color: "var(--muted)", display: "block" }}>SESSÃO SALVA DENTRO DO SISTEMA:</span>
+              <span style={{ fontSize: "10px", color: "var(--muted)", display: "block" }}>
+                {takeatCreds.authMethod === "oauth" ? "INSTALAÇÃO OFICIAL TAKEAT STORE (OAUTH 2.0 PKCE):" : "SESSÃO SALVA DENTRO DO SISTEMA:"}
+              </span>
               <b style={{ fontSize: "13px", color: "#10b981" }}>
-                {takeatCreds.authMethod === "credentials" ? (takeatCreds.email || "Conectado por Login") : "Conectado por Chave de API"}
+                {takeatCreds.authMethod === "oauth"
+                  ? `${takeatCreds.restaurantName || "Restaurante Conectado"} ${takeatCreds.restaurantId ? `(#${takeatCreds.restaurantId})` : ""}`
+                  : takeatCreds.authMethod === "credentials"
+                  ? (takeatCreds.email || "Conectado por Login")
+                  : "Conectado por Chave de API"}
               </b>
+              {takeatCreds.restaurantEmail && (
+                <span style={{ fontSize: "11px", color: "var(--muted)", display: "block" }}>{takeatCreds.restaurantEmail}</span>
+              )}
             </div>
             <div style={{ display: "flex", gap: "6px" }}>
               <button
@@ -5456,25 +5542,90 @@ function AdminDriversTab({
         )}
 
         {/* Seletor de Método de Conexão */}
-        <div className="takeat-tabs-selector">
+        <div className="takeat-tabs-selector" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
+          <button
+            type="button"
+            className={`takeat-tab-btn ${authMethod === "oauth" ? "active" : ""}`}
+            onClick={() => setAuthMethod("oauth")}
+          >
+            Takeat Store (OAuth PKCE)
+          </button>
           <button
             type="button"
             className={`takeat-tab-btn ${authMethod === "credentials" ? "active" : ""}`}
             onClick={() => setAuthMethod("credentials")}
           >
-            Conectar por Login e Senha (Recomendado)
+            Login e Senha
           </button>
           <button
             type="button"
             className={`takeat-tab-btn ${authMethod === "apikey" ? "active" : ""}`}
             onClick={() => setAuthMethod("apikey")}
           >
-            Conectar por Chave de API
+            Chave de API
           </button>
         </div>
 
-        {/* Formulário: Login e Senha */}
-        {authMethod === "credentials" ? (
+        {/* Formulário: Takeat Store OAuth PKCE */}
+        {authMethod === "oauth" ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ background: "var(--surface-2)", padding: "12px", borderRadius: "10px", fontSize: "11.5px", lineHeight: "1.5" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: "700", color: "#7c3aed", marginBottom: "4px" }}>
+                <ShieldCheck size={16} /> Conexão Pública Oficial Takeat Store (OAuth 2.0 PKCE)
+              </div>
+              <div>
+                Instalação direta para restaurantes. Não precisa compartilhar senha nem chave de API: o proprietário autoriza pelo portal <b>Entrar com a Takeat</b> com tokens renováveis a cada 15 min.
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
+                Client ID do Aplicativo (Takeat Store)
+              </label>
+              <input
+                type="text"
+                value={oauthClientId}
+                onChange={(e) => setOauthClientId(e.target.value)}
+                placeholder="tk_app_rotacerta"
+                style={{ width: "100%", height: "40px", borderRadius: "10px", border: "1px solid var(--line)", padding: "0 12px", fontSize: "12px", background: "var(--surface-2)" }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>
+                Redirect URI Cadastrada (Exata)
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={typeof window !== "undefined" ? `${window.location.origin}/oauth/callback` : "https://houseburger-entregas.web.app/oauth/callback"}
+                style={{ width: "100%", height: "40px", borderRadius: "10px", border: "1px solid var(--line)", padding: "0 12px", fontSize: "12px", background: "var(--surface-2)", color: "var(--muted)" }}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="primary"
+              onClick={handleConnectWithOAuth}
+              style={{
+                height: "44px",
+                borderRadius: "10px",
+                fontSize: "13px",
+                fontWeight: "800",
+                background: "linear-gradient(135deg, #ea1d2c 0%, #b91c1c 100%)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                cursor: "pointer",
+                boxShadow: "0 4px 14px rgba(234,29,44,.25)",
+              }}
+            >
+              <ExternalLink size={16} /> Entrar e Autorizar com a Takeat
+            </button>
+          </div>
+        ) : authMethod === "credentials" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <div>
               <label style={{ display: "block", fontSize: "11px", fontWeight: "700", marginBottom: "4px" }}>

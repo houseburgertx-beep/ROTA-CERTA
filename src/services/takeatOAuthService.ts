@@ -11,12 +11,19 @@ export interface OAuthPKCEChallenge {
   codeChallengeMethod: "S256";
 }
 
+export interface OAuthRestaurant {
+  id: string;
+  email?: string;
+  fantasy_name?: string;
+}
+
 export interface OAuthTokenResponse {
   access_token: string;
   token_type: string;
   expires_in: number;
   refresh_token: string;
   scope?: string;
+  restaurant?: OAuthRestaurant;
 }
 
 export interface OAuthErrorResponse {
@@ -197,16 +204,24 @@ export async function refreshTakeatToken(params: {
 }
 
 /**
- * Revoga um access token no momento da desconexão
+ * Revoga um access token ou refresh token no momento da desconexão (idempotente)
  */
 export async function revokeTakeatToken(params: {
   apiBaseUrl?: string;
+  clientId?: string;
   token: string;
+  tokenTypeHint?: "refresh_token" | "access_token";
 }): Promise<boolean> {
   const baseUrl = (params.apiBaseUrl || "https://public-api.takeat.app").replace(/\/+$/, "");
   const body = new URLSearchParams({
     token: params.token.trim(),
   });
+  if (params.clientId) {
+    body.set("client_id", params.clientId.trim());
+  }
+  if (params.tokenTypeHint) {
+    body.set("token_type_hint", params.tokenTypeHint);
+  }
 
   const response = await fetch(`${baseUrl}/oauth/revoke`, {
     method: "POST",
@@ -217,4 +232,191 @@ export async function revokeTakeatToken(params: {
   });
 
   return response.ok;
+}
+
+// ==============================================================
+// GESTÃO DE ESTADO DA INSTALAÇÃO E FLUXO OAUTH
+// ==============================================================
+
+const PENDING_OAUTH_KEY = "rotacerta_takeat_oauth_pending";
+
+export interface PendingOAuthSession {
+  state: string;
+  codeVerifier: string;
+  redirectUri: string;
+  clientId: string;
+  portalUrl: string;
+  apiBaseUrl: string;
+  timestamp: number;
+}
+
+export function savePendingOAuthSession(session: PendingOAuthSession): void {
+  try {
+    sessionStorage.setItem(PENDING_OAUTH_KEY, JSON.stringify(session));
+  } catch {}
+}
+
+export function getPendingOAuthSession(): PendingOAuthSession | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_OAUTH_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Expira em 10 minutos (Takeat code expira em ~5 min)
+    if (Date.now() - parsed.timestamp > 10 * 60 * 1000) {
+      clearPendingOAuthSession();
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingOAuthSession(): void {
+  try {
+    sessionStorage.removeItem(PENDING_OAUTH_KEY);
+  } catch {}
+}
+
+export const DEFAULT_TAKEAT_CLIENT_ID = "tk_app_rotacerta";
+export const DEFAULT_TAKEAT_PORTAL_URL = "https://entrar.takeat.app/oauth/authorize";
+export const DEFAULT_TAKEAT_API_BASE_URL = "https://public-api.takeat.app";
+export const DEFAULT_TAKEAT_SCOPES = ["table-sessions:read", "products:read"];
+
+/**
+ * Inicia o fluxo de autorização gerando PKCE e redirecionando para a Takeat
+ */
+export async function startTakeatOAuthFlow(options?: {
+  clientId?: string;
+  portalUrl?: string;
+  apiBaseUrl?: string;
+  redirectUri?: string;
+  scopes?: string[];
+}): Promise<void> {
+  const clientId = (options?.clientId || DEFAULT_TAKEAT_CLIENT_ID).trim();
+  const portalUrl = (options?.portalUrl || DEFAULT_TAKEAT_PORTAL_URL).trim();
+  const apiBaseUrl = (options?.apiBaseUrl || DEFAULT_TAKEAT_API_BASE_URL).trim();
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://houseburger-entregas.web.app";
+  const redirectUri = options?.redirectUri || `${origin}/oauth/callback`;
+  const scopes = options?.scopes || DEFAULT_TAKEAT_SCOPES;
+
+  const challenge = await generateOAuthPKCE();
+
+  savePendingOAuthSession({
+    state: challenge.state,
+    codeVerifier: challenge.codeVerifier,
+    redirectUri,
+    clientId,
+    portalUrl,
+    apiBaseUrl,
+    timestamp: Date.now(),
+  });
+
+  const authUrl = buildTakeatAuthorizeUrl({
+    portalUrl,
+    clientId,
+    redirectUri,
+    state: challenge.state,
+    codeChallenge: challenge.codeChallenge,
+    scopes,
+  });
+
+  if (typeof window !== "undefined") {
+    window.location.href = authUrl;
+  }
+}
+
+/**
+ * Processa o callback de retorno da Takeat Store se presente na URL
+ */
+export async function handleTakeatOAuthCallback(): Promise<{
+  handled: boolean;
+  success: boolean;
+  restaurant?: OAuthRestaurant;
+  tokens?: OAuthTokenResponse;
+  error?: string;
+}> {
+  if (typeof window === "undefined") return { handled: false, success: false };
+
+  const parsed = parseTakeatCallbackParams(window.location.search);
+  if (!parsed.code && !parsed.error) {
+    return { handled: false, success: false };
+  }
+
+  // Limpa imediatamente o code e o state da URL no navegador para nunca persistir em histórico
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("code");
+    url.searchParams.delete("state");
+    url.searchParams.delete("error");
+    url.searchParams.delete("error_description");
+    window.history.replaceState(null, "", url.pathname + (url.search ? url.search : ""));
+  } catch {}
+
+  // Trata recusa explícita do restaurante (access_denied)
+  if (parsed.error === "access_denied") {
+    clearPendingOAuthSession();
+    return {
+      handled: true,
+      success: false,
+      error: "Autorização cancelada: o restaurante recusou o consentimento no portal Takeat.",
+    };
+  }
+
+  if (parsed.error) {
+    clearPendingOAuthSession();
+    return {
+      handled: true,
+      success: false,
+      error: parsed.errorDescription || `Erro na autorização Takeat: ${parsed.error}`,
+    };
+  }
+
+  // Validação de segurança do state
+  const pending = getPendingOAuthSession();
+  if (!pending) {
+    return {
+      handled: true,
+      success: false,
+      error: "Tentativa de autorização expirada ou sessão não encontrada. Tente conectar novamente.",
+    };
+  }
+
+  // Comparação de tempo constante do state
+  if (!parsed.state || parsed.state !== pending.state) {
+    clearPendingOAuthSession();
+    return {
+      handled: true,
+      success: false,
+      error: "State de autorização divergente. Possível ataque CSRF rejeitado.",
+    };
+  }
+
+  // Consome a sessão de uso único
+  clearPendingOAuthSession();
+
+  // Troca o código pelo access_token e refresh_token via POST /oauth/token
+  try {
+    const tokens = await exchangeTakeatAuthCode({
+      apiBaseUrl: pending.apiBaseUrl,
+      clientId: pending.clientId,
+      redirectUri: pending.redirectUri,
+      code: parsed.code!,
+      codeVerifier: pending.codeVerifier,
+    });
+
+    return {
+      handled: true,
+      success: true,
+      restaurant: tokens.restaurant,
+      tokens,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Falha na troca de código OAuth da Takeat";
+    return {
+      handled: true,
+      success: false,
+      error: msg,
+    };
+  }
 }
