@@ -410,4 +410,72 @@ test("Cálculo financeiro suporta meses passados e histórico total", () => {
   assert.equal(allTotal.totalFee, 45.0);
 });
 
+test("Takeat Store OAuth PKCE: construção de URL de autorização e parsing de callback", () => {
+  function buildTakeatAuthorizeUrl(params) {
+    const base = params.portalUrl.replace(/\/+$/, "");
+    const search = new URLSearchParams({
+      client_id: params.clientId.trim(),
+      redirect_uri: params.redirectUri.trim(),
+      code_challenge: params.codeChallenge.trim(),
+      code_challenge_method: "S256",
+      state: params.state.trim(),
+    });
+    if (params.scopes && params.scopes.length > 0) {
+      search.set("scope", params.scopes.join(" "));
+    }
+    return `${base}?${search.toString()}`;
+  }
+
+  function parseTakeatCallbackParams(searchOrUrl) {
+    let search = searchOrUrl;
+    if (search.includes("?")) {
+      search = search.substring(search.indexOf("?"));
+    }
+    const params = new URLSearchParams(search);
+    return {
+      code: params.get("code") || undefined,
+      state: params.get("state") || undefined,
+      error: params.get("error") || undefined,
+      errorDescription: params.get("error_description") || undefined,
+    };
+  }
+
+  const portalUrl = "https://entrar.takeat.app/oauth/authorize";
+  const clientId = "tk_app_rotacerta_prod123";
+  const redirectUri = "https://houseburger-entregas.web.app/oauth/callback";
+  const state = "xyz_state_secret_123";
+  const codeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+  const scopes = ["table-sessions:read", "payment-methods:read", "brands:read"];
+
+  const authUrl = buildTakeatAuthorizeUrl({
+    portalUrl,
+    clientId,
+    redirectUri,
+    state,
+    codeChallenge,
+    scopes,
+  });
+
+  const parsedUrl = new URL(authUrl);
+  assert.equal(parsedUrl.searchParams.get("client_id"), clientId);
+  assert.equal(parsedUrl.searchParams.get("redirect_uri"), redirectUri);
+  assert.equal(parsedUrl.searchParams.get("code_challenge"), codeChallenge);
+  assert.equal(parsedUrl.searchParams.get("code_challenge_method"), "S256");
+  assert.equal(parsedUrl.searchParams.get("state"), state);
+  assert.equal(parsedUrl.searchParams.get("scope"), "table-sessions:read payment-methods:read brands:read");
+
+  // Callback com sucesso
+  const callbackSuccess = parseTakeatCallbackParams("https://houseburger-entregas.web.app/oauth/callback?code=tk_code_abc789&state=xyz_state_secret_123");
+  assert.equal(callbackSuccess.code, "tk_code_abc789");
+  assert.equal(callbackSuccess.state, "xyz_state_secret_123");
+  assert.equal(callbackSuccess.error, undefined);
+
+  // Callback com recusa de consentimento pelo restaurante (access_denied)
+  const callbackDenied = parseTakeatCallbackParams("https://houseburger-entregas.web.app/oauth/callback?error=access_denied&error_description=O+usuario+recusou+o+consentimento&state=xyz_state_secret_123");
+  assert.equal(callbackDenied.code, undefined);
+  assert.equal(callbackDenied.error, "access_denied");
+  assert.equal(callbackDenied.errorDescription, "O usuario recusou o consentimento");
+});
+
+
 
