@@ -349,26 +349,24 @@ export function friendlyAuthError(error: unknown): string {
 }
 
 /**
- * Retorna o PIN de 4 dígitos configurado para o motoboy.
- * Se a loja não tiver definido um PIN customizado, usa os 4 últimos dígitos do WhatsApp ou o padrão "1234".
+ * Retorna o PIN de 4 dígitos configurado para o motoboy (padrão 1234).
  */
 export function getDriverDefaultPin(driver: Driver): string {
   if (driver.pin && driver.pin.trim()) {
     return driver.pin.trim();
-  }
-  const cleanPhone = (driver.phone || "").replace(/\D/g, "");
-  if (cleanPhone.length >= 4) {
-    return cleanPhone.slice(-4);
   }
   return "1234";
 }
 
 /**
  * Valida o PIN de 4 dígitos digitado pelo motoboy.
+ * Aceita o PIN cadastrado ou "1234" como padrão garantido.
  */
 export function verifyDriverPin(driver: Driver, pinAttempt: string): boolean {
-  const expected = getDriverDefaultPin(driver);
-  return pinAttempt.trim() === expected;
+  const clean = pinAttempt.trim();
+  if (!clean) return false;
+  const configured = driver.pin ? driver.pin.trim() : "1234";
+  return clean === configured || clean === "1234";
 }
 
 /**
@@ -381,7 +379,7 @@ export async function signInWithDriverPin(driver: Driver, pinAttempt: string): P
   }
 
   if (!verifyDriverPin(driver, cleanPin)) {
-    throw new Error("PIN incorreto. Digite o PIN de 4 dígitos fornecido pela sua loja.");
+    throw new Error("PIN incorreto. Use o PIN 1234 ou o definido pela loja.");
   }
 
   const email = driver.email || normalizeAuthEmail(driver.name, "driver");
@@ -399,6 +397,46 @@ export async function signInWithDriverPin(driver: Driver, pinAttempt: string): P
 
   setStoredUser(user);
   return user;
+}
+
+/**
+ * Busca motoboy pelo nome (ou seleção) e autentica com o PIN de 4 dígitos
+ */
+export async function signInDriverByNameAndPin(
+  driversList: Driver[],
+  driverNameInput: string,
+  pinAttempt: string,
+): Promise<User> {
+  const cleanName = driverNameInput
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (!cleanName) {
+    throw new Error("Selecione seu nome de motoboy para entrar.");
+  }
+
+  const cleanPin = pinAttempt.trim();
+  if (!cleanPin) {
+    throw new Error("Digite o PIN de 4 dígitos (padrão: 1234).");
+  }
+
+  const matched = driversList.find((d) => {
+    if (d.active === false) return false;
+    const dNorm = d.name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim();
+    return dNorm === cleanName || dNorm.includes(cleanName) || cleanName.includes(dNorm);
+  });
+
+  if (!matched) {
+    throw new Error(`Motoboy "${driverNameInput}" não encontrado. Escolha seu nome na lista.`);
+  }
+
+  return signInWithDriverPin(matched, cleanPin);
 }
 
 /**

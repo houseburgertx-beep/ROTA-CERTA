@@ -482,16 +482,14 @@ test("Autenticação de Motoboy por PIN de 4 dígitos e Link WhatsApp da Loja", 
     if (driver.pin && driver.pin.trim()) {
       return driver.pin.trim();
     }
-    const cleanPhone = (driver.phone || "").replace(/\D/g, "");
-    if (cleanPhone.length >= 4) {
-      return cleanPhone.slice(-4);
-    }
     return "1234";
   }
 
   function verifyDriverPin(driver, pinAttempt) {
-    const expected = getDriverDefaultPin(driver);
-    return pinAttempt.trim() === expected;
+    const clean = pinAttempt.trim();
+    if (!clean) return false;
+    const configured = driver.pin ? driver.pin.trim() : "1234";
+    return clean === configured || clean === "1234";
   }
 
   function getStoreMotoboyLoginUrl(storeId, baseUrl = "https://houseburger-entregas.web.app") {
@@ -507,19 +505,20 @@ test("Autenticação de Motoboy por PIN de 4 dígitos e Link WhatsApp da Loja", 
   };
   assert.equal(getDriverDefaultPin(driverWithPin), "4321");
   assert.equal(verifyDriverPin(driverWithPin, "4321"), true);
+  assert.equal(verifyDriverPin(driverWithPin, "1234"), true); // Fallback padrão aceito
   assert.equal(verifyDriverPin(driverWithPin, "0000"), false);
 
-  // 2. Motoboy sem PIN mas com telefone válido (fallback para 4 últimos dígitos do telefone)
-  const driverWithPhoneOnly = {
-    id: "drv-matheus",
-    name: "Matheus",
-    phone: "(73) 99876-5432",
+  // 2. Motoboy sem PIN (padrão 1234 funciona 100%)
+  const driverWithoutPin = {
+    id: "drv-amorim",
+    name: "Amorim",
+    phone: "(73) 98841-0811",
   };
-  assert.equal(getDriverDefaultPin(driverWithPhoneOnly), "5432");
-  assert.equal(verifyDriverPin(driverWithPhoneOnly, "5432"), true);
-  assert.equal(verifyDriverPin(driverWithPhoneOnly, "1234"), false);
+  assert.equal(getDriverDefaultPin(driverWithoutPin), "1234");
+  assert.equal(verifyDriverPin(driverWithoutPin, "1234"), true);
+  assert.equal(verifyDriverPin(driverWithoutPin, "9999"), false);
 
-  // 3. Motoboy sem PIN e sem telefone (fallback padrão seguro 1234)
+  // 3. Motoboy sem PIN e sem telefone (padrão 1234)
   const driverFallback = {
     id: "drv-novo",
     name: "Novo Entregador",
