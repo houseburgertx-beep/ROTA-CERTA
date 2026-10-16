@@ -19,6 +19,7 @@ import {
   Download,
   ExternalLink,
   EyeOff,
+  KeyRound,
   LogOut,
   MapPin,
   MapPinned,
@@ -5263,8 +5264,58 @@ function AdminDriversTab({
   isConnected: boolean;
 }) {
   const summaries = useMemo(() => {
-    return getDriversEarningsSummary(drivers, deliveries);
+    // Deduplica motoristas por nome normalizado para o painel de gestão
+    const map = new Map<string, Driver>();
+    for (const d of drivers) {
+      const key = (d.name || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (!key) continue;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, d);
+      } else {
+        map.set(key, {
+          ...existing,
+          ...d,
+          pin: d.pin || existing.pin,
+          phone: d.phone || existing.phone,
+          takeatId: d.takeatId || existing.takeatId,
+        });
+      }
+    }
+    const unique = Array.from(map.values());
+    return getDriversEarningsSummary(unique, deliveries);
   }, [drivers, deliveries]);
+
+  const [editingPinDriver, setEditingPinDriver] = useState<Driver | null>(null);
+  const [newPinValue, setNewPinValue] = useState("");
+  const [savingPin, setSavingPin] = useState(false);
+
+  const handleOpenEditPin = (driver: Driver) => {
+    setEditingPinDriver(driver);
+    setNewPinValue(driver.pin || "1234");
+  };
+
+  const handleSavePin = async () => {
+    if (!editingPinDriver) return;
+    const clean = newPinValue.replace(/\D/g, "").slice(0, 4);
+    if (clean.length < 4) {
+      notify("O PIN deve ter exatamente 4 dígitos numéricos.");
+      return;
+    }
+    setSavingPin(true);
+    try {
+      await saveDriverRTDB({
+        ...editingPinDriver,
+        pin: clean,
+      });
+      notify(`PIN do motoboy ${editingPinDriver.name} alterado para ${clean}!`);
+      setEditingPinDriver(null);
+    } catch {
+      notify("Erro ao atualizar o PIN no banco.");
+    } finally {
+      setSavingPin(false);
+    }
+  };
 
   const [authMethod, setAuthMethod] = useState<"credentials" | "apikey">(
     takeatCreds.authMethod || "credentials",
@@ -5670,19 +5721,31 @@ function AdminDriversTab({
                   <span style={{ fontSize: "11px", color: "var(--muted)" }}>
                     Nome: <strong style={{ color: "var(--text)" }}>{drv.driverName}</strong>
                   </span>
-                  <span
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (fullDriver) handleOpenEditPin(fullDriver);
+                    }}
                     style={{
-                      fontSize: "10.5px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      fontSize: "11px",
                       fontWeight: 800,
                       background: "rgba(124,58,237,.12)",
                       color: "#7c3aed",
-                      padding: "2px 8px",
-                      borderRadius: "6px",
-                      border: "1px solid rgba(124,58,237,.25)",
+                      padding: "3px 9px",
+                      borderRadius: "7px",
+                      border: "1px solid rgba(124,58,237,.3)",
+                      cursor: "pointer",
+                      transition: "all .15s ease",
                     }}
+                    title="Toque para alterar o PIN exclusivo deste motoboy"
                   >
-                    PIN de Acesso: {fullDriver?.pin || "1234"}
-                  </span>
+                    <KeyRound size={12} />
+                    <span>PIN: {fullDriver?.pin || "1234"}</span>
+                    <Pencil size={10} style={{ opacity: 0.7 }} />
+                  </button>
                 </div>
               </div>
               <a
@@ -5732,6 +5795,98 @@ function AdminDriversTab({
         );
       })}
       </div>
+
+      {/* Modal para Alterar PIN do Motoboy */}
+      {editingPinDriver && (
+        <div className="overlay" style={{ zIndex: 9999 }}>
+          <div className="modal" style={{ maxWidth: "360px", padding: "20px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(124,58,237,.12)", color: "#7c3aed", display: "grid", placeItems: "center" }}>
+                  <KeyRound size={18} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "16px" }}>Alterar PIN de Acesso</h3>
+                  <span style={{ fontSize: "11px", color: "var(--muted)" }}>Motoboy: <b>{editingPinDriver.name}</b></span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingPinDriver(null)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>
+                Novo PIN (4 dígitos numéricos)
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
+                value={newPinValue}
+                onChange={(e) => setNewPinValue(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="Ex: 5821"
+                autoFocus
+                style={{
+                  width: "100%",
+                  height: "44px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--line)",
+                  background: "var(--surface-2)",
+                  textAlign: "center",
+                  fontSize: "20px",
+                  letterSpacing: "8px",
+                  fontWeight: 800,
+                  color: "var(--text)",
+                }}
+              />
+              <p style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px", marginBottom: 0 }}>
+                Defina um PIN exclusivo para este motoboy para não ser igual para todos.
+              </p>
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setEditingPinDriver(null)}
+                style={{
+                  height: "38px",
+                  padding: "0 14px",
+                  borderRadius: "10px",
+                  border: "1px solid var(--line)",
+                  background: "var(--surface)",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={newPinValue.length !== 4 || savingPin}
+                onClick={handleSavePin}
+                style={{
+                  height: "38px",
+                  padding: "0 18px",
+                  borderRadius: "10px",
+                  fontSize: "12px",
+                  fontWeight: 700,
+                  cursor: newPinValue.length !== 4 || savingPin ? "not-allowed" : "pointer",
+                }}
+              >
+                {savingPin ? "Salvando..." : "Salvar PIN"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

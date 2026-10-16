@@ -349,7 +349,7 @@ export function friendlyAuthError(error: unknown): string {
 }
 
 /**
- * Retorna o PIN de 4 dígitos configurado para o motoboy (padrão 1234).
+ * Retorna o PIN de 4 dígitos configurado para o motoboy (padrão 1234 se não configurado).
  */
 export function getDriverDefaultPin(driver: Driver): string {
   if (driver.pin && driver.pin.trim()) {
@@ -360,13 +360,13 @@ export function getDriverDefaultPin(driver: Driver): string {
 
 /**
  * Valida o PIN de 4 dígitos digitado pelo motoboy.
- * Aceita o PIN cadastrado ou "1234" como padrão garantido.
+ * Se o motoboy tiver PIN próprio configurado pela loja, valida estritamente o dele.
  */
 export function verifyDriverPin(driver: Driver, pinAttempt: string): boolean {
   const clean = pinAttempt.trim();
   if (!clean) return false;
-  const configured = driver.pin ? driver.pin.trim() : "1234";
-  return clean === configured || clean === "1234";
+  const expected = getDriverDefaultPin(driver);
+  return clean === expected;
 }
 
 /**
@@ -379,7 +379,7 @@ export async function signInWithDriverPin(driver: Driver, pinAttempt: string): P
   }
 
   if (!verifyDriverPin(driver, cleanPin)) {
-    throw new Error("PIN incorreto. Use o PIN 1234 ou o definido pela loja.");
+    throw new Error("PIN incorreto. Verifique seu PIN com o gerente da loja.");
   }
 
   const email = driver.email || normalizeAuthEmail(driver.name, "driver");
@@ -419,10 +419,10 @@ export async function signInDriverByNameAndPin(
 
   const cleanPin = pinAttempt.trim();
   if (!cleanPin) {
-    throw new Error("Digite o PIN de 4 dígitos (padrão: 1234).");
+    throw new Error("Digite o PIN de 4 dígitos.");
   }
 
-  const matched = driversList.find((d) => {
+  const candidates = driversList.filter((d) => {
     if (d.active === false) return false;
     const dNorm = d.name
       .toLowerCase()
@@ -432,9 +432,18 @@ export async function signInDriverByNameAndPin(
     return dNorm === cleanName || dNorm.includes(cleanName) || cleanName.includes(dNorm);
   });
 
-  if (!matched) {
+  if (!candidates.length) {
     throw new Error(`Motoboy "${driverNameInput}" não encontrado. Escolha seu nome na lista.`);
   }
+
+  // Se houver mais de um registro do mesmo motoboy no banco, mescla as propriedades preservando o PIN configurado
+  const matched: Driver = candidates.reduce((acc, curr) => ({
+    ...acc,
+    ...curr,
+    pin: curr.pin || acc.pin,
+    phone: curr.phone || acc.phone,
+    takeatId: curr.takeatId || acc.takeatId,
+  }));
 
   return signInWithDriverPin(matched, cleanPin);
 }

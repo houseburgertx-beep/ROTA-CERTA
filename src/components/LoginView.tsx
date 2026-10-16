@@ -11,7 +11,7 @@ import {
   Store,
   UserCheck,
 } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   friendlyAuthError,
   signIn,
@@ -183,7 +183,28 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
   }
 
   const isDriver = selectedRole === "driver";
-  const activeDriversList = drivers.filter((d) => d.active !== false);
+  // Deduplica motoboys por nome normalizado para nunca exibir repetidos no seletor
+  const activeDriversList = useMemo(() => {
+    const map = new Map<string, Driver>();
+    for (const d of drivers) {
+      if (d.active === false) continue;
+      const key = (d.name || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (!key) continue;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, d);
+      } else {
+        map.set(key, {
+          ...existing,
+          ...d,
+          pin: d.pin || existing.pin,
+          phone: d.phone || existing.phone,
+          takeatId: d.takeatId || existing.takeatId,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [drivers]);
 
   return (
     <main className="auth-shell">
@@ -377,10 +398,9 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
 
             {/* Campo 2: PIN de 4 Dígitos */}
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                <label style={{ fontSize: "12px", fontWeight: 700 }}>PIN de Acesso (4 dígitos)</label>
-                <span style={{ fontSize: "11px", color: "#7c3aed", fontWeight: 700 }}>Padrão: 1234</span>
-              </div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>
+                PIN de Acesso (4 dígitos)
+              </label>
               <div
                 style={{
                   display: "flex",
@@ -405,15 +425,16 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                     setDriverPin(clean);
                     setError("");
                   }}
-                  placeholder="1234"
+                  placeholder="••••"
+                  autoComplete="current-password"
                   style={{
                     border: "none",
                     background: "transparent",
                     width: "100%",
                     outline: "none",
                     color: "var(--text)",
-                    fontSize: "16px",
-                    letterSpacing: "4px",
+                    fontSize: "18px",
+                    letterSpacing: "6px",
                     fontWeight: 700,
                   }}
                 />

@@ -657,17 +657,19 @@ export async function syncTakeatMotoboysToRTDB(apiKey?: string): Promise<Driver[
           (d.email && d.email.toLowerCase() === email.toLowerCase())
       );
 
+      const existingDriver = idx >= 0 ? updatedDrivers[idx] : undefined;
       const driverRecord: Driver = {
-        id: idx >= 0 ? updatedDrivers[idx].id : `drv-takeat-${mb.id}`,
+        id: existingDriver ? existingDriver.id : `drv-takeat-${mb.id}`,
         name: displayName,
         email: email,
-        phone: phone || (idx >= 0 ? updatedDrivers[idx].phone : ""),
-        vehicle: "Moto",
-        defaultFee: idx >= 0 && updatedDrivers[idx].defaultFee ? updatedDrivers[idx].defaultFee : 7.0,
+        phone: phone || existingDriver?.phone || "",
+        vehicle: existingDriver?.vehicle || "Moto",
+        defaultFee: existingDriver?.defaultFee ? existingDriver.defaultFee : 7.0,
         active: mb.active !== false,
         companyId: getActiveStore().id === "foodpark" ? "house-foodpark" : "house-burger-190",
         takeatId: mb.id,
-        createdAt: idx >= 0 && updatedDrivers[idx].createdAt ? updatedDrivers[idx].createdAt : new Date().toISOString(),
+        pin: existingDriver?.pin,
+        createdAt: existingDriver?.createdAt || new Date().toISOString(),
       };
 
       await saveDriverRTDB(driverRecord);

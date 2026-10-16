@@ -58,7 +58,40 @@ function normalizeDeliveries(raw: Record<string, Delivery> | Delivery[] | null):
 function normalizeDrivers(raw: Record<string, Driver> | Driver[] | null): Driver[] {
   if (!raw) return [];
   const list = Array.isArray(raw) ? raw.filter(Boolean) : Object.values(raw);
-  return list.sort((a, b) => a.name.localeCompare(b.name));
+
+  // Deduplica motoboys por nome normalizado para evitar entradas repetidas no sistema
+  const map = new Map<string, Driver>();
+  for (const item of list) {
+    if (!item || !item.name) continue;
+    const normName = item.name
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (!normName) continue;
+
+    const existing = map.get(normName);
+    if (!existing) {
+      map.set(normName, item);
+    } else {
+      // Mescla priorizando quem tem takeatId, PIN configurado pela loja, telefone e dados mais recentes
+      map.set(normName, {
+        ...existing,
+        ...item,
+        id: item.takeatId ? item.id : existing.id,
+        pin: item.pin || existing.pin,
+        phone: item.phone || existing.phone,
+        takeatId: item.takeatId || existing.takeatId,
+        vehicle: item.vehicle || existing.vehicle,
+        plate: item.plate || existing.plate,
+        defaultFee: item.defaultFee || existing.defaultFee,
+        active: item.active !== false && existing.active !== false,
+        location: item.location || existing.location,
+      });
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // ==========================================
