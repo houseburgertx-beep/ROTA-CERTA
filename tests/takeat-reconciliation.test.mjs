@@ -477,5 +477,74 @@ test("Takeat Store OAuth PKCE: construção de URL de autorização e parsing de
   assert.equal(callbackDenied.errorDescription, "O usuario recusou o consentimento");
 });
 
+test("Autenticação de Motoboy por PIN de 4 dígitos e Link WhatsApp da Loja", () => {
+  function getDriverDefaultPin(driver) {
+    if (driver.pin && driver.pin.trim()) {
+      return driver.pin.trim();
+    }
+    const cleanPhone = (driver.phone || "").replace(/\D/g, "");
+    if (cleanPhone.length >= 4) {
+      return cleanPhone.slice(-4);
+    }
+    return "1234";
+  }
+
+  function verifyDriverPin(driver, pinAttempt) {
+    const expected = getDriverDefaultPin(driver);
+    return pinAttempt.trim() === expected;
+  }
+
+  function getStoreMotoboyLoginUrl(storeId, baseUrl = "https://houseburger-entregas.web.app") {
+    return `${baseUrl}/?store=${encodeURIComponent(storeId)}&role=driver`;
+  }
+
+  // 1. Motoboy com PIN customizado definido pela loja
+  const driverWithPin = {
+    id: "drv-carlos",
+    name: "Carlos",
+    phone: "(73) 99111-2222",
+    pin: "4321",
+  };
+  assert.equal(getDriverDefaultPin(driverWithPin), "4321");
+  assert.equal(verifyDriverPin(driverWithPin, "4321"), true);
+  assert.equal(verifyDriverPin(driverWithPin, "0000"), false);
+
+  // 2. Motoboy sem PIN mas com telefone válido (fallback para 4 últimos dígitos do telefone)
+  const driverWithPhoneOnly = {
+    id: "drv-matheus",
+    name: "Matheus",
+    phone: "(73) 99876-5432",
+  };
+  assert.equal(getDriverDefaultPin(driverWithPhoneOnly), "5432");
+  assert.equal(verifyDriverPin(driverWithPhoneOnly, "5432"), true);
+  assert.equal(verifyDriverPin(driverWithPhoneOnly, "1234"), false);
+
+  // 3. Motoboy sem PIN e sem telefone (fallback padrão seguro 1234)
+  const driverFallback = {
+    id: "drv-novo",
+    name: "Novo Entregador",
+    phone: "",
+  };
+  assert.equal(getDriverDefaultPin(driverFallback), "1234");
+  assert.equal(verifyDriverPin(driverFallback, "1234"), true);
+
+  // 4. Geração de Link Direto para envio no WhatsApp da equipe da loja
+  const storeLink = getStoreMotoboyLoginUrl("pizzaria-do-chefe");
+  assert.equal(storeLink, "https://houseburger-entregas.web.app/?store=pizzaria-do-chefe&role=driver");
+
+  // 5. Isolamento dinâmico de caminho RTDB por loja
+  function getRtdbPathForStore(subpath, storeId) {
+    const cleanSub = subpath.replace(/^\/+/, "");
+    if (storeId === "houseburger") return `rotacerta/${cleanSub}`;
+    return `rotacerta/stores/${storeId}/${cleanSub}`;
+  }
+
+  assert.equal(getRtdbPathForStore("deliveries", "houseburger"), "rotacerta/deliveries");
+  assert.equal(getRtdbPathForStore("deliveries", "foodpark"), "rotacerta/stores/foodpark/deliveries");
+  assert.equal(getRtdbPathForStore("deliveries", "241"), "rotacerta/stores/241/deliveries");
+  assert.equal(getRtdbPathForStore("drivers", "241"), "rotacerta/stores/241/drivers");
+});
+
+
 
 

@@ -347,3 +347,78 @@ export function friendlyAuthError(error: unknown): string {
   }
   return error instanceof Error ? error.message : "Não foi possível concluir o acesso.";
 }
+
+/**
+ * Retorna o PIN de 4 dígitos configurado para o motoboy.
+ * Se a loja não tiver definido um PIN customizado, usa os 4 últimos dígitos do WhatsApp ou o padrão "1234".
+ */
+export function getDriverDefaultPin(driver: Driver): string {
+  if (driver.pin && driver.pin.trim()) {
+    return driver.pin.trim();
+  }
+  const cleanPhone = (driver.phone || "").replace(/\D/g, "");
+  if (cleanPhone.length >= 4) {
+    return cleanPhone.slice(-4);
+  }
+  return "1234";
+}
+
+/**
+ * Valida o PIN de 4 dígitos digitado pelo motoboy.
+ */
+export function verifyDriverPin(driver: Driver, pinAttempt: string): boolean {
+  const expected = getDriverDefaultPin(driver);
+  return pinAttempt.trim() === expected;
+}
+
+/**
+ * Autentica o motoboy diretamente no banco através do Nome e PIN de 4 dígitos.
+ */
+export async function signInWithDriverPin(driver: Driver, pinAttempt: string): Promise<User> {
+  const cleanPin = pinAttempt.trim();
+  if (!cleanPin) {
+    throw new Error("Digite seu PIN de 4 dígitos.");
+  }
+
+  if (!verifyDriverPin(driver, cleanPin)) {
+    throw new Error("PIN incorreto. Digite o PIN de 4 dígitos fornecido pela sua loja.");
+  }
+
+  const email = driver.email || normalizeAuthEmail(driver.name, "driver");
+  const user: User = {
+    id: driver.id.replace(/^drv-/, ""),
+    name: driver.name,
+    email,
+    phone: driver.phone,
+    role: "driver",
+    companyId: driver.companyId || getActiveStore().companyId,
+    storeId: getActiveStore().id,
+    active: true,
+    takeatId: driver.takeatId,
+  };
+
+  setStoredUser(user);
+  return user;
+}
+
+/**
+ * Autentica uma loja automaticamente no banco com isolamento por Store ID
+ */
+export async function signInAsStoreDirect(storeId: string, storeName?: string): Promise<User> {
+  const store = getActiveStore();
+  const name = storeName || store.name || `Loja ${storeId}`;
+  const user: User = {
+    id: `store-${storeId}`,
+    name,
+    email: `loja-${storeId}@takeat.app`,
+    phone: store.phone || "",
+    role: "admin",
+    companyId: storeId,
+    storeId,
+    active: true,
+  };
+
+  setStoredUser(user);
+  return user;
+}
+

@@ -21,7 +21,7 @@ export type DeliveryPriority =
   | "urgente";
 
 export interface GeoPoint { latitude:number; longitude:number }
-export interface User { id:string; name:string; email:string; phone:string; role:UserRole; companyId:string; active:boolean; takeatId?: number | string }
+export interface User { id:string; name:string; email:string; phone:string; role:UserRole; companyId:string; active:boolean; takeatId?: number | string; storeId?: string }
 export interface Company { id:string; name:string; phone:string; city:string; state:string; defaultAddress:string; defaultLatitude?:number; defaultLongitude?:number }
 export interface Driver {
   id: string;
@@ -35,6 +35,7 @@ export interface Driver {
   companyId?: string;
   createdAt?: string;
   takeatId?: number | string;
+  pin?: string;
   location?: {
     latitude: number;
     longitude: number;

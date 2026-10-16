@@ -138,7 +138,7 @@ import {
   authenticateTakeat,
   type TakeatCredentials,
 } from "../src/services/takeatService";
-import { getActiveStore, getStoreCacheKey, type StoreConfig } from "../src/services/storeService";
+import { getActiveStore, getStoreCacheKey, getStoreMotoboyLoginUrl, type StoreConfig } from "../src/services/storeService";
 import type { DeliveryRecord, DeliveryRecordStatus } from "../src/types/delivery";
 import { LoginView } from "../src/components/LoginView";
 import {
@@ -5560,6 +5560,33 @@ function AdminDriversTab({
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
           <button
             type="button"
+            onClick={() => {
+              const link = getStoreMotoboyLoginUrl();
+              if (typeof navigator !== "undefined" && navigator.clipboard) {
+                void navigator.clipboard.writeText(link);
+                notify("Link de acesso copiado! Envie no WhatsApp dos motoboys para entrarem com Nome e PIN.");
+              }
+            }}
+            style={{
+              height: "40px",
+              fontSize: "12px",
+              background: "rgba(16,185,129,.12)",
+              color: "#10b981",
+              border: "1px solid rgba(16,185,129,.3)",
+              borderRadius: "10px",
+              padding: "0 12px",
+              fontWeight: "700",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              cursor: "pointer",
+            }}
+            title="Copiar link com login rápido por PIN para o grupo de WhatsApp dos motoboys"
+          >
+            <Copy size={14} /> Link WhatsApp Motoboys
+          </button>
+          <button
+            type="button"
             onClick={handleSyncTakeatMotoboys}
             disabled={syncingTakeatMotoboys}
             style={{
@@ -5639,9 +5666,24 @@ function AdminDriversTab({
                     )}
                   </div>
                 <span>{drv.phone || "Sem telefone"} • {drv.vehicle}</span>
-                <span style={{ fontSize: "11px", color: "var(--muted)", display: "block", marginTop: "2px" }}>
-                  Login: <strong style={{ color: "var(--text)" }}>{drv.email ? drv.email.split("@")[0] : drv.driverName.toLowerCase()}</strong> • Senha: <code style={{ fontSize: "10px" }}>123456</code>
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "3px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+                    Nome: <strong style={{ color: "var(--text)" }}>{drv.driverName}</strong>
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "10.5px",
+                      fontWeight: 800,
+                      background: "rgba(124,58,237,.12)",
+                      color: "#7c3aed",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      border: "1px solid rgba(124,58,237,.25)",
+                    }}
+                  >
+                    PIN de Acesso: {fullDriver?.pin || "1234"}
+                  </span>
+                </div>
               </div>
               <a
                 href={`https://wa.me/55${drv.phone.replace(/\D/g, "")}`}
@@ -5709,6 +5751,7 @@ function NewDriverModal({
   const [vehicle, setVehicle] = useState("Honda Fan 160");
   const [plate, setPlate] = useState("");
   const [defaultFee, setDefaultFee] = useState("7.00");
+  const [pin, setPin] = useState("1234");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -5718,6 +5761,7 @@ function NewDriverModal({
       vehicle,
       plate,
       defaultFee: Number(defaultFee.replace(",", ".")) || 7.0,
+      pin: pin.trim() || "1234",
       active: true,
     });
   }
@@ -5746,6 +5790,21 @@ function NewDriverModal({
             <label>
               WhatsApp / Telefone
               <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(73) 99999-9999" required />
+            </label>
+
+            <label>
+              PIN de Acesso (4 dígitos)
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="1234"
+                required
+                title="PIN de 4 dígitos para o motoboy entrar no celular"
+              />
             </label>
 
             <label>
