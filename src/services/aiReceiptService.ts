@@ -78,6 +78,7 @@ export async function analyzeReceiptWithAI(file: File): Promise<AIReceiptFields>
 Regras obrigatórias:
 - extraia somente dados realmente visíveis; nunca complete por suposição;
 - diferencie valor do pedido, taxa de entrega e troco;
+- CRÍTICO PARA VALOR (amount): O campo 'amount' DEVE ser estritamente o VALOR FINAL LÍQUIDO A PAGAR pelo cliente (com todos os cupons, vouchers e descontos já SUBTRAÍDOS). Exemplo: Subtotal R$ 50,00, Cupom R$ 10,00, Entrega R$ 7,00 -> amount DEVE ser 47.00 (e nunca 57.00 bruto). Se já constar 'PAGO ONLINE' / 'iFood Pago', preencha payment='Pago' e o amount como o valor líquido pago;
 - normalize telefone brasileiro, CEP e valores em reais;
 - separe logradouro e número; preserve complemento e referência;
 - transcreva itens com quantidade e variações;

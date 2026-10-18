@@ -592,6 +592,133 @@ test("Autenticação de Motoboy por PIN de 4 dígitos e Link WhatsApp da Loja", 
   assert.equal(getRtdbPathForStore("drivers", "241"), "rotacerta/stores/241/drivers");
 });
 
+test("Cálculo de valor líquido a pagar com cupom e desconto abatidos na Takeat", () => {
+  function computeTakeatNetPayable(session, assignedMotoboy, rawBasket) {
+    const rawDeliveryTax = parseFloat(
+      (assignedMotoboy?.deliveryFee != null ? String(assignedMotoboy.deliveryFee) : "") ||
+      session.delivery_tax_price ||
+      rawBasket?.delivery_tax_price ||
+      "0"
+    );
+    const deliveryFee = rawDeliveryTax > 0 ? rawDeliveryTax : 7.0;
+
+    const rawDeliveryFeeDiscount = parseFloat(
+      session.delivery_fee_discount ||
+      rawBasket?.delivery_fee_discount ||
+      "0"
+    );
+    const netDeliveryFee = Math.max(0, deliveryFee - (isNaN(rawDeliveryFeeDiscount) ? 0 : rawDeliveryFeeDiscount));
+
+    const rawDiscountCandidate =
+      session.discount_total ||
+      rawBasket?.discount_total ||
+      rawBasket?.discount_value ||
+      rawBasket?.discount ||
+      rawBasket?.coupon_value ||
+      rawBasket?.total_discount ||
+      session.merchant_discount ||
+      rawBasket?.merchant_discount ||
+      "0";
+    const parsedDiscount = Math.max(0, parseFloat(String(rawDiscountCandidate)) || 0);
+
+    const rawOldTotal = parseFloat(session.old_total_price || rawBasket?.old_total_price || "0");
+    const rawSubtotal = parseFloat(session.total_price || rawBasket?.total_price || "0");
+
+    const priceDiffDiscount =
+      rawOldTotal > 0 && rawSubtotal > 0 && rawOldTotal > rawSubtotal
+        ? rawOldTotal - rawSubtotal
+        : 0;
+
+    const effectiveDiscount = Math.max(
+      parsedDiscount,
+      priceDiffDiscount,
+      isNaN(rawDeliveryFeeDiscount) ? 0 : rawDeliveryFeeDiscount
+    );
+
+    const paymentsList = session.payments || rawBasket?.payments || [];
+    const paymentSum = paymentsList.reduce((sum, p) => {
+      const val = parseFloat(p.original_value || p.payment_value || "0");
+      return sum + (isNaN(val) ? 0 : val);
+    }, 0);
+
+    const rawTotalDelivery = parseFloat(session.total_delivery_price || rawBasket?.total_delivery_price || "0");
+
+    let amount = 0;
+    if (paymentSum > 0) {
+      amount = paymentSum;
+    } else {
+      let productNet = rawSubtotal;
+      if (rawOldTotal > 0 && Math.abs(rawSubtotal - rawOldTotal) < 0.01 && effectiveDiscount > 0) {
+        productNet = Math.max(0, rawSubtotal - effectiveDiscount);
+      }
+      const netFromProductsAndFee = (productNet > 0 ? productNet : 0) + netDeliveryFee;
+      if (netFromProductsAndFee > 0) {
+        amount = netFromProductsAndFee;
+        if (rawTotalDelivery > 0 && rawTotalDelivery < netFromProductsAndFee) {
+          amount = rawTotalDelivery;
+        }
+      } else if (rawTotalDelivery > 0) {
+        amount = Math.max(0, rawTotalDelivery - effectiveDiscount);
+      }
+    }
+
+    amount = Math.round(amount * 100) / 100;
+    return { amount, discount: effectiveDiscount > 0 ? effectiveDiscount : 0, netDeliveryFee };
+  }
+
+  // Caso 1: Takeat envia total_delivery_price bruto (57.00), mas houve cupom de 10.00
+  // Produtos: 50.00 bruto, 40.00 líquido. Taxa: 7.00. Total líquido a pagar DEVE ser 47.00 (e NÃO 57.00)
+  const orderWithCouponGrossDelivery = {
+    id: 101,
+    total_price: "40.00",
+    old_total_price: "50.00",
+    discount_total: "10.00",
+    delivery_tax_price: "7.00",
+    total_delivery_price: "57.00", // Bruto da Takeat antes do cupom
+    payments: [],
+  };
+  const res1 = computeTakeatNetPayable(orderWithCouponGrossDelivery);
+  assert.equal(res1.amount, 47.00, "Valor a pagar deve abater o cupom de R$ 10,00 e resultar em R$ 47,00");
+  assert.equal(res1.discount, 10.00, "Desconto identificado deve ser R$ 10,00");
+
+  // Caso 2: Sessão com pagamento faturado pelo cliente
+  const orderWithPayments = {
+    id: 102,
+    total_price: "35.00",
+    delivery_tax_price: "5.00",
+    total_delivery_price: "40.00",
+    payments: [{ payment_value: "32.00", original_value: "32.00" }], // Desconto especial de R$ 8,00 no pagamento
+  };
+  const res2 = computeTakeatNetPayable(orderWithPayments);
+  assert.equal(res2.amount, 32.00, "Valor faturado em payments tem prioridade absoluta como valor a pagar");
+
+  // Caso 3: Cupom de frete grátis (delivery_fee_discount)
+  const orderWithFreeDeliveryCoupon = {
+    id: 103,
+    total_price: "45.00",
+    delivery_tax_price: "7.00",
+    delivery_fee_discount: "7.00",
+    total_delivery_price: "52.00",
+    payments: [],
+  };
+  const res3 = computeTakeatNetPayable(orderWithFreeDeliveryCoupon);
+  assert.equal(res3.amount, 45.00, "Com frete grátis, o valor líquido a pagar não cobra a taxa do cliente");
+  assert.equal(res3.netDeliveryFee, 0, "Taxa cobrada do cliente é 0");
+
+  // Caso 4: Subtotal enviado como valor bruto sem desconto descontado no subtotal
+  const orderGrossSubtotal = {
+    id: 104,
+    total_price: "60.00",
+    old_total_price: "60.00",
+    discount_total: "15.00",
+    delivery_tax_price: "6.00",
+    payments: [],
+  };
+  const res4 = computeTakeatNetPayable(orderGrossSubtotal);
+  assert.equal(res4.amount, 51.00, "Abate desconto de R$ 15,00 do subtotal bruto (60 - 15 + 6 = 51)");
+});
+
+
 
 
 

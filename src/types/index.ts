@@ -80,6 +80,8 @@ export interface Delivery {
   deliveryFee: number;
   payment: string;
   paymentMethod?: string;
+  discount?: number;
+  isPaidOnline?: boolean;
   priority: DeliveryPriority;
   status: DeliveryStatus;
   driver?: string;

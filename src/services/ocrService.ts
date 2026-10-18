@@ -229,13 +229,35 @@ export function parseComandaText(text: string): ParsedReceiptData {
     out.deliveryFee = "7.00";
   }
 
-  // 10. VALOR TOTAL DO PEDIDO
+  // 10. VALOR TOTAL / LÍQUIDO A PAGAR (COM CUPOM/DESCONTO ABATIDO)
+  const aPagarRaw = g(/(?:total\s*a\s*pagar|valor\s*a\s*pagar|total\s*l[ií]quido|valor\s*cobrado|total\s*final|valor\s*pago)[\s.:#-]*R?\$?\s*([\d.,]+)/i);
   const totalRaw =
-    g(/(?:valor\s*total\s*(?:do\s*pedido)?|total\s*(?:do\s*pedido)?|total\s*a\s*pagar|total\s*geral)[\s.:#-]*R?\$?\s*([\d.,]+)/i) ||
+    aPagarRaw ||
+    g(/(?:valor\s*total\s*(?:do\s*pedido)?|total\s*(?:do\s*pedido)?|total\s*geral)[\s.:#-]*R?\$?\s*([\d.,]+)/i) ||
     g(/TOTAL[\s.:#-]*R?\$?\s*([\d.,]+)/i);
 
-  if (totalRaw) {
-    out.amount = num(totalRaw);
+  const subtotalRaw = g(/(?:subtotal|total\s*dos\s*itens|valor\s*dos\s*produtos)[\s.:#-]*R?\$?\s*([\d.,]+)/i);
+  const cupomRaw = g(/(?:cupom|desconto|abatimento|desconto\s*loja|desconto\s*ifood)[\s.:#-]*[-–—]?\s*R?\$?\s*([\d.,]+)/i);
+
+  let parsedTotal = totalRaw ? parseFloat(num(totalRaw)) : 0;
+  const parsedSubtotal = subtotalRaw ? parseFloat(num(subtotalRaw)) : 0;
+  const parsedCupom = cupomRaw ? parseFloat(num(cupomRaw)) : 0;
+  const parsedFee = parseFloat(out.deliveryFee || "7.00") || 0;
+
+  if (aPagarRaw) {
+    out.amount = num(aPagarRaw);
+  } else if (parsedTotal > 0) {
+    if (parsedCupom > 0 && parsedTotal >= parsedSubtotal && parsedTotal > parsedCupom) {
+      if (parsedSubtotal > 0 && Math.abs(parsedTotal - (parsedSubtotal + parsedFee)) < 0.05) {
+        parsedTotal = Math.max(0, parsedTotal - parsedCupom);
+      } else if (parsedSubtotal > 0 && Math.abs(parsedTotal - parsedSubtotal) < 0.05) {
+        parsedTotal = Math.max(0, parsedTotal - parsedCupom + parsedFee);
+      }
+    }
+    out.amount = parsedTotal.toFixed(2);
+  } else if (parsedSubtotal > 0) {
+    const net = Math.max(0, parsedSubtotal - parsedCupom + parsedFee);
+    out.amount = net.toFixed(2);
   } else {
     out.amount = "51.89";
   }
@@ -269,6 +291,7 @@ export function parseComandaText(text: string): ParsedReceiptData {
   const notesParts = [
     out.pickupCode ? `Código de coleta: ${out.pickupCode}` : "",
     out.reference ? `Ref: ${out.reference}` : "",
+    parsedCupom > 0 ? `Cupom/Desconto: -R$ ${parsedCupom.toFixed(2)}` : "",
     obs ? `Obs: ${obs}` : "",
     /N[AÃ]O\s*COBRAR\s*DO\s*CLIENTE/i.test(normalized) ? "NÃO COBRAR DO CLIENTE" : "",
   ].filter(Boolean);

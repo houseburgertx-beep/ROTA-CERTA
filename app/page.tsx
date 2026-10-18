@@ -2803,6 +2803,11 @@ function MobileDeliveryCard({
     delivery.payment?.toLowerCase().includes("verificar") ||
     delivery.payment?.toLowerCase().includes("pendente");
 
+  const isPaidOnline =
+    delivery.isPaidOnline ??
+    (/online|pago\s*online|pago\s*pelo|pago\b|ifood\s*online|pix\s*online/i.test(delivery.payment || "") ||
+     (isIfood && !/dinheiro|na\s*entrega|maquin|pos|a\s*cobrar/i.test(delivery.payment || "")));
+
   const itemCount =
     delivery.items && delivery.items.length > 0
       ? delivery.items.reduce((acc, it) => acc + (it.amount || 1), 0)
@@ -2878,8 +2883,24 @@ function MobileDeliveryCard({
         <div className="cdc-finance-row">
           <div className="cdc-finance-left">
             {isPendingPayment && <span className="cdc-pending-dot" />}
-            <span className="cdc-amount">{money(delivery.amount)}</span>
-            <span className="cdc-payment"> · {delivery.payment || "A Cobrar"}</span>
+            {isPaidOnline ? (
+              <span className="cdc-paid-online-badge" title="Pedido pago online (iFood/Pix/Takeat). NÃO cobrar do cliente!">
+                <span className="cdc-paid-icon">✓</span>
+                <span className="cdc-paid-text">PAGO ONLINE</span>
+                <span className="cdc-paid-sub">({money(delivery.amount)})</span>
+              </span>
+            ) : (
+              <span className="cdc-to-collect-badge">
+                <span className="cdc-collect-label">COBRAR:</span>
+                <span className="cdc-amount">{money(delivery.amount)}</span>
+                <span className="cdc-payment"> · {delivery.payment || "A Cobrar"}</span>
+              </span>
+            )}
+            {delivery.discount != null && delivery.discount > 0 && (
+              <span className="cdc-discount-badge" title={`Cupom/Desconto de ${money(delivery.discount)} já abatido no valor`}>
+                Cupom -{money(delivery.discount)}
+              </span>
+            )}
           </div>
           <span className="cdc-fee">Taxa {money(delivery.deliveryFee)}</span>
         </div>

@@ -90,6 +90,7 @@ export interface TakeatAssignedDriver {
   deliveryFee?: number;
   status?: string;
   totalPrice?: number;
+  discount?: number;
   deliveredAt?: string;
   createdAt?: string;
   buyerName?: string;
@@ -108,11 +109,14 @@ export interface TakeatBill {
 
 export interface TakeatPayment {
   payment_value?: string;
+  original_value?: string;
+  change?: string;
   payment_method?: {
     id?: number;
     name?: string;
     method?: string;
     brand?: string;
+    keyword?: string;
   };
 }
 
@@ -121,6 +125,12 @@ export interface TakeatTableSession {
   details?: string | null;
   ifood_document?: string | null;
   total_price?: string;
+  old_total_price?: string | null;
+  discount_total?: string | null;
+  discount_percent?: string | null;
+  discount_obs?: string | null;
+  merchant_discount?: string | null;
+  delivery_fee_discount?: string | null;
   total_service_price?: string;
   start_time?: string;
   end_time?: string | null;
@@ -766,6 +776,11 @@ export async function fetchTakeatBaskets(apiKey?: string): Promise<{
           : (o.basket as Record<string, unknown> | undefined)?.attendance_password != null
           ? String((o.basket as Record<string, unknown>).attendance_password).trim()
           : undefined;
+        const rawDiscount = o.discount_total != null
+          ? parseFloat(String(o.discount_total))
+          : (o.basket as Record<string, unknown> | undefined)?.discount_total != null
+          ? parseFloat(String((o.basket as Record<string, unknown>).discount_total))
+          : undefined;
         map.set(sId, {
           id: Number(motoboy.id),
           name: String(motoboy.name).trim(),
@@ -773,6 +788,7 @@ export async function fetchTakeatBaskets(apiKey?: string): Promise<{
           deliveryFee: deliveryTax && !isNaN(deliveryTax) ? deliveryTax : undefined,
           status: o.status || o.delivery_status ? String(o.status || o.delivery_status) : undefined,
           totalPrice: totalPrice && !isNaN(totalPrice) ? totalPrice : undefined,
+          discount: rawDiscount && !isNaN(rawDiscount) ? rawDiscount : undefined,
           attendancePassword: rawPass,
         });
       }
@@ -1299,7 +1315,8 @@ export function mapTakeatSessionToDelivery(
     cleanOrderNumber = `#${session.id}`;
   }
 
-  // Preço e taxa: VALOR TOTAL DEVE INCLUIR A TAXA DE ENTREGA (total_delivery_price na Takeat)
+  // Preço, Taxa, Cupons e Pagamentos:
+  // 1. Extração da taxa de entrega
   const rawDeliveryTax = parseFloat(
     (assignedMotoboy?.deliveryFee != null ? String(assignedMotoboy.deliveryFee) : "") ||
     session.delivery_tax_price ||
@@ -1308,30 +1325,106 @@ export function mapTakeatSessionToDelivery(
   );
   const deliveryFee = rawDeliveryTax > 0 ? rawDeliveryTax : 7.0;
 
+  const rawDeliveryFeeDiscount = parseFloat(
+    session.delivery_fee_discount ||
+    (rawSession.delivery_fee_discount as string) ||
+    (rawBasket?.delivery_fee_discount as string) ||
+    "0"
+  );
+  const netDeliveryFee = Math.max(0, deliveryFee - (isNaN(rawDeliveryFeeDiscount) ? 0 : rawDeliveryFeeDiscount));
+
+  // 2. Extração de Descontos e Cupons (loja, iFood, Takeat)
+  const rawDiscountCandidate =
+    session.discount_total ||
+    (rawSession.discount_total as string) ||
+    (rawBasket?.discount_total as string) ||
+    (rawBasket?.discount_value as string) ||
+    (rawBasket?.discount as string) ||
+    (rawBasket?.coupon_value as string) ||
+    (rawBasket?.total_discount as string) ||
+    session.merchant_discount ||
+    (rawSession.merchant_discount as string) ||
+    (rawBasket?.merchant_discount as string) ||
+    "0";
+  const parsedDiscount = Math.max(0, parseFloat(String(rawDiscountCandidate)) || 0);
+
+  const rawOldTotal = parseFloat(
+    session.old_total_price ||
+    (rawSession.old_total_price as string) ||
+    (rawBasket?.old_total_price as string) ||
+    "0"
+  );
+
+  const rawSubtotal = parseFloat(
+    session.total_price ||
+    (rawSession.total_price as string) ||
+    (rawBasket?.total_price as string) ||
+    "0"
+  );
+
+  // Na Takeat: total_price é a soma dos produtos, já com desconto aplicado (se houver).
+  // old_total_price é o total_price sem o desconto aplicado.
+  // Se old_total_price for maior que total_price, a diferença é o desconto aplicado nos produtos!
+  const priceDiffDiscount =
+    rawOldTotal > 0 && rawSubtotal > 0 && rawOldTotal > rawSubtotal
+      ? rawOldTotal - rawSubtotal
+      : 0;
+
+  const effectiveDiscount = Math.max(
+    parsedDiscount,
+    priceDiffDiscount,
+    isNaN(rawDeliveryFeeDiscount) ? 0 : rawDeliveryFeeDiscount
+  );
+
+  // 3. Pagamentos registrados na sessão ou cesta
+  const paymentsList = session.payments || (rawBasket?.payments as TakeatPayment[]) || [];
+  const paymentSum = paymentsList.reduce((sum, p) => {
+    const val = parseFloat(p.original_value || p.payment_value || "0");
+    return sum + (isNaN(val) ? 0 : val);
+  }, 0);
+
   const rawTotalDelivery = parseFloat(
     session.total_delivery_price ||
+    (rawSession.total_delivery_price as string) ||
     (rawBasket?.total_delivery_price as string) ||
     "0"
   );
 
-  const paymentSum = (session.payments || []).reduce(
-    (sum, p) => sum + parseFloat(p.payment_value || "0"),
-    0
-  );
-
-  const rawSubtotal = parseFloat(session.total_price || (rawBasket?.total_price as string) || "0");
-
+  // 4. Cálculo do VALOR LÍQUIDO A PAGAR (o motoboy DEVE ver o valor após cupom/desconto)
   let amount = 0;
-  if (rawTotalDelivery > 0) {
-    amount = rawTotalDelivery;
-  } else if (paymentSum > 0) {
+  if (paymentSum > 0) {
+    // Se há registro de pagamentos, o Takeat payments já traz o valor exato faturado/cobrado com cupom deduzido
     amount = paymentSum;
-  } else if (rawSubtotal > 0) {
-    amount = rawSubtotal + deliveryFee;
+  } else {
+    // Caso de pedido a cobrar na entrega sem payments fechado
+    let productNet = rawSubtotal;
+    // Se o subtotal informado era o valor bruto (igual a old_total_price), subtrai o desconto
+    if (rawOldTotal > 0 && Math.abs(rawSubtotal - rawOldTotal) < 0.01 && effectiveDiscount > 0) {
+      productNet = Math.max(0, rawSubtotal - effectiveDiscount);
+    }
+
+    const netFromProductsAndFee = (productNet > 0 ? productNet : 0) + netDeliveryFee;
+
+    if (netFromProductsAndFee > 0) {
+      amount = netFromProductsAndFee;
+      // Se rawTotalDelivery existir e for menor que netFromProductsAndFee, respeita o menor
+      if (rawTotalDelivery > 0 && rawTotalDelivery < netFromProductsAndFee) {
+        amount = rawTotalDelivery;
+      }
+    } else if (rawTotalDelivery > 0) {
+      amount = Math.max(0, rawTotalDelivery - effectiveDiscount);
+    }
   }
+
+  // Arredonda para 2 casas decimais
+  amount = Math.round(amount * 100) / 100;
 
   const paymentMethod =
     paymentMethodRaw || (isIfood ? "Pagamento Online iFood" : "A Cobrar na Entrega");
+
+  const isPaidOnline =
+    /online|pago\s*online|pago\s*pelo|pago\b|ifood\s*online|pix\s*online|app/i.test(paymentMethod) ||
+    (isIfood && !/dinheiro|na\s*entrega|maquin|pos|a\s*cobrar/i.test(paymentMethod));
 
   // Status da sessão Takeat mapeado para o Rota Certa
   let status: Delivery["status"] = "Aguardando";
@@ -1363,6 +1456,7 @@ export function mapTakeatSessionToDelivery(
   if (pickupCode) notesParts.push(`Coleta: ${pickupCode}`);
   if (addressObj?.complement) notesParts.push(`Comp: ${addressObj.complement}`);
   if (addressObj?.reference) notesParts.push(`Ref: ${addressObj.reference}`);
+  if (effectiveDiscount > 0) notesParts.push(`Cupom/Desconto: -R$ ${effectiveDiscount.toFixed(2)}`);
   if (session.details) notesParts.push(`Obs: ${session.details}`);
   const notes = notesParts.join(" | ") || undefined;
 
@@ -1413,6 +1507,8 @@ export function mapTakeatSessionToDelivery(
     amount,
     deliveryFee: deliveryFee > 0 ? deliveryFee : 7.0,
     payment: paymentMethod,
+    discount: effectiveDiscount > 0 ? Number(effectiveDiscount.toFixed(2)) : undefined,
+    isPaidOnline,
     platform: isIfood ? "ifood" : "takeat",
     platformOrderId: ifoodId,
     pickupCode,
@@ -1611,9 +1707,17 @@ export async function syncTakeatDeliveries(
           changed = true;
         }
 
-        // Atualiza valor total do pedido com a taxa de entrega inclusa
+        // Atualiza valor total do pedido (líquido com cupom descontado)
         if (mapped.amount > 0 && Math.abs((current.amount || 0) - mapped.amount) > 0.01) {
           current.amount = mapped.amount;
+          changed = true;
+        }
+        if (mapped.discount !== undefined && mapped.discount !== current.discount) {
+          current.discount = mapped.discount;
+          changed = true;
+        }
+        if (mapped.isPaidOnline !== undefined && mapped.isPaidOnline !== current.isPaidOnline) {
+          current.isPaidOnline = mapped.isPaidOnline;
           changed = true;
         }
         if (mapped.deliveryFee > 0 && Math.abs((current.deliveryFee || 0) - mapped.deliveryFee) > 0.01) {
@@ -1682,16 +1786,23 @@ export async function syncTakeatDeliveries(
     if (!sId || processedSessionIds.has(sId)) continue;
     if (!isTakeatSessionDelivery(bOrder as unknown as TakeatTableSession)) continue;
 
+    const rawBSub = bOrder.basket as Record<string, unknown> | undefined;
     const synthSession: TakeatTableSession = {
       id: sId,
       status: String(bOrder.delivery_status || "open"),
       is_delivery: true,
-      total_price: String(bOrder.total_price || "0"),
-      total_delivery_price: String(bOrder.total_delivery_price || bOrder.total_price || "0"),
-      delivery_tax_price: String(bOrder.delivery_tax_price || "7.00"),
-      attendance_password: bOrder.attendance_password != null ? String(bOrder.attendance_password) : null,
-      start_time: (bOrder.start_time || bOrder.created_at || (bOrder.basket as Record<string, unknown> | undefined)?.start_time || new Date().toISOString()) as string,
-      details: (bOrder.details || "") as string,
+      total_price: String(bOrder.total_price || rawBSub?.total_price || "0"),
+      old_total_price: bOrder.old_total_price != null ? String(bOrder.old_total_price) : (rawBSub?.old_total_price != null ? String(rawBSub.old_total_price) : null),
+      discount_total: bOrder.discount_total != null ? String(bOrder.discount_total) : (rawBSub?.discount_total != null ? String(rawBSub.discount_total) : null),
+      discount_percent: bOrder.discount_percent != null ? String(bOrder.discount_percent) : (rawBSub?.discount_percent != null ? String(rawBSub.discount_percent) : null),
+      delivery_fee_discount: bOrder.delivery_fee_discount != null ? String(bOrder.delivery_fee_discount) : (rawBSub?.delivery_fee_discount != null ? String(rawBSub.delivery_fee_discount) : null),
+      merchant_discount: bOrder.merchant_discount != null ? String(bOrder.merchant_discount) : (rawBSub?.merchant_discount != null ? String(rawBSub.merchant_discount) : null),
+      total_delivery_price: String(bOrder.total_delivery_price || rawBSub?.total_delivery_price || bOrder.total_price || "0"),
+      delivery_tax_price: String(bOrder.delivery_tax_price || rawBSub?.delivery_tax_price || "7.00"),
+      attendance_password: bOrder.attendance_password != null ? String(bOrder.attendance_password) : (rawBSub?.attendance_password != null ? String(rawBSub.attendance_password) : null),
+      start_time: (bOrder.start_time || bOrder.created_at || rawBSub?.start_time || new Date().toISOString()) as string,
+      details: (bOrder.details || rawBSub?.details || "") as string,
+      payments: (Array.isArray(bOrder.payments) ? bOrder.payments : (Array.isArray(rawBSub?.payments) ? rawBSub.payments : undefined)) as TakeatPayment[] | undefined,
     };
     const assignedMotoboy = assignedMotoboyMap.get(sId);
     const mapped = mapTakeatSessionToDelivery(synthSession, driversList, assignedMotoboy, bOrder);
@@ -1750,6 +1861,14 @@ export async function syncTakeatDeliveries(
         }
         if (mapped.amount > 0 && Math.abs((current.amount || 0) - mapped.amount) > 0.01) {
           current.amount = mapped.amount;
+          changed = true;
+        }
+        if (mapped.discount !== undefined && mapped.discount !== current.discount) {
+          current.discount = mapped.discount;
+          changed = true;
+        }
+        if (mapped.isPaidOnline !== undefined && mapped.isPaidOnline !== current.isPaidOnline) {
+          current.isPaidOnline = mapped.isPaidOnline;
           changed = true;
         }
         if (changed) {
