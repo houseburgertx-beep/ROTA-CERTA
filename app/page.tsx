@@ -104,6 +104,7 @@ import { CustomerTrackingView } from "../src/components/CustomerTrackingView";
 import { SwipeToDeliver } from "../src/components/SwipeToDeliver";
 import { KanbanExpeditionBoard } from "../src/components/KanbanExpeditionBoard";
 import { ErrorBoundary } from "../src/components/ErrorBoundary";
+import { WhatsAppMessageSelector } from "../src/components/WhatsAppMessageSelector";
 import {
   isDeviceOnline,
   onConnectionChange,
@@ -2858,44 +2859,7 @@ function MobileDeliveryCard({
     ? delivery.order
     : `#${delivery.order}`;
 
-  // Validação e sanitização inteligente de WhatsApp
-  const validWhatsApp = sanitizeWhatsAppNumber(delivery.phone, delivery.notes);
 
-  const whatsappUrl = validWhatsApp
-    ? `https://wa.me/${validWhatsApp}?text=${encodeURIComponent(
-        `Olá ${delivery.customer}! Sou o motoboy com seu pedido ${displayOrderStr}. Já estou a caminho do seu endereço: ${delivery.address}.`,
-      )}`
-    : null;
-
-  const whatsappArrivedUrl = validWhatsApp
-    ? `https://wa.me/${validWhatsApp}?text=${encodeURIComponent(
-        `Olá ${delivery.customer}! Sou o motoboy com seu pedido ${displayOrderStr}. Já cheguei no seu endereço e estou no portão te aguardando! Pode retirar, por favor? Obrigado!`,
-      )}`
-    : null;
-
-  const handlePromptPhone = (actionAfter?: "contact" | "arrived") => {
-    const input = window.prompt(
-      `Digite o WhatsApp do cliente ${delivery.customer} (com DDD, ex: 73999998888):`
-    );
-    if (!input) return;
-    const sanitized = sanitizeWhatsAppNumber(input);
-    if (!sanitized) {
-      alert("Número inválido! Digite com DDD (ex: 73999998888).");
-      return;
-    }
-    onUpdatePhone?.(sanitized);
-    if (actionAfter === "arrived") {
-      const url = `https://wa.me/${sanitized}?text=${encodeURIComponent(
-        `Olá ${delivery.customer}! Sou o motoboy com seu pedido ${displayOrderStr}. Já cheguei no seu endereço e estou no portão te aguardando! Pode retirar, por favor? Obrigado!`,
-      )}`;
-      window.open(url, "_blank");
-    } else if (actionAfter === "contact") {
-      const url = `https://wa.me/${sanitized}?text=${encodeURIComponent(
-        `Olá ${delivery.customer}! Sou o motoboy com seu pedido ${displayOrderStr}. Já estou a caminho do seu endereço: ${delivery.address}.`,
-      )}`;
-      window.open(url, "_blank");
-    }
-  };
 
   const mapsUrl = delivery.latitude && delivery.longitude
     ? `https://www.google.com/maps/dir/?api=1&destination=${delivery.latitude},${delivery.longitude}&travelmode=driving`
@@ -3075,31 +3039,6 @@ function MobileDeliveryCard({
                 <Copy size={13} />
               </button>
             )}
-
-            {!isIfood && (
-              validWhatsApp ? (
-                <a
-                  href={whatsappUrl!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="cdc-contact-btn"
-                  title="Conversar no WhatsApp"
-                >
-                  <WhatsAppIcon size={14} color="#15803d" />
-                  <span>Contato</span>
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  className="cdc-contact-btn is-add"
-                  onClick={() => handlePromptPhone("contact")}
-                  title="Digitar número de WhatsApp"
-                >
-                  <WhatsAppIcon size={14} color="#15803d" />
-                  <span>Contato</span>
-                </button>
-              )
-            )}
           </div>
         </div>
 
@@ -3186,30 +3125,17 @@ function MobileDeliveryCard({
             </a>
           </div>
 
-          {/* Ações Operacionais da Entrega */}
+          {/* Seletor de Mensagens Rápidas WhatsApp */}
           {!isIfood && (
-            validWhatsApp ? (
-              <a
-                href={whatsappArrivedUrl!}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-cdc-cheguei-banner"
-                title="Avisar cliente no WhatsApp que já chegou no portão"
-              >
-                <WhatsAppIcon size={16} color="#15803d" />
-                <span>Cheguei no Portão (WhatsApp)</span>
-              </a>
-            ) : (
-              <button
-                type="button"
-                className="btn-cdc-cheguei-banner"
-                onClick={() => handlePromptPhone("arrived")}
-                title="Informar WhatsApp para avisar chegada no portão"
-              >
-                <WhatsAppIcon size={16} color="#15803d" />
-                <span>Cheguei no Portão (WhatsApp)</span>
-              </button>
-            )
+            <WhatsAppMessageSelector
+              customerName={delivery.customer}
+              orderNumber={displayOrderStr}
+              address={delivery.address}
+              phone={delivery.phone}
+              notes={delivery.notes}
+              onUpdatePhone={onUpdatePhone}
+              onNotify={onNotify}
+            />
           )}
 
           {/* Botão de Deslizar (Swipe to Deliver) - Estilo Uber / 99 / iFood */}
