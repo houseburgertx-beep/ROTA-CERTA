@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Clock,
   Bike,
@@ -14,8 +14,8 @@ import {
 import type { Delivery, Driver } from "../types";
 
 interface KanbanExpeditionBoardProps {
-  deliveries: Delivery[];
-  drivers: Driver[];
+  deliveries?: Delivery[];
+  drivers?: Driver[];
   onAssignDriver: (deliveryId: string, driverId: string) => void;
   onUpdateStatus: (deliveryId: string, status: Delivery["status"]) => void;
   onMarkDelivered: (deliveryId: string) => void;
@@ -33,14 +33,17 @@ function money(v: number): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export const KanbanExpeditionBoard: React.FC<KanbanExpeditionBoardProps> = ({
-  deliveries,
-  drivers,
+export function KanbanExpeditionBoard({
+  deliveries = [],
+  drivers = [],
   onAssignDriver,
   onUpdateStatus,
   onMarkDelivered,
   onNotify,
-}) => {
+}: KanbanExpeditionBoardProps) {
+  const safeDeliveries = useMemo(() => Array.isArray(deliveries) ? deliveries : [], [deliveries]);
+  const safeDrivers = useMemo(() => Array.isArray(drivers) ? drivers : [], [drivers]);
+
   // Atualiza os minutos decorridos a cada 30 segundos
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -50,27 +53,27 @@ export const KanbanExpeditionBoard: React.FC<KanbanExpeditionBoardProps> = ({
 
   // 1. Balcão / Preparando: "Aguardando" ou "Pronta para sair"
   const colBalcao = useMemo(() => {
-    return deliveries.filter((d) => {
+    return safeDeliveries.filter((d) => {
       const st = (d.status || "").toLowerCase();
       return st === "aguardando" || st === "pronta para sair" || st === "open" || st === "ready" || !st;
     });
-  }, [deliveries]);
+  }, [safeDeliveries]);
 
   // 2. Em Rota: "Em rota" / "dispatched" / "ongoing"
   const colEmRota = useMemo(() => {
-    return deliveries.filter((d) => {
+    return safeDeliveries.filter((d) => {
       const st = (d.status || "").toLowerCase();
       return st === "em rota" || st === "dispatched" || st === "ongoing";
     });
-  }, [deliveries]);
+  }, [safeDeliveries]);
 
   // 3. Entregues: "Entregue" / "delivered"
   const colEntregues = useMemo(() => {
-    return deliveries.filter((d) => {
+    return safeDeliveries.filter((d) => {
       const st = (d.status || "").toLowerCase();
       return st === "entregue" || st === "delivered" || st === "completed";
     });
-  }, [deliveries]);
+  }, [safeDeliveries]);
 
   const totalEntreguesAmount = colEntregues.reduce((acc, d) => acc + (d.amount || 0), 0);
 
@@ -146,7 +149,7 @@ export const KanbanExpeditionBoard: React.FC<KanbanExpeditionBoardProps> = ({
                           className="kanban-driver-select"
                         >
                           <option value="">Atribuir motoboy...</option>
-                          {drivers.map((drv) => (
+                          {safeDrivers.map((drv) => (
                             <option key={drv.id} value={drv.id}>
                               {drv.name}
                             </option>

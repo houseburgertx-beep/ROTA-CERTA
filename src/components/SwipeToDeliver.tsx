@@ -1,4 +1,11 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  type TouchEvent,
+  type PointerEvent,
+} from "react";
 import { Bike, Check, ChevronRight } from "lucide-react";
 
 interface SwipeToDeliverProps {
@@ -8,12 +15,12 @@ interface SwipeToDeliverProps {
   disabled?: boolean;
 }
 
-export const SwipeToDeliver: React.FC<SwipeToDeliverProps> = ({
+export function SwipeToDeliver({
   onConfirm,
   label = "Deslize para Concluir",
-  completedLabel = "Entrega Concluída!",
+  completedLabel = "Entrega Concluída",
   disabled = false,
-}) => {
+}: SwipeToDeliverProps) {
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
@@ -64,14 +71,14 @@ export const SwipeToDeliver: React.FC<SwipeToDeliverProps> = ({
   }, [disabled, dragX, getMaxDrag, isCompleted, onConfirm]);
 
   // Touch handlers
-  const onTouchStart = (e: React.TouchEvent) => {
+  const onTouchStart = (e: TouchEvent) => {
     if (disabled || isCompleted) return;
     isDraggingRef.current = true;
     setIsDragging(true);
     startXRef.current = e.touches[0].clientX - dragX;
   };
 
-  const onTouchMove = (e: React.TouchEvent) => {
+  const onTouchMove = (e: TouchEvent) => {
     handleDragMove(e.touches[0].clientX);
   };
 
@@ -80,7 +87,7 @@ export const SwipeToDeliver: React.FC<SwipeToDeliverProps> = ({
   };
 
   // Pointer / Mouse handlers
-  const onPointerDown = (e: React.PointerEvent) => {
+  const onPointerDown = (e: PointerEvent) => {
     if (disabled || isCompleted || e.button !== 0) return;
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     isDraggingRef.current = true;
@@ -88,11 +95,11 @@ export const SwipeToDeliver: React.FC<SwipeToDeliverProps> = ({
     startXRef.current = e.clientX - dragX;
   };
 
-  const onPointerMove = (e: React.PointerEvent) => {
+  const onPointerMove = (e: PointerEvent) => {
     handleDragMove(e.clientX);
   };
 
-  const onPointerUp = (e: React.PointerEvent) => {
+  const onPointerUp = (e: PointerEvent) => {
     (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
     handleDragEnd();
   };

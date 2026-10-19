@@ -1577,8 +1577,8 @@ function MobileDeliveryApp({
               {/* Fintech Clean Scorecard: Meta & Faturamento da Noite */}
               {(() => {
                 const nightTargetRuns = 15;
-                const runsCount = financialStats.nightCount;
-                const totalEarnings = financialStats.nightTotal;
+                const runsCount = financialStats?.nightCount ?? 0;
+                const totalEarnings = financialStats?.nightTotal ?? 0;
                 const avgPerRun = runsCount > 0 ? totalEarnings / runsCount : 0;
                 const goalProgress = Math.min(100, Math.round((runsCount / nightTargetRuns) * 100));
 
@@ -1795,8 +1795,8 @@ function MobileDeliveryApp({
 
               {appMode === "adm" && storeViewMode === "kanban" ? (
                 <KanbanExpeditionBoard
-                  deliveries={deliveries}
-                  drivers={drivers}
+                  deliveries={deliveries || []}
+                  drivers={drivers || []}
                   onAssignDriver={(deliveryId, driverId) => {
                     const drv = drivers.find((x) => x.id === driverId);
                     const driverName = drv ? drv.name : "Não atribuído";

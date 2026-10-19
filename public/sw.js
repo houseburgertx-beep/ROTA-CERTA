@@ -1,7 +1,5 @@
-const CACHE = "rota-certa-v5";
-const ASSETS_TO_CACHE = [
-  "/",
-  "/index.html",
+const CACHE = "rota-certa-v6";
+const CORE_ASSETS = [
   "/manifest.webmanifest",
   "/favicon.svg",
   "/notification.wav"
@@ -10,7 +8,7 @@ const ASSETS_TO_CACHE = [
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(ASSETS_TO_CACHE).catch(() => {}))
+    caches.open(CACHE).then((cache) => cache.addAll(CORE_ASSETS).catch(() => {}))
   );
 });
 
@@ -27,22 +25,15 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Responde com cache primeiro para assets estáticos, e rede primeiro com fallback para navegação
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Busca versão atualizada em background se online
-        fetch(event.request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200) {
-              caches.open(CACHE).then((cache) => cache.put(event.request, networkResponse));
-            }
-          })
-          .catch(() => {});
-        return cachedResponse;
-      }
+  const isNavigation = event.request.mode === "navigate" ||
+    event.request.headers.get("accept")?.includes("text/html") ||
+    event.request.url.endsWith("/index.html") ||
+    event.request.url === self.location.origin + "/";
 
-      return fetch(event.request)
+  // Para navegação/HTML: SEMPRE REDE PRIMEIRO para evitar servir hashes desatualizados de JS
+  if (isNavigation) {
+    event.respondWith(
+      fetch(event.request)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const clone = networkResponse.clone();
@@ -50,7 +41,32 @@ self.addEventListener("fetch", (event) => {
           }
           return networkResponse;
         })
-        .catch(() => caches.match("/") || caches.match("/index.html"));
+        .catch(async () => {
+          // Se estiver offline, recupera o index.html salvo em cache
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+          const fallback = await caches.match("/index.html");
+          if (fallback) return fallback;
+          return caches.match("/");
+        })
+    );
+    return;
+  }
+
+  // Para assets estáticos imutáveis (com hash em /assets/): Cache primeiro com fallback para rede
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+
+      return fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const clone = networkResponse.clone();
+          caches.open(CACHE).then((cache) => cache.put(event.request, clone));
+        }
+        return networkResponse;
+      });
     })
   );
 });
