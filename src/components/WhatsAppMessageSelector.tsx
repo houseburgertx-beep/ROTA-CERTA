@@ -1,16 +1,7 @@
-import { useState } from "react";
-import {
-  MessageSquare,
-  ChevronDown,
-  Phone,
-  Send,
-  Pencil,
-  AlertCircle
-} from "lucide-react";
 import { sanitizeWhatsAppNumber } from "../services/phoneService";
 
 // Ícone SVG oficial do WhatsApp sem emojis
-function WhatsAppIcon({ size = 15, color = "#16a34a" }: { size?: number; color?: string }) {
+function WhatsAppIcon({ size = 13, color = "#16a34a" }: { size?: number; color?: string }) {
   return (
     <svg
       width={size}
@@ -28,43 +19,32 @@ function WhatsAppIcon({ size = 15, color = "#16a34a" }: { size?: number; color?:
   );
 }
 
-export type MessageKey = "cheguei" | "saiu" | "dificuldade" | "chat";
+export type MessageKey = "cheguei" | "saiu" | "dificuldade";
 
-interface QuickMessageOption {
+interface QuickNoticeOption {
   key: MessageKey;
-  label: string;
   chipLabel: string;
   buildText: (ctx: { customer: string; order: string; address: string }) => string;
 }
 
-const QUICK_MESSAGES: QuickMessageOption[] = [
+const QUICK_NOTICES: QuickNoticeOption[] = [
   {
     key: "cheguei",
-    label: "Cheguei no local / portão",
     chipLabel: "Cheguei no local",
     buildText: ({ customer, order }) =>
       `Olá ${customer}! Sou o entregador com seu pedido ${order}. Já cheguei no seu endereço e estou no portão te aguardando. Pode retirar, por favor? Obrigado!`,
   },
   {
     key: "saiu",
-    label: "Seu pedido saiu para entrega",
     chipLabel: "Saiu p/ entrega",
     buildText: ({ customer, order, address }) =>
       `Olá ${customer}! Seu pedido ${order} acabou de sair para entrega e estou a caminho do seu endereço: ${address}. Até breve!`,
   },
   {
     key: "dificuldade",
-    label: "Estou com dificuldades em achar endereço",
-    chipLabel: "Dificuldade no endereço",
+    chipLabel: "Dificuldade endereço",
     buildText: ({ customer, order, address }) =>
       `Olá ${customer}! Sou o entregador com seu pedido ${order}. Estou com dificuldades para encontrar seu endereço (${address}). Poderia me enviar a localização ou um ponto de referência? Obrigado!`,
-  },
-  {
-    key: "chat",
-    label: "Conversar no WhatsApp (chat direto)",
-    chipLabel: "Chat direto",
-    buildText: ({ customer, order }) =>
-      `Olá ${customer}! Sou o entregador com seu pedido ${order}.`,
   },
 ];
 
@@ -87,12 +67,10 @@ export function WhatsAppMessageSelector({
   onUpdatePhone,
   onNotify,
 }: WhatsAppMessageSelectorProps) {
-  const [selectedKey, setSelectedKey] = useState<string>("");
-
   const validPhone = sanitizeWhatsAppNumber(phone, notes);
 
   const sendMessage = (msgKey: MessageKey) => {
-    const opt = QUICK_MESSAGES.find((m) => m.key === msgKey);
+    const opt = QUICK_NOTICES.find((m) => m.key === msgKey);
     if (!opt) return;
 
     const cleanCustomer = customerName?.trim() || "Cliente";
@@ -126,118 +104,37 @@ export function WhatsAppMessageSelector({
       onUpdatePhone?.(sanitized);
       triggerOpen(sanitized);
     }
-
-    // Reseta o seletor para o estado neutro
-    setSelectedKey("");
-  };
-
-  const handleEditPhone = () => {
-    const current = validPhone ? `+${validPhone}` : "";
-    const input = window.prompt(
-      `Atualizar WhatsApp do cliente ${customerName || ""}:`,
-      current
-    );
-    if (!input) return;
-    const sanitized = sanitizeWhatsAppNumber(input);
-    if (!sanitized) {
-      alert("Número inválido! Digite com DDD (ex: 73999998888).");
-      return;
-    }
-    onUpdatePhone?.(sanitized);
-    onNotify?.("Número de WhatsApp atualizado com sucesso.");
   };
 
   return (
-    <div className="cdc-whatsapp-selector-card">
-      {/* Top Header: WhatsApp Title & Phone Status */}
-      <div className="cdc-whatsapp-selector-header">
-        <div className="cdc-whatsapp-title-wrap">
-          <div className="cdc-whatsapp-icon-circle">
-            <WhatsAppIcon size={14} color="#16a34a" />
-          </div>
-          <span className="cdc-whatsapp-title">Avisar no WhatsApp</span>
-        </div>
+    <div className="cdc-quick-notices-row">
+      <button
+        type="button"
+        className="btn-quick-notice arrived"
+        onClick={() => sendMessage("cheguei")}
+        title="Avisar no WhatsApp que chegou no portão"
+      >
+        <WhatsAppIcon size={13} color="#15803d" />
+        <span>Cheguei no local</span>
+      </button>
 
-        {validPhone ? (
-          <button
-            type="button"
-            className="cdc-whatsapp-phone-badge"
-            onClick={handleEditPhone}
-            title="Editar número do cliente"
-          >
-            <Phone size={10} />
-            <span>{validPhone.slice(-8)}</span>
-            <Pencil size={9} style={{ opacity: 0.6 }} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="cdc-whatsapp-add-phone-btn"
-            onClick={handleEditPhone}
-            title="Adicionar número de WhatsApp"
-          >
-            <AlertCircle size={10} />
-            <span>Adicionar WhatsApp</span>
-          </button>
-        )}
-      </div>
+      <button
+        type="button"
+        className="btn-quick-notice transit"
+        onClick={() => sendMessage("saiu")}
+        title="Avisar no WhatsApp que o pedido saiu para entrega"
+      >
+        <span>Saiu p/ entrega</span>
+      </button>
 
-      {/* Main Dropdown Select (Seletor Nativo de Mensagens) */}
-      <div className="cdc-whatsapp-select-wrap">
-        <MessageSquare size={13} className="cdc-whatsapp-select-icon" />
-        <select
-          className="cdc-whatsapp-select-input"
-          value={selectedKey}
-          onChange={(e) => {
-            const val = e.target.value as MessageKey;
-            if (val) {
-              setSelectedKey(val);
-              sendMessage(val);
-            }
-          }}
-        >
-          <option value="" disabled>
-            Selecione uma mensagem rápida...
-          </option>
-          {QUICK_MESSAGES.map((m) => (
-            <option key={m.key} value={m.key}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-        <ChevronDown size={14} className="cdc-whatsapp-select-arrow" />
-      </div>
-
-      {/* 3 Quick Chips de 1 Toque (Atalho Rápido para o Motoboy na Moto) */}
-      <div className="cdc-whatsapp-chips-grid">
-        <button
-          type="button"
-          className="cdc-whatsapp-chip highlight"
-          onClick={() => sendMessage("cheguei")}
-          title="Avisar que chegou no portão"
-        >
-          <Send size={11} />
-          <span>Cheguei no local</span>
-        </button>
-
-        <button
-          type="button"
-          className="cdc-whatsapp-chip"
-          onClick={() => sendMessage("saiu")}
-          title="Avisar que o pedido saiu para entrega"
-        >
-          <span>Saiu p/ entrega</span>
-        </button>
-
-        <button
-          type="button"
-          className="cdc-whatsapp-chip warn"
-          onClick={() => sendMessage("dificuldade")}
-          title="Pedir ponto de referência ou localização"
-        >
-          <span>Dificuldade endereço</span>
-        </button>
-      </div>
+      <button
+        type="button"
+        className="btn-quick-notice help"
+        onClick={() => sendMessage("dificuldade")}
+        title="Pedir ajuda para achar o endereço"
+      >
+        <span>Dificuldade endereço</span>
+      </button>
     </div>
   );
 }
