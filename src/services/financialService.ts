@@ -20,14 +20,27 @@ export interface DeliveryItemForFinance {
  * Retorna se uma data corresponde à "noite/turno de hoje".
  * Em entregas de delivery, o turno da noite normalmente vai das 17h até as 04h do dia seguinte.
  */
-export function isSameShiftOrToday(dateStr?: string): boolean {
-  if (!dateStr) return false;
-  const clean = dateStr.trim();
-  // Se for apenas formato de hora "HH:MM" ou "HH:MM:SS", é do dia/turno de hoje
-  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(clean)) return true;
+export function isSameShiftOrToday(dateInput?: unknown): boolean {
+  if (!dateInput) return false;
+  let date: Date;
 
-  const normalized = clean.replace(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/, "$1T$2");
-  const date = new Date(normalized);
+  if (typeof dateInput === "number") {
+    date = new Date(dateInput);
+  } else if (typeof dateInput === "string") {
+    const clean = dateInput.trim();
+    if (!clean) return false;
+    // Se for apenas formato de hora "HH:MM" ou "HH:MM:SS", é do dia/turno de hoje
+    if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(clean)) return true;
+    const normalized = clean.replace(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/, "$1T$2");
+    date = new Date(normalized);
+  } else if (dateInput && typeof (dateInput as any).toDate === "function") {
+    date = (dateInput as any).toDate();
+  } else if (dateInput && typeof (dateInput as any).seconds === "number") {
+    date = new Date((dateInput as any).seconds * 1000);
+  } else {
+    date = new Date(String(dateInput));
+  }
+
   if (isNaN(date.getTime())) return false;
 
   const now = new Date();
@@ -47,12 +60,24 @@ export function isSameShiftOrToday(dateStr?: string): boolean {
 }
 
 /**
-/**
  * Retorna se a data pertence ao mês e ano atuais ou a um mês específico (YYYY-MM).
  */
-export function isCurrentMonth(dateStr?: string, targetYearMonth?: string): boolean {
-  if (!dateStr) return true;
-  const date = new Date(dateStr);
+export function isCurrentMonth(dateInput?: unknown, targetYearMonth?: string): boolean {
+  if (!dateInput) return true;
+  let date: Date;
+
+  if (typeof dateInput === "number") {
+    date = new Date(dateInput);
+  } else if (typeof dateInput === "string") {
+    date = new Date(dateInput);
+  } else if (dateInput && typeof (dateInput as any).toDate === "function") {
+    date = (dateInput as any).toDate();
+  } else if (dateInput && typeof (dateInput as any).seconds === "number") {
+    date = new Date((dateInput as any).seconds * 1000);
+  } else {
+    date = new Date(String(dateInput));
+  }
+
   if (isNaN(date.getTime())) return true;
 
   if (targetYearMonth && targetYearMonth !== "all") {
@@ -73,13 +98,18 @@ export function calculateFinancialStats(
   driverIdFilter?: string,
   targetYearMonth?: string,
 ): FinancialStats {
+  if (!Array.isArray(deliveries)) {
+    return { nightTotal: 0, nightCount: 0, monthTotal: 0, monthCount: 0, avgFee: 0 };
+  }
+
+  const safeDeliveries = deliveries.filter((d): d is DeliveryItemForFinance => Boolean(d && typeof d === "object"));
   const filterNorm = driverNameFilter ? driverNameFilter.toLowerCase().trim() : undefined;
   const idNorm = driverIdFilter ? driverIdFilter.toLowerCase().trim() : undefined;
 
   const filtered = (filterNorm || idNorm)
-    ? deliveries.filter((d) => {
+    ? safeDeliveries.filter((d) => {
         if (idNorm && d.driverId) {
-          const dId = d.driverId.toLowerCase().trim();
+          const dId = String(d.driverId).toLowerCase().trim();
           if (
             dId === idNorm ||
             dId === `drv-${idNorm}` ||
@@ -90,15 +120,16 @@ export function calculateFinancialStats(
           }
         }
         if (!filterNorm || !d.driver) return false;
-        const dNorm = d.driver.toLowerCase().trim();
+        const dNorm = String(d.driver).toLowerCase().trim();
         return dNorm === filterNorm || dNorm.includes(filterNorm) || filterNorm.includes(dNorm);
       })
-    : deliveries;
+    : safeDeliveries;
 
   // Apenas entregas concluídas contam como faturado
-  const deliveredOnly = filtered.filter(
-    (d) => d.status.toLowerCase() === "entregue" || d.status.toLowerCase() === "delivered",
-  );
+  const deliveredOnly = filtered.filter((d) => {
+    const st = String(d.status || "").toLowerCase().trim();
+    return st === "entregue" || st === "delivered" || st === "completed" || st === "concluída";
+  });
 
   let nightTotal = 0;
   let nightCount = 0;

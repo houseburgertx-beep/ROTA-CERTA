@@ -103,6 +103,7 @@ import {
 import { CustomerTrackingView } from "../src/components/CustomerTrackingView";
 import { SwipeToDeliver } from "../src/components/SwipeToDeliver";
 import { KanbanExpeditionBoard } from "../src/components/KanbanExpeditionBoard";
+import { ErrorBoundary } from "../src/components/ErrorBoundary";
 import {
   isDeviceOnline,
   onConnectionChange,
@@ -370,14 +371,16 @@ export default function Home() {
   }
 
   return (
-    <MobileDeliveryApp
-      currentUser={currentUser}
-      onLogout={() => {
-        void signOut();
-        setCurrentUser(null);
-      }}
-      demoMode={!firebaseConfigured}
-    />
+    <ErrorBoundary fallbackTitle="Rota Certa">
+      <MobileDeliveryApp
+        currentUser={currentUser}
+        onLogout={() => {
+          void signOut();
+          setCurrentUser(null);
+        }}
+        demoMode={!firebaseConfigured}
+      />
+    </ErrorBoundary>
   );
 }
 
@@ -423,7 +426,15 @@ function MobileDeliveryApp({
   const [arrivalSortOrder, setArrivalSortOrder] = useState<"asc" | "desc">("asc");
   const [showAllHistory, setShowAllHistory] = useState<boolean>(false);
   const [selectedForRouteIds, setSelectedForRouteIds] = useState<string[]>([]);
-  const [storeViewMode, setStoreViewMode] = useState<"kanban" | "list">("kanban");
+  const [storeViewMode, setStoreViewMode] = useState<"kanban" | "list">(() => {
+    try {
+      if (typeof localStorage !== "undefined") {
+        const saved = localStorage.getItem("rc_store_view_mode") as "kanban" | "list";
+        if (saved === "kanban" || saved === "list") return saved;
+      }
+    } catch {}
+    return "kanban";
+  });
   const [modal, setModal] = useState<"new" | "ocr" | "driver" | "profile" | "install" | null>(null);
   const [ocrData, setOcrData] = useState<Record<string, string> | null>(null);
   const [ifoodConfirmDelivery, setIfoodConfirmDelivery] = useState<Delivery | null>(null);
@@ -913,6 +924,7 @@ function MobileDeliveryApp({
 
   // Função ESTRITA: O pedido pertence a este motoboy?
   const isDeliveryForThisDriver = (d: Delivery): boolean => {
+    if (!d || typeof d !== "object") return false;
     if (currentUser.role !== "driver") return true;
 
     // Se o pedido não tem motoboy atribuído ou está aguardando, NUNCA exibe para o motoboy
@@ -1021,7 +1033,9 @@ function MobileDeliveryApp({
 
   // Entregas visíveis para o usuário atual (filtro estrito de motoboy ou simulação da loja)
   const scopedDeliveries = useMemo(() => {
+    if (!Array.isArray(deliveries)) return [];
     return deliveries.filter((d) => {
+      if (!d || typeof d !== "object") return false;
       if (currentUser.role === "driver") {
         return isDeliveryForThisDriver(d);
       }
@@ -1032,29 +1046,29 @@ function MobileDeliveryApp({
     });
   }, [deliveries, currentUser, appMode, activeDriver]);
 
-  const isDeliveryDone = (status: string) => {
-    const s = (status || "").toLowerCase().trim();
+  const isDeliveryDone = (status?: unknown) => {
+    const s = String(status || "").toLowerCase().trim();
     return s === "entregue" || s === "delivered" || s === "cancelada" || s === "concluída";
   };
 
   const activeDeliveries = useMemo(() => {
     return scopedDeliveries.filter(
-      (d) => !isDeliveryDone(d.status) && isSameShiftOrToday(d.createdAt || d.time)
+      (d) => d && !isDeliveryDone(d.status) && isSameShiftOrToday(d.createdAt || d.time)
     );
   }, [scopedDeliveries]);
 
   const completedDeliveriesTonight = useMemo(() => {
     return scopedDeliveries.filter(
-      (d) => isDeliveryDone(d.status) && isSameShiftOrToday(d.deliveredAt || d.createdAt || d.time)
+      (d) => d && isDeliveryDone(d.status) && isSameShiftOrToday(d.deliveredAt || d.createdAt || d.time)
     );
   }, [scopedDeliveries]);
 
   const allCompletedDeliveries = useMemo(() => {
-    return scopedDeliveries.filter((d) => isDeliveryDone(d.status));
+    return scopedDeliveries.filter((d) => d && isDeliveryDone(d.status));
   }, [scopedDeliveries]);
 
   const tonightDeliveries = useMemo(() => {
-    return scopedDeliveries.filter((d) => isSameShiftOrToday(d.createdAt || d.deliveredAt || d.time));
+    return scopedDeliveries.filter((d) => d && isSameShiftOrToday(d.createdAt || d.deliveredAt || d.time));
   }, [scopedDeliveries]);
 
   // Sequenciamento Inteligente de Entregas & Próxima Parada (Função 7)
@@ -1777,7 +1791,10 @@ function MobileDeliveryApp({
                   <button
                     type="button"
                     className={`store-view-btn ${storeViewMode === "kanban" ? "active" : ""}`}
-                    onClick={() => setStoreViewMode("kanban")}
+                    onClick={() => {
+                      setStoreViewMode("kanban");
+                      try { localStorage.setItem("rc_store_view_mode", "kanban"); } catch {}
+                    }}
                   >
                     <LayoutDashboard size={14} />
                     <span>Quadro Kanban de Expedição</span>
@@ -1785,7 +1802,10 @@ function MobileDeliveryApp({
                   <button
                     type="button"
                     className={`store-view-btn ${storeViewMode === "list" ? "active" : ""}`}
-                    onClick={() => setStoreViewMode("list")}
+                    onClick={() => {
+                      setStoreViewMode("list");
+                      try { localStorage.setItem("rc_store_view_mode", "list"); } catch {}
+                    }}
                   >
                     <List size={14} />
                     <span>Lista de Pedidos</span>
@@ -1794,28 +1814,36 @@ function MobileDeliveryApp({
               )}
 
               {appMode === "adm" && storeViewMode === "kanban" ? (
-                <KanbanExpeditionBoard
-                  deliveries={deliveries || []}
-                  drivers={drivers || []}
-                  onAssignDriver={(deliveryId, driverId) => {
-                    const drv = drivers.find((x) => x.id === driverId);
-                    const driverName = drv ? drv.name : "Não atribuído";
-                    setDeliveries((prev) =>
-                      prev.map((item) =>
-                        item.id === deliveryId ? { ...item, driverId, driver: driverName } : item
-                      )
-                    );
-                    void updateDeliveryRTDB(deliveryId, { driverId, driver: driverName });
-                    notify(`Entrega atribuída a ${driverName}`);
+                <ErrorBoundary
+                  fallbackTitle="Quadro Kanban de Expedição"
+                  onReset={() => {
+                    setStoreViewMode("list");
+                    try { localStorage.setItem("rc_store_view_mode", "list"); } catch {}
                   }}
-                  onUpdateStatus={(deliveryId, status) => {
-                    updateStatus(deliveryId, status);
-                  }}
-                  onMarkDelivered={(deliveryId) => {
-                    markAsDelivered(deliveryId);
-                  }}
-                  onNotify={notify}
-                />
+                >
+                  <KanbanExpeditionBoard
+                    deliveries={deliveries || []}
+                    drivers={drivers || []}
+                    onAssignDriver={(deliveryId, driverId) => {
+                      const drv = (drivers || []).find((x) => x && x.id === driverId);
+                      const driverName = drv ? drv.name : "Não atribuído";
+                      setDeliveries((prev) =>
+                        prev.map((item) =>
+                          item.id === deliveryId ? { ...item, driverId, driver: driverName } : item
+                        )
+                      );
+                      void updateDeliveryRTDB(deliveryId, { driverId, driver: driverName });
+                      notify(`Entrega atribuída a ${driverName}`);
+                    }}
+                    onUpdateStatus={(deliveryId, status) => {
+                      updateStatus(deliveryId, status);
+                    }}
+                    onMarkDelivered={(deliveryId) => {
+                      markAsDelivered(deliveryId);
+                    }}
+                    onNotify={notify}
+                  />
+                </ErrorBoundary>
               ) : (
                 <>
                   {/* Native Segmented Delivery Tabs */}

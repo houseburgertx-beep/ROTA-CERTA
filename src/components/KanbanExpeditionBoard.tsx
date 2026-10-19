@@ -5,13 +5,10 @@ import {
   CheckCircle2,
   AlertTriangle,
   User,
-  Phone,
-  Navigation,
-  ArrowRight,
-  ExternalLink,
-  ChevronDown
+  ArrowRight
 } from "lucide-react";
 import type { Delivery, Driver } from "../types";
+import { isSameShiftOrToday } from "../services/financialService";
 
 interface KanbanExpeditionBoardProps {
   deliveries?: Delivery[];
@@ -22,15 +19,54 @@ interface KanbanExpeditionBoardProps {
   onNotify?: (msg: string) => void;
 }
 
-function getMinutesElapsed(dateStr?: string): number {
-  if (!dateStr) return 0;
-  const t = new Date(dateStr).getTime();
-  if (isNaN(t)) return 0;
-  return Math.max(0, Math.floor((Date.now() - t) / (1000 * 60)));
+function getMinutesElapsed(dateInput?: unknown): number {
+  if (!dateInput) return 0;
+  try {
+    let t = 0;
+    if (typeof dateInput === "number") {
+      t = dateInput;
+    } else if (typeof dateInput === "string") {
+      t = new Date(dateInput).getTime();
+    } else if (dateInput && typeof (dateInput as any).toDate === "function") {
+      t = (dateInput as any).toDate().getTime();
+    } else if (dateInput && typeof (dateInput as any).seconds === "number") {
+      t = (dateInput as any).seconds * 1000;
+    } else {
+      t = new Date(String(dateInput)).getTime();
+    }
+    if (isNaN(t) || t <= 0) return 0;
+    return Math.max(0, Math.floor((Date.now() - t) / (1000 * 60)));
+  } catch {
+    return 0;
+  }
 }
 
-function money(v: number): string {
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+function formatDeliveredTime(val?: unknown): string {
+  if (!val) return "Concluído";
+  try {
+    let d: Date;
+    if (typeof val === "number") {
+      d = new Date(val);
+    } else if (typeof val === "string") {
+      d = new Date(val);
+    } else if (val && typeof (val as any).toDate === "function") {
+      d = (val as any).toDate();
+    } else if (val && typeof (val as any).seconds === "number") {
+      d = new Date((val as any).seconds * 1000);
+    } else {
+      d = new Date(String(val));
+    }
+    if (isNaN(d.getTime())) return "Concluído";
+    return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "Concluído";
+  }
+}
+
+function money(v?: unknown): string {
+  const num = typeof v === "number" ? v : Number(v || 0);
+  const safeNum = isNaN(num) ? 0 : num;
+  return safeNum.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 export function KanbanExpeditionBoard({
@@ -41,8 +77,15 @@ export function KanbanExpeditionBoard({
   onMarkDelivered,
   onNotify,
 }: KanbanExpeditionBoardProps) {
-  const safeDeliveries = useMemo(() => Array.isArray(deliveries) ? deliveries : [], [deliveries]);
-  const safeDrivers = useMemo(() => Array.isArray(drivers) ? drivers : [], [drivers]);
+  const safeDeliveries = useMemo(() => {
+    if (!Array.isArray(deliveries)) return [];
+    return deliveries.filter((d): d is Delivery => Boolean(d && typeof d === "object" && d.id));
+  }, [deliveries]);
+
+  const safeDrivers = useMemo(() => {
+    if (!Array.isArray(drivers)) return [];
+    return drivers.filter((drv): drv is Driver => Boolean(drv && typeof drv === "object" && drv.id));
+  }, [drivers]);
 
   // Atualiza os minutos decorridos a cada 30 segundos
   const [, setTick] = useState(0);
@@ -54,7 +97,7 @@ export function KanbanExpeditionBoard({
   // 1. Balcão / Preparando: "Aguardando" ou "Pronta para sair"
   const colBalcao = useMemo(() => {
     return safeDeliveries.filter((d) => {
-      const st = (d.status || "").toLowerCase();
+      const st = String(d.status || "").toLowerCase().trim();
       return st === "aguardando" || st === "pronta para sair" || st === "open" || st === "ready" || !st;
     });
   }, [safeDeliveries]);
@@ -62,20 +105,22 @@ export function KanbanExpeditionBoard({
   // 2. Em Rota: "Em rota" / "dispatched" / "ongoing"
   const colEmRota = useMemo(() => {
     return safeDeliveries.filter((d) => {
-      const st = (d.status || "").toLowerCase();
-      return st === "em rota" || st === "dispatched" || st === "ongoing";
+      const st = String(d.status || "").toLowerCase().trim();
+      return st === "em rota" || st === "dispatched" || st === "ongoing" || st === "a caminho";
     });
   }, [safeDeliveries]);
 
-  // 3. Entregues: "Entregue" / "delivered"
+  // 3. Entregues: "Entregue" / "delivered" (do turno de hoje)
   const colEntregues = useMemo(() => {
     return safeDeliveries.filter((d) => {
-      const st = (d.status || "").toLowerCase();
-      return st === "entregue" || st === "delivered" || st === "completed";
+      const st = String(d.status || "").toLowerCase().trim();
+      const isDone = st === "entregue" || st === "delivered" || st === "completed" || st === "concluída";
+      if (!isDone) return false;
+      return isSameShiftOrToday(d.deliveredAt || d.createdAt || d.time);
     });
   }, [safeDeliveries]);
 
-  const totalEntreguesAmount = colEntregues.reduce((acc, d) => acc + (d.amount || 0), 0);
+  const totalEntreguesAmount = colEntregues.reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
 
   return (
     <div className="kanban-expedition-container">
@@ -111,7 +156,7 @@ export function KanbanExpeditionBoard({
                   <article key={d.id} className={`kanban-card ${isLate ? "is-late" : isWarning ? "is-warning" : ""}`}>
                     <div className="kanban-card-top">
                       <div className="kanban-order-badge">
-                        <b>{d.order}</b>
+                        <b>{d.order || d.orderNumber || "Pedido"}</b>
                         {d.platform === "ifood" ? (
                           <span className="kanban-tag ifood">iFood</span>
                         ) : (
@@ -125,9 +170,9 @@ export function KanbanExpeditionBoard({
                     </div>
 
                     <div className="kanban-card-customer">
-                      <b className="kanban-customer-name">{d.customer || "Cliente"}</b>
+                      <b className="kanban-customer-name">{d.customer || d.customerName || "Cliente"}</b>
                       <span className="kanban-customer-address">
-                        {d.address} {d.district ? `· ${d.district}` : ""}
+                        {d.address || "Endereço não informado"} {d.district ? `· ${d.district}` : ""}
                       </span>
                     </div>
 
@@ -135,7 +180,7 @@ export function KanbanExpeditionBoard({
                       {d.isPaidOnline ? (
                         <span className="kanban-paid-online">Pago Online ({money(d.amount)})</span>
                       ) : (
-                        <span className="kanban-to-collect">Cobrar: {money(d.amount)} ({d.payment || "A Cobrar"})</span>
+                        <span className="kanban-to-collect">Cobrar: {money(d.amount)} ({d.payment || d.paymentMethod || "A Cobrar"})</span>
                       )}
                     </div>
 
@@ -161,7 +206,7 @@ export function KanbanExpeditionBoard({
                         type="button"
                         onClick={() => {
                           onUpdateStatus(d.id, "Em rota");
-                          onNotify?.(`Pedido ${d.order} despachado em rota.`);
+                          onNotify?.(`Pedido ${d.order || d.orderNumber || ""} despachado em rota.`);
                         }}
                         className="kanban-btn-dispatch"
                         title="Despachar pedido para a rua"
@@ -206,7 +251,7 @@ export function KanbanExpeditionBoard({
                   <article key={d.id} className="kanban-card em-rota-card">
                     <div className="kanban-card-top">
                       <div className="kanban-order-badge">
-                        <b>{d.order}</b>
+                        <b>{d.order || d.orderNumber || "Pedido"}</b>
                         {d.platform === "ifood" ? (
                           <span className="kanban-tag ifood">iFood</span>
                         ) : (
@@ -230,9 +275,9 @@ export function KanbanExpeditionBoard({
                     </div>
 
                     <div className="kanban-card-customer">
-                      <b className="kanban-customer-name">{d.customer || "Cliente"}</b>
+                      <b className="kanban-customer-name">{d.customer || d.customerName || "Cliente"}</b>
                       <span className="kanban-customer-address">
-                        {d.address} {d.district ? `· ${d.district}` : ""}
+                        {d.address || "Endereço não informado"} {d.district ? `· ${d.district}` : ""}
                       </span>
                     </div>
 
@@ -240,7 +285,7 @@ export function KanbanExpeditionBoard({
                       {d.isPaidOnline ? (
                         <span className="kanban-paid-online">Pago Online ({money(d.amount)})</span>
                       ) : (
-                        <span className="kanban-to-collect">Cobrar: {money(d.amount)} ({d.payment || "A Cobrar"})</span>
+                        <span className="kanban-to-collect">Cobrar: {money(d.amount)} ({d.payment || d.paymentMethod || "A Cobrar"})</span>
                       )}
                     </div>
 
@@ -287,7 +332,7 @@ export function KanbanExpeditionBoard({
                 <article key={d.id} className="kanban-card delivered-card">
                   <div className="kanban-card-top">
                     <div className="kanban-order-badge">
-                      <b>{d.order}</b>
+                      <b>{d.order || d.orderNumber || "Pedido"}</b>
                       {d.platform === "ifood" ? (
                         <span className="kanban-tag ifood">iFood</span>
                       ) : (
@@ -295,16 +340,14 @@ export function KanbanExpeditionBoard({
                       )}
                     </div>
                     <span className="kanban-delivered-time">
-                      {d.deliveredAt
-                        ? new Date(d.deliveredAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-                        : "Concluído"}
+                      {formatDeliveredTime(d.deliveredAt || d.createdAt)}
                     </span>
                   </div>
 
                   <div className="kanban-card-customer">
-                    <b className="kanban-customer-name">{d.customer || "Cliente"}</b>
+                    <b className="kanban-customer-name">{d.customer || d.customerName || "Cliente"}</b>
                     <span className="kanban-customer-address">
-                      {d.address} {d.district ? `· ${d.district}` : ""}
+                      {d.address || "Endereço não informado"} {d.district ? `· ${d.district}` : ""}
                     </span>
                   </div>
 
@@ -327,4 +370,4 @@ export function KanbanExpeditionBoard({
       </div>
     </div>
   );
-};
+}
