@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownUp,
+  Award,
   Bell,
   BellOff,
   Bike,
@@ -20,6 +21,8 @@ import {
   ExternalLink,
   EyeOff,
   KeyRound,
+  LayoutDashboard,
+  List,
   LogOut,
   MapPin,
   MapPinned,
@@ -43,6 +46,7 @@ import {
   Sparkles,
   Sun,
   Trash2,
+  TrendingUp,
   Upload,
   UserCheck,
   UserRound,
@@ -97,6 +101,8 @@ import {
   updateDriverGpsLocationRTDB,
 } from "../src/services/realtimeDbService";
 import { CustomerTrackingView } from "../src/components/CustomerTrackingView";
+import { SwipeToDeliver } from "../src/components/SwipeToDeliver";
+import { KanbanExpeditionBoard } from "../src/components/KanbanExpeditionBoard";
 import {
   isDeviceOnline,
   onConnectionChange,
@@ -329,7 +335,7 @@ export default function Home() {
         const user = await signInAsStoreDirect(cleanStoreId, storeName);
         if (mounted) {
           setCurrentUser(user);
-          alert(`🎉 Restaurante "${storeName}" conectado com sucesso via Takeat Store!`);
+          alert(`Restaurante "${storeName}" conectado com sucesso via Takeat Store.`);
         }
       } else if (res.error) {
         alert(res.error);
@@ -417,6 +423,7 @@ function MobileDeliveryApp({
   const [arrivalSortOrder, setArrivalSortOrder] = useState<"asc" | "desc">("asc");
   const [showAllHistory, setShowAllHistory] = useState<boolean>(false);
   const [selectedForRouteIds, setSelectedForRouteIds] = useState<string[]>([]);
+  const [storeViewMode, setStoreViewMode] = useState<"kanban" | "list">("kanban");
   const [modal, setModal] = useState<"new" | "ocr" | "driver" | "profile" | "install" | null>(null);
   const [ocrData, setOcrData] = useState<Record<string, string> | null>(null);
   const [ifoodConfirmDelivery, setIfoodConfirmDelivery] = useState<Delivery | null>(null);
@@ -634,11 +641,11 @@ function MobileDeliveryApp({
         sessionStorage.setItem(notifiedKey, myTodayShift.id);
         void playShiftReminderSound();
         void triggerShiftWebNotification(
-          `Lembrete de Plantão 🛵 (${activeStoreConfig.shortName})`,
+          `Lembrete de Plantão (${activeStoreConfig.shortName})`,
           `Seu plantão começa em ${diffMinutes} min (às ${myTodayShift.startTime}). Toque para confirmar presença!`,
           () => setActiveTab("escala")
         );
-        notify(`⏰ Lembrete: Seu plantão começa em ${diffMinutes} min (${myTodayShift.startTime})!`);
+        notify(`Lembrete: Seu plantão começa em ${diffMinutes} min (${myTodayShift.startTime}).`);
       }
     };
 
@@ -1567,28 +1574,90 @@ function MobileDeliveryApp({
           {/* TAB 1: ENTREGAS */}
           {activeTab === "entregas" && (
             <div>
-              {/* Native Shift Earnings Ticker (Compact & Tactile) */}
-              <div
-                className="app-earnings-ticker"
-                onClick={() => setActiveTab("financeiro")}
-                title="Ver extrato completo de ganhos"
-              >
-                <div className="ticker-left">
-                  <div className="ticker-icon-circle">
-                    <Sparkles size={17} />
-                  </div>
-                  <div>
-                    <div className="ticker-amount">{money(financialStats.nightTotal)}</div>
-                    <div className="ticker-label">
-                      {appMode === "motoboy" ? "Ganhos Hoje" : "Total Hoje"} • {financialStats.nightCount} entrega(s)
+              {/* Fintech Clean Scorecard: Meta & Faturamento da Noite */}
+              {(() => {
+                const nightTargetRuns = 15;
+                const runsCount = financialStats.nightCount;
+                const totalEarnings = financialStats.nightTotal;
+                const avgPerRun = runsCount > 0 ? totalEarnings / runsCount : 0;
+                const goalProgress = Math.min(100, Math.round((runsCount / nightTargetRuns) * 100));
+
+                let goalMotivation = `Começando a noite. Rumo à meta de ${nightTargetRuns} entregas.`;
+                if (runsCount >= nightTargetRuns) {
+                  goalMotivation = `Meta de ${nightTargetRuns} entregas concluída com sucesso.`;
+                } else if (goalProgress >= 70) {
+                  goalMotivation = `Falta pouco: apenas mais ${nightTargetRuns - runsCount} entregas para a meta.`;
+                } else if (goalProgress >= 40) {
+                  goalMotivation = `Noite movimentada: ${runsCount} entregas concluídas.`;
+                }
+
+                return (
+                  <div
+                    className="app-earnings-scorecard"
+                    onClick={() => setActiveTab("financeiro")}
+                    title="Ver extrato completo de ganhos e corridas"
+                  >
+                    <div className="scorecard-header">
+                      <div className="scorecard-header-left">
+                        <div className="scorecard-icon-badge">
+                          <TrendingUp size={22} strokeWidth={2.5} />
+                        </div>
+                        <div className="scorecard-title-row">
+                          <span className="scorecard-subtitle">
+                            {appMode === "motoboy" ? "Ganhos Hoje" : "Faturamento Hoje"}
+                          </span>
+                          <span className="scorecard-main-amount">
+                            {money(totalEarnings)}
+                          </span>
+                          <div className="scorecard-pills-row">
+                            <span className="scorecard-pill-highlight">
+                              {runsCount} {runsCount === 1 ? "Entrega" : "Entregas"}
+                            </span>
+                            <span>•</span>
+                            <span>Média {money(avgPerRun)}/corrida</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="scorecard-extrato-btn">
+                        <span>Extrato</span>
+                        <ChevronRight size={13} strokeWidth={2.5} />
+                      </div>
+                    </div>
+
+                    {/* Gamificação: Meta da Noite e Progresso */}
+                    <div className="scorecard-progress-section">
+                      <div className="scorecard-progress-labels">
+                        <span>
+                          Meta da Noite:{" "}
+                          <strong className="scorecard-target-text">
+                            {runsCount} de {nightTargetRuns} entregas
+                          </strong>
+                        </span>
+                        <span
+                          style={{
+                            fontWeight: 800,
+                            color: runsCount >= nightTargetRuns ? "#10b981" : "var(--primary)",
+                          }}
+                        >
+                          {goalProgress}%
+                        </span>
+                      </div>
+
+                      <div className="scorecard-progress-track">
+                        <div
+                          className={`scorecard-progress-bar ${runsCount >= nightTargetRuns ? "completed" : ""}`}
+                          style={{ width: `${Math.max(4, goalProgress)}%` }}
+                        />
+                      </div>
+
+                      <div className="scorecard-motivation">
+                        <span>{goalMotivation}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="ticker-action-pill">
-                  <span>Extrato</span>
-                  <ChevronRight size={13} />
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Lembrete de Presença / Check-in de Plantão do Dia */}
               {todayDriverShift && todayDriverShift.status !== "confirmado" && (
@@ -1604,7 +1673,7 @@ function MobileDeliveryApp({
                     className="sas-btn-checkin"
                     onClick={async () => {
                       await checkInShift(todayDriverShift.id);
-                      notify("Presença confirmada no plantão! Bom trabalho! 🛵");
+                      notify("Presença confirmada no plantão. Bom trabalho.");
                     }}
                   >
                     <UserCheck size={14} /> Fazer Check-in
@@ -1702,8 +1771,55 @@ function MobileDeliveryApp({
                 </button>
               </div>
 
-              {/* Native Segmented Delivery Tabs */}
-              <div className="native-segment-control">
+              {/* Seletor de Visão de Loja: Kanban de Expedição vs Lista */}
+              {appMode === "adm" && (
+                <div className="store-view-mode-toggle">
+                  <button
+                    type="button"
+                    className={`store-view-btn ${storeViewMode === "kanban" ? "active" : ""}`}
+                    onClick={() => setStoreViewMode("kanban")}
+                  >
+                    <LayoutDashboard size={14} />
+                    <span>Quadro Kanban de Expedição</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`store-view-btn ${storeViewMode === "list" ? "active" : ""}`}
+                    onClick={() => setStoreViewMode("list")}
+                  >
+                    <List size={14} />
+                    <span>Lista de Pedidos</span>
+                  </button>
+                </div>
+              )}
+
+              {appMode === "adm" && storeViewMode === "kanban" ? (
+                <KanbanExpeditionBoard
+                  deliveries={deliveries}
+                  drivers={drivers}
+                  onAssignDriver={(deliveryId, driverId) => {
+                    const drv = drivers.find((x) => x.id === driverId);
+                    const driverName = drv ? drv.name : "Não atribuído";
+                    setDeliveries((prev) =>
+                      prev.map((item) =>
+                        item.id === deliveryId ? { ...item, driverId, driver: driverName } : item
+                      )
+                    );
+                    void updateDeliveryRTDB(deliveryId, { driverId, driver: driverName });
+                    notify(`Entrega atribuída a ${driverName}`);
+                  }}
+                  onUpdateStatus={(deliveryId, status) => {
+                    updateStatus(deliveryId, status);
+                  }}
+                  onMarkDelivered={(deliveryId) => {
+                    markAsDelivered(deliveryId);
+                  }}
+                  onNotify={notify}
+                />
+              ) : (
+                <>
+                  {/* Native Segmented Delivery Tabs */}
+                  <div className="native-segment-control">
                 <button
                   type="button"
                   className={`native-segment-btn ${deliveryTabMode === "active" ? "active" : ""}`}
@@ -2025,6 +2141,8 @@ function MobileDeliveryApp({
                   </>
                 )}
               </div>
+            </>
+          )}
 
               {/* Floating Bottom Bar para Rota Agrupada */}
               {selectedForRouteIds.length > 0 && activeTab === "entregas" && (
@@ -2393,10 +2511,10 @@ function MobileDeliveryApp({
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {[
-                    { n: 1, txt: "Abra este link no Safari (nao funciona em outros navegadores)", icon: "🧭" },
-                    { n: 2, txt: "Toque no icone de compartilhar na barra inferior (quadrado com seta para cima)", icon: "⬆️" },
-                    { n: 3, txt: "Role a lista e toque em \"Adicionar a Tela de Inicio\"", icon: "➕" },
-                    { n: 4, txt: "Confirme tocando em \"Adicionar\" no canto superior direito", icon: "✅" },
+                    { n: 1, txt: "Abra este link no Safari (nao funciona em outros navegadores)" },
+                    { n: 2, txt: "Toque no icone de compartilhar na barra inferior (quadrado com seta para cima)" },
+                    { n: 3, txt: "Role a lista e toque em \"Adicionar a Tela de Inicio\"" },
+                    { n: 4, txt: "Confirme tocando em \"Adicionar\" no canto superior direito" },
                   ].map(step => (
                     <div key={step.n} style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
                       <div style={{
@@ -2885,7 +3003,7 @@ function MobileDeliveryCard({
             {isPendingPayment && <span className="cdc-pending-dot" />}
             {isPaidOnline ? (
               <span className="cdc-paid-online-badge" title="Pedido pago online (iFood/Pix/Takeat). NÃO cobrar do cliente!">
-                <span className="cdc-paid-icon">✓</span>
+                <span className="cdc-paid-icon"><Check size={12} strokeWidth={3} /></span>
                 <span className="cdc-paid-text">PAGO ONLINE</span>
                 <span className="cdc-paid-sub">({money(delivery.amount)})</span>
               </span>
@@ -3041,42 +3159,37 @@ function MobileDeliveryCard({
           </div>
 
           {/* Ações Operacionais da Entrega */}
-          <div className={`cdc-action-buttons ${isIfood ? "grid-1" : "grid-2"}`}>
-            {!isIfood && (
-              validWhatsApp ? (
-                <a
-                  href={whatsappArrivedUrl!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-cdc-cheguei"
-                  title="Avisar cliente no WhatsApp que já chegou no portão"
-                >
-                  <WhatsAppIcon size={16} color="#15803d" />
-                  <span>Cheguei</span>
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  className="btn-cdc-cheguei"
-                  onClick={() => handlePromptPhone("arrived")}
-                  title="Informar WhatsApp para avisar chegada no portão"
-                >
-                  <WhatsAppIcon size={16} color="#15803d" />
-                  <span>Cheguei</span>
-                </button>
-              )
-            )}
+          {!isIfood && (
+            validWhatsApp ? (
+              <a
+                href={whatsappArrivedUrl!}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-cdc-cheguei-banner"
+                title="Avisar cliente no WhatsApp que já chegou no portão"
+              >
+                <WhatsAppIcon size={16} color="#15803d" />
+                <span>Cheguei no Portão (WhatsApp)</span>
+              </a>
+            ) : (
+              <button
+                type="button"
+                className="btn-cdc-cheguei-banner"
+                onClick={() => handlePromptPhone("arrived")}
+                title="Informar WhatsApp para avisar chegada no portão"
+              >
+                <WhatsAppIcon size={16} color="#15803d" />
+                <span>Cheguei no Portão (WhatsApp)</span>
+              </button>
+            )
+          )}
 
-            <button
-              type="button"
-              className="btn-cdc-concluir"
-              onClick={onMarkDelivered}
-              title="Concluir entrega"
-            >
-              <Check size={15} strokeWidth={2.8} />
-              <span>Concluir</span>
-            </button>
-          </div>
+          {/* Botão de Deslizar (Swipe to Deliver) - Estilo Uber / 99 / iFood */}
+          <SwipeToDeliver
+            onConfirm={onMarkDelivered}
+            label="Deslize para Concluir"
+            completedLabel="Entrega Concluída"
+          />
         </div>
       ) : (
         <div className="cdc-delivered-bar">
@@ -3418,7 +3531,7 @@ function MobileMapView({
                   ? "Sua moto está conectada e transmitindo ao vivo"
                   : "Traçando melhor rota viária…"}
               {route?.provider === "valhalla" && (
-                <span className="vrp-badge">⚡ Valhalla VRP</span>
+                <span className="vrp-badge"><Zap size={11} /> Valhalla VRP</span>
               )}
             </span>
           </div>
@@ -5079,7 +5192,7 @@ function FinancialTab({
                   outline: "none",
                 }}
               >
-                <option value="all">📅 Todos os Meses ({completedList.length} corridas)</option>
+                <option value="all">Todos os Meses ({completedList.length} corridas)</option>
                 {availableMonths.map(([ym, label]) => {
                   const mCount = completedList.filter((d) => {
                     const raw = d.createdAt || d.deliveredAt;
