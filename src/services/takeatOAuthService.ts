@@ -296,7 +296,7 @@ export async function startTakeatOAuthFlow(options?: {
   const clientId = (options?.clientId || DEFAULT_TAKEAT_CLIENT_ID).trim();
   const portalUrl = (options?.portalUrl || DEFAULT_TAKEAT_PORTAL_URL).trim();
   const apiBaseUrl = (options?.apiBaseUrl || DEFAULT_TAKEAT_API_BASE_URL).trim();
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://houseburger-entregas.web.app";
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://rotacerta-app.web.app";
   const redirectUri = options?.redirectUri || `${origin}/oauth/callback`;
   const scopes = options?.scopes || DEFAULT_TAKEAT_SCOPES;
 

@@ -61,7 +61,7 @@ export function registerDynamicStore(store: Partial<StoreConfig> & { id: string;
     latitude: store.latitude ?? existing?.latitude ?? -17.5399,
     longitude: store.longitude ?? existing?.longitude ?? -39.7414,
     rtdbPrefix: cleanId === "houseburger" ? "rotacerta" : `rotacerta/stores/${cleanId}`,
-    hostingDomain: store.hostingDomain || existing?.hostingDomain || (typeof window !== "undefined" ? window.location.hostname : "houseburger-entregas.web.app"),
+    hostingDomain: store.hostingDomain || existing?.hostingDomain || (typeof window !== "undefined" ? window.location.hostname : "rotacerta-app.web.app"),
     defaultTakeatEmail: store.defaultTakeatEmail || existing?.defaultTakeatEmail || "",
     companyId: store.companyId || existing?.companyId || `store-${cleanId}`,
   };
@@ -172,6 +172,6 @@ export function getStoreCacheKey(baseKey: string): string {
  */
 export function getStoreMotoboyLoginUrl(storeId?: string): string {
   const id = storeId || getActiveStoreId();
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://houseburger-entregas.web.app";
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://rotacerta-app.web.app";
   return `${origin}/?store=${encodeURIComponent(id)}&role=driver`;
 }

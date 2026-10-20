@@ -5686,7 +5686,7 @@ function AdminDriversTab({
               <input
                 type="text"
                 readOnly
-                value={typeof window !== "undefined" ? `${window.location.origin}/oauth/callback` : "https://houseburger-entregas.web.app/oauth/callback"}
+                value={typeof window !== "undefined" ? `${window.location.origin}/oauth/callback` : "https://rotacerta-app.web.app/oauth/callback"}
                 style={{ width: "100%", height: "40px", borderRadius: "10px", border: "1px solid var(--line)", padding: "0 12px", fontSize: "12px", background: "var(--surface-2)", color: "var(--muted)" }}
               />
             </div>
