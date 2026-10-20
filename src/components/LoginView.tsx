@@ -836,7 +836,7 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.75)",
+            background: "rgba(15, 23, 42, 0.75)",
             backdropFilter: "blur(8px)",
             WebkitBackdropFilter: "blur(8px)",
             zIndex: 10000,
@@ -849,17 +849,17 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
         >
           <div
             style={{
-              background: "var(--surface, #18181b)",
-              border: "1px solid rgba(249, 115, 22, 0.35)",
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
               borderRadius: "20px",
-              maxWidth: "430px",
+              maxWidth: "440px",
               width: "100%",
               maxHeight: "90vh",
               overflowY: "auto",
-              padding: "22px 20px",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+              padding: "24px 22px",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
               boxSizing: "border-box",
-              color: "var(--text, #f4f4f5)",
+              color: "#0f172a",
               display: "flex",
               flexDirection: "column",
               gap: "14px",
@@ -867,24 +867,26 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
           >
             {/* Modal Header */}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 <div
                   style={{
-                    width: "40px",
-                    height: "40px",
+                    width: "42px",
+                    height: "42px",
                     borderRadius: "12px",
-                    background: "rgba(249, 115, 22, 0.15)",
-                    border: "1px solid rgba(249, 115, 22, 0.3)",
+                    background: "rgba(249, 115, 22, 0.12)",
+                    border: "1px solid rgba(249, 115, 22, 0.25)",
                     display: "grid",
                     placeItems: "center",
-                    color: "#f97316",
+                    color: "#ea580c",
                   }}
                 >
-                  <Store size={20} />
+                  <Store size={22} />
                 </div>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 800 }}>Acesso do Estabelecimento</h2>
-                  <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--muted, #a1a1aa)" }}>
+                  <h2 style={{ margin: 0, fontSize: "17px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px" }}>
+                    Acesso do Estabelecimento
+                  </h2>
+                  <p style={{ margin: "2px 0 0", fontSize: "12.5px", color: "#475569", fontWeight: 500 }}>
                     Conexão Takeat e Cadastro de Restaurante
                   </p>
                 </div>
@@ -895,14 +897,14 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 onClick={() => setShowStoreConnectModal(false)}
                 aria-label="Fechar"
                 style={{
-                  background: "rgba(255, 255, 255, 0.08)",
-                  border: "none",
+                  background: "#f1f5f9",
+                  border: "1px solid #e2e8f0",
                   borderRadius: "8px",
-                  width: "30px",
-                  height: "30px",
+                  width: "32px",
+                  height: "32px",
                   display: "grid",
                   placeItems: "center",
-                  color: "var(--muted)",
+                  color: "#475569",
                   cursor: "pointer",
                 }}
               >
@@ -916,10 +918,10 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
                 gap: "6px",
-                background: "var(--surface-2, #27272a)",
+                background: "#f1f5f9",
                 padding: "4px",
                 borderRadius: "12px",
-                border: "1px solid var(--line, #3f3f46)",
+                border: "1px solid #e2e8f0",
               }}
             >
               <button
@@ -933,17 +935,18 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                   borderRadius: "8px",
                   border: "none",
                   background: modalTab === "takeat" ? "linear-gradient(135deg, #f97316 0%, #ea580c 100%)" : "transparent",
-                  color: modalTab === "takeat" ? "#fff" : "var(--muted)",
-                  fontSize: "12px",
+                  color: modalTab === "takeat" ? "#ffffff" : "#475569",
+                  fontSize: "12.5px",
                   fontWeight: 800,
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "6px",
+                  boxShadow: modalTab === "takeat" ? "0 2px 8px rgba(249,115,22,.3)" : "none",
                 }}
               >
-                <Store size={14} />
+                <Store size={15} />
                 <span>Conectar Takeat</span>
               </button>
 
@@ -958,17 +961,18 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                   borderRadius: "8px",
                   border: "none",
                   background: modalTab === "signup" ? "linear-gradient(135deg, #f97316 0%, #ea580c 100%)" : "transparent",
-                  color: modalTab === "signup" ? "#fff" : "var(--muted)",
-                  fontSize: "12px",
+                  color: modalTab === "signup" ? "#ffffff" : "#475569",
+                  fontSize: "12.5px",
                   fontWeight: 800,
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "6px",
+                  boxShadow: modalTab === "signup" ? "0 2px 8px rgba(249,115,22,.3)" : "none",
                 }}
               >
-                <KeyRound size={14} />
+                <KeyRound size={15} />
                 <span>Criar Login e Senha</span>
               </button>
             </div>
@@ -978,20 +982,21 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
               <form onSubmit={handleTakeatConnectSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div
                   style={{
-                    padding: "9px 12px",
+                    padding: "10px 12px",
                     borderRadius: "10px",
-                    background: "rgba(249, 115, 22, 0.08)",
-                    border: "1px solid rgba(249, 115, 22, 0.2)",
-                    fontSize: "11.5px",
-                    color: "var(--muted, #cbd5e1)",
-                    lineHeight: "1.4",
+                    background: "#fff7ed",
+                    border: "1px solid #fed7aa",
+                    fontSize: "12px",
+                    color: "#9a3412",
+                    fontWeight: 600,
+                    lineHeight: "1.45",
                   }}
                 >
-                  Digite o e-mail e a senha do gestor Takeat para sincronizar automaticamente os pedidos e criar seu espaço exclusivo.
+                  Digite o e-mail e a senha do gestor Takeat para sincronizar automaticamente pedidos, comandas e cardápio.
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "11.5px", fontWeight: 700, marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 700, marginBottom: "5px", color: "#1e293b" }}>
                     E-mail do Gestor Takeat
                   </label>
                   <div
@@ -999,13 +1004,13 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
-                      background: "var(--surface)",
-                      border: "1px solid var(--line)",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
                       borderRadius: "10px",
                       padding: "10px 12px",
                     }}
                   >
-                    <Mail size={16} color="var(--muted)" />
+                    <Mail size={16} color="#64748b" />
                     <input
                       type="email"
                       required
@@ -1019,15 +1024,16 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                         background: "transparent",
                         width: "100%",
                         outline: "none",
-                        color: "var(--text)",
-                        fontSize: "13.5px",
+                        color: "#0f172a",
+                        fontSize: "14px",
+                        fontWeight: 600,
                       }}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "11.5px", fontWeight: 700, marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 700, marginBottom: "5px", color: "#1e293b" }}>
                     Senha da Conta Takeat
                   </label>
                   <div
@@ -1035,13 +1041,13 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
-                      background: "var(--surface)",
-                      border: "1px solid var(--line)",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
                       borderRadius: "10px",
                       padding: "9px 12px",
                     }}
                   >
-                    <LockKeyhole size={16} color="var(--muted)" />
+                    <LockKeyhole size={16} color="#64748b" />
                     <input
                       type={showTakeatPassword ? "text" : "password"}
                       required
@@ -1053,8 +1059,9 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                         background: "transparent",
                         width: "100%",
                         outline: "none",
-                        color: "var(--text)",
-                        fontSize: "13.5px",
+                        color: "#0f172a",
+                        fontSize: "14px",
+                        fontWeight: 600,
                       }}
                     />
                     <button
@@ -1064,7 +1071,7 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                         background: "none",
                         border: "none",
                         cursor: "pointer",
-                        color: "var(--muted)",
+                        color: "#64748b",
                         padding: 0,
                         display: "grid",
                         placeItems: "center",
@@ -1078,12 +1085,14 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 {modalError && (
                   <div
                     style={{
-                      padding: "9px 11px",
+                      padding: "10px 12px",
                       borderRadius: "8px",
-                      background: "rgba(239, 68, 68, 0.12)",
-                      border: "1px solid rgba(239, 68, 68, 0.3)",
-                      color: "#ef4444",
-                      fontSize: "11.5px",
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      color: "#b91c1c",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      lineHeight: "1.4",
                     }}
                   >
                     {modalError}
@@ -1105,25 +1114,27 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                     fontWeight: 800,
                     cursor: modalLoading ? "not-allowed" : "pointer",
                     border: "none",
-                    color: "#fff",
+                    color: "#ffffff",
                     background: "linear-gradient(135deg, #f97316 0%, #ea580c 100%)",
                     boxShadow: "0 4px 14px rgba(249,115,22,.35)",
                     opacity: modalLoading ? 0.7 : 1,
                   }}
                 >
-                  {modalLoading ? "Conectando…" : "Conectar com Takeat e Entrar"}
+                  {modalLoading ? "Conectando na Takeat…" : "Conectar com Takeat e Entrar"}
                 </button>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "4px 0" }}>
-                  <span style={{ flex: 1, height: "1px", background: "var(--line)" }} />
-                  <span style={{ fontSize: "10.5px", color: "var(--muted)", fontWeight: 600 }}>ou autorização oficial</span>
-                  <span style={{ flex: 1, height: "1px", background: "var(--line)" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "6px 0 2px" }}>
+                  <span style={{ flex: 1, height: "1px", background: "#e2e8f0" }} />
+                  <span style={{ fontSize: "11px", color: "#64748b", fontWeight: 600 }}>ou integração oficial Takeat Store</span>
+                  <span style={{ flex: 1, height: "1px", background: "#e2e8f0" }} />
                 </div>
 
                 <button
                   type="button"
                   onClick={() => {
-                    void startTakeatOAuthFlow();
+                    setModalError(
+                      "A autorização via Takeat Store OAuth PKCE será liberada assim que sua proposta for aprovada no portal AI Builders da Takeat. Enquanto aguarda a aprovação, conecte sua loja digitando seu E-mail e Senha do Gestor Takeat acima!"
+                    );
                   }}
                   style={{
                     display: "flex",
@@ -1134,9 +1145,9 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                     borderRadius: "10px",
                     fontSize: "12.5px",
                     fontWeight: 700,
-                    border: "1px solid var(--line)",
-                    background: "var(--surface)",
-                    color: "var(--text)",
+                    border: "1.5px solid #cbd5e1",
+                    background: "#f8fafc",
+                    color: "#334155",
                     cursor: "pointer",
                   }}
                 >
@@ -1148,23 +1159,24 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
 
             {/* ABA 2: CRIAR NOVO LOGIN E SENHA DA LOJA */}
             {modalTab === "signup" && (
-              <form onSubmit={handleStoreSignupSubmit} style={{ display: "flex", flexDirection: "column", gap: "11px" }}>
+              <form onSubmit={handleStoreSignupSubmit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <div
                   style={{
-                    padding: "9px 12px",
+                    padding: "10px 12px",
                     borderRadius: "10px",
-                    background: "rgba(16, 185, 129, 0.08)",
-                    border: "1px solid rgba(16, 185, 129, 0.2)",
-                    fontSize: "11.5px",
-                    color: "var(--muted, #cbd5e1)",
-                    lineHeight: "1.4",
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    fontSize: "12px",
+                    color: "#166534",
+                    fontWeight: 600,
+                    lineHeight: "1.45",
                   }}
                 >
-                  Crie o login e senha do seu restaurante. Todos os pedidos e motoboys serão isolados com total segurança.
+                  Crie o login e senha do seu restaurante. Todos os pedidos, taxas e motoboys serão isolados com total segurança.
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "11.5px", fontWeight: 700, marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 700, marginBottom: "5px", color: "#1e293b" }}>
                     Nome do Estabelecimento
                   </label>
                   <div
@@ -1172,13 +1184,13 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
-                      background: "var(--surface)",
-                      border: "1px solid var(--line)",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
                       borderRadius: "10px",
-                      padding: "9px 12px",
+                      padding: "10px 12px",
                     }}
                   >
-                    <Building2 size={16} color="var(--muted)" />
+                    <Building2 size={16} color="#64748b" />
                     <input
                       type="text"
                       required
@@ -1190,15 +1202,16 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                         background: "transparent",
                         width: "100%",
                         outline: "none",
-                        color: "var(--text)",
-                        fontSize: "13.5px",
+                        color: "#0f172a",
+                        fontSize: "14px",
+                        fontWeight: 600,
                       }}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "11.5px", fontWeight: 700, marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 700, marginBottom: "5px", color: "#1e293b" }}>
                     E-mail de Acesso da Loja
                   </label>
                   <div
@@ -1206,13 +1219,13 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
-                      background: "var(--surface)",
-                      border: "1px solid var(--line)",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
                       borderRadius: "10px",
-                      padding: "9px 12px",
+                      padding: "10px 12px",
                     }}
                   >
-                    <Mail size={16} color="var(--muted)" />
+                    <Mail size={16} color="#64748b" />
                     <input
                       type="email"
                       required
@@ -1226,15 +1239,16 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                         background: "transparent",
                         width: "100%",
                         outline: "none",
-                        color: "var(--text)",
-                        fontSize: "13.5px",
+                        color: "#0f172a",
+                        fontSize: "14px",
+                        fontWeight: 600,
                       }}
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "11.5px", fontWeight: 700, marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 700, marginBottom: "5px", color: "#1e293b" }}>
                     Senha de Acesso (mínimo 6 dígitos)
                   </label>
                   <div
@@ -1242,13 +1256,13 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
-                      background: "var(--surface)",
-                      border: "1px solid var(--line)",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
                       borderRadius: "10px",
                       padding: "9px 12px",
                     }}
                   >
-                    <LockKeyhole size={16} color="var(--muted)" />
+                    <LockKeyhole size={16} color="#64748b" />
                     <input
                       type={showSignupPassword ? "text" : "password"}
                       required
@@ -1261,8 +1275,9 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                         background: "transparent",
                         width: "100%",
                         outline: "none",
-                        color: "var(--text)",
-                        fontSize: "13.5px",
+                        color: "#0f172a",
+                        fontSize: "14px",
+                        fontWeight: 600,
                       }}
                     />
                     <button
@@ -1272,7 +1287,7 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                         background: "none",
                         border: "none",
                         cursor: "pointer",
-                        color: "var(--muted)",
+                        color: "#64748b",
                         padding: 0,
                         display: "grid",
                         placeItems: "center",
@@ -1284,7 +1299,7 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 </div>
 
                 <div>
-                  <label style={{ display: "block", fontSize: "11.5px", fontWeight: 700, marginBottom: "5px" }}>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 700, marginBottom: "5px", color: "#1e293b" }}>
                     WhatsApp / Telefone da Loja (Opcional)
                   </label>
                   <div
@@ -1292,13 +1307,13 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
-                      background: "var(--surface)",
-                      border: "1px solid var(--line)",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
                       borderRadius: "10px",
-                      padding: "9px 12px",
+                      padding: "10px 12px",
                     }}
                   >
-                    <Phone size={16} color="var(--muted)" />
+                    <Phone size={16} color="#64748b" />
                     <input
                       type="tel"
                       value={signupPhone}
@@ -1309,8 +1324,9 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                         background: "transparent",
                         width: "100%",
                         outline: "none",
-                        color: "var(--text)",
-                        fontSize: "13.5px",
+                        color: "#0f172a",
+                        fontSize: "14px",
+                        fontWeight: 600,
                       }}
                     />
                   </div>
@@ -1319,12 +1335,14 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 {modalError && (
                   <div
                     style={{
-                      padding: "9px 11px",
+                      padding: "10px 12px",
                       borderRadius: "8px",
-                      background: "rgba(239, 68, 68, 0.12)",
-                      border: "1px solid rgba(239, 68, 68, 0.3)",
-                      color: "#ef4444",
-                      fontSize: "11.5px",
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      color: "#b91c1c",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      lineHeight: "1.4",
                     }}
                   >
                     {modalError}
@@ -1346,13 +1364,13 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                     fontWeight: 800,
                     cursor: modalLoading ? "not-allowed" : "pointer",
                     border: "none",
-                    color: "#fff",
+                    color: "#ffffff",
                     background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
                     boxShadow: "0 4px 14px rgba(16,185,129,.35)",
                     opacity: modalLoading ? 0.7 : 1,
                   }}
                 >
-                  {modalLoading ? "Cadastrando…" : "Criar Acesso e Entrar no Painel"}
+                  {modalLoading ? "Cadastrando Loja…" : "Criar Acesso e Entrar no Painel"}
                 </button>
               </form>
             )}
@@ -1367,8 +1385,9 @@ export function LoginView({ profileError, signedInEmail, onLoginSuccess }: Login
                 style={{
                   background: "none",
                   border: "none",
-                  color: "var(--muted)",
-                  fontSize: "11px",
+                  color: "#64748b",
+                  fontSize: "12px",
+                  fontWeight: 600,
                   cursor: "pointer",
                   textDecoration: "underline",
                 }}
