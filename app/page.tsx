@@ -164,6 +164,7 @@ import {
 import { signInAsStoreDirect } from "../src/services/authService";
 import type { DeliveryRecord, DeliveryRecordStatus } from "../src/types/delivery";
 import { LoginView } from "../src/components/LoginView";
+import { PWAInstallBanner } from "../src/components/PWAInstallBanner";
 import {
   playIfoodNotificationSound,
   playShiftReminderSound,
@@ -368,7 +369,12 @@ export default function Home() {
 
   // If not logged in, render LoginView with 1-tap login for motoboy and admin
   if (!currentUser) {
-    return <LoginView onLoginSuccess={(u) => setCurrentUser(u)} />;
+    return (
+      <>
+        <LoginView onLoginSuccess={(u) => setCurrentUser(u)} />
+        <PWAInstallBanner />
+      </>
+    );
   }
 
   return (
@@ -381,6 +387,7 @@ export default function Home() {
         }}
         demoMode={!firebaseConfigured}
       />
+      <PWAInstallBanner />
     </ErrorBoundary>
   );
 }

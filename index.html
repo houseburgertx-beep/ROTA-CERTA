@@ -3,15 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="description" content="Rota Certa — central mobile de entregas e rotas." />
-    <meta name="theme-color" content="#7557f6" />
+    <meta name="description" content="Rota Certa — central móvel de entregas, rotas e expedição." />
+    <meta name="theme-color" content="#090D16" />
+    
+    <!-- PWA e Instalação Mobile -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    
+    <!-- iOS Web App & Safari -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Rota Certa" />
+    <meta name="application-name" content="Rota Certa" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
+
     <title>Rota Certa — Gestão de entregas</title>
     <script>
-      // Redireciona automaticamente se aberto via link do GitHub Pages (ex: GitHub Actions bot)
+      // Redireciona automaticamente se aberto via link do GitHub Pages (ex: bot)
       if (window.location.hostname.includes("github.io")) {
-        window.location.replace("https://houseburger-entregas.web.app" + window.location.search + window.location.hash);
+        window.location.replace("https://rotacerta-app.web.app" + window.location.search + window.location.hash);
       }
     </script>
   </head>

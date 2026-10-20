@@ -1,10 +1,62 @@
 {
-  "name": "Rota Certa — Gestão de entregas",
+  "name": "Rota Certa - Gestão de Entregas",
   "short_name": "Rota Certa",
-  "description": "Entregas organizadas. Menos caminho. Mais agilidade.",
-  "start_url": "/",
+  "description": "Central de entregas inteligente para motoboys e expedição com rotas GPS e avisos automáticos.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "id": "/?source=pwa",
   "display": "standalone",
-  "background_color": "#f5f8f7",
-  "theme_color": "#0c3e3a",
-  "icons": [{"src":"/favicon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#090D16",
+  "theme_color": "#090D16",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "food", "utilities"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Painel de Entregas",
+      "short_name": "Entregas",
+      "url": "/?role=driver&source=pwa",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Visão da Loja",
+      "short_name": "Loja",
+      "url": "/?role=admin&source=pwa",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
 }

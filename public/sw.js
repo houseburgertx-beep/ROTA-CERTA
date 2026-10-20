@@ -1,7 +1,12 @@
-const CACHE = "rota-certa-v6";
+const CACHE = "rota-certa-v7";
 const CORE_ASSETS = [
+  "/",
   "/manifest.webmanifest",
   "/favicon.svg",
+  "/logo.svg",
+  "/logo.png",
+  "/icon-192.png",
+  "/icon-512.png",
   "/notification.wav"
 ];
 
